@@ -335,6 +335,7 @@ pub struct Weights {
 #[serde(rename_all = "camelCase")]
 pub struct Slot {
     pub track_id: i64,
+    #[specta(type = crate::wire_enums::MixtapeRole)]
     pub role: String,
     pub locked: bool,
     pub transition_to_next: bool,

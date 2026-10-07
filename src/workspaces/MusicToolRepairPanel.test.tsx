@@ -43,6 +43,11 @@ const response: MusicToolIssueResponse = {
       value: "Repeated spaces",
       filename: "02 What  Have I Done.mp3",
       filePath: "D:\\Music\\Pet  Shop Boys\\Actually",
+      billboard: null,
+      officialUk: null,
+      vgLista: null,
+      tiISkuddet: null,
+      norsktoppen: null,
     },
   ],
 };

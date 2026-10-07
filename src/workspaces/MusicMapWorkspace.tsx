@@ -155,7 +155,7 @@ type MapPointProperties = {
 function pointCollection(points: MusicMapPoint[], metric: MusicMapMetric) {
   return {
     type: "FeatureCollection" as const,
-    features: points.map((point) => ({
+    features: points.flatMap((point) => point.longitude == null || point.latitude == null ? [] : [{
       type: "Feature" as const,
       geometry: {
         type: "Point" as const,
@@ -173,7 +173,7 @@ function pointCollection(points: MusicMapPoint[], metric: MusicMapMetric) {
         topGenre: point.topGenre,
         color: genreColor(point.topGenre),
       } satisfies MapPointProperties,
-    })),
+    }]),
   };
 }
 
@@ -589,6 +589,7 @@ export function MusicMapWorkspace({ onOpenArtist }: MusicMapWorkspaceProps) {
   const lunaScope = details ? musicMapScopeLabel(details) : null;
 
   function focusPoint(point: MusicMapPoint) {
+    if (point.longitude == null || point.latitude == null) return;
     setSearchText("");
     void selectLocation(point.id);
     mapRef.current?.flyTo({
@@ -938,12 +939,12 @@ function LocationInspector({
             <div className="music-map-genre-track">
               <i
                 style={{
-                  width: `${Math.max(3, genre.percentage)}%`,
+                  width: `${Math.max(3, genre.percentage ?? 0)}%`,
                   background: genreColor(genre.genre),
                 }}
               />
             </div>
-            <strong>{Math.round(genre.percentage)}%</strong>
+            <strong>{Math.round(genre.percentage ?? 0)}%</strong>
           </div>
         ))}
       </section>

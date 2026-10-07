@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.174.0] - 2026-10-07
+
+### Changed
+- Replace the hand-written struct types in `src/types.ts` with the types generated from Rust. 271 of its 304 types are now re-exports or thin views of `src/bindings.ts` (the file shrank from about 3,500 to about 1,100 lines), so a Rust struct change reaches the UI without a matching hand edit. Request structs whose serde defaults make fields optional use a small `Complete<T>` helper, types that serialize differently from how they deserialize use their Serialize shape, and the Soulseek types alias the generated connection, search, transfer, share, and upload types.
+- Remove 161 of the 177 `as Promise<T>` casts in `backend.ts` (and the ones in `publishedCharts.ts` and `updater.ts`). The 16 that remain convert a generated Serialize shape to its `Complete` view.
+- Use the generated Mixtape and Jev types in `mixtape.ts`, with a generated `MixtapeRole` enum for slot roles.
+- Handle nullable floats: specta exports Rust `f64` as `number | null` because non-finite floats serialize as `null`, so percentages, scores, and map coordinates now default to `0` (or skip the point) where the UI assumed a number.
+- Make the web-preview mocks and tests match the real contract: browse rows, artist summaries, Music Tool issue rows, Soulseek bootstrap data, and AI playlists now include the nullable fields Rust always sends.
+
 ## [0.173.0] - 2026-10-07
 
 ### Changed

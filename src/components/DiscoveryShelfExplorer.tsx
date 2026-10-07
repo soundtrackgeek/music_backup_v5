@@ -480,7 +480,7 @@ export function DiscoveryShelfExplorer({
                 <span>Next gap: {story.missingReleaseTitle}{story.missingReleaseYear ? ` · ${story.missingReleaseYear}` : ""}</span>
                 <small>{story.evidence}</small>
               </span>
-              <span className="daily-edition-explorer-percent">{Math.round(story.completionPercent * 100)}%</span>
+              <span className="daily-edition-explorer-percent">{Math.round((story.completionPercent ?? 0) * 100)}%</span>
               <ChevronRight aria-hidden="true" />
             </button>
           </article>
@@ -495,7 +495,7 @@ export function DiscoveryShelfExplorer({
                 <span>{story.artist} · {story.releaseYear ?? "Year unknown"} · {story.genre}</span>
                 <small>{story.evidence}</small>
               </span>
-              <span className="daily-edition-explorer-percent">{Math.round(story.completionPercent * 100)}%</span>
+              <span className="daily-edition-explorer-percent">{Math.round((story.completionPercent ?? 0) * 100)}%</span>
               <ChevronRight aria-hidden="true" />
             </button>
           </article>

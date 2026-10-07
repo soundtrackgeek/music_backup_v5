@@ -1,27 +1,24 @@
+import type {
+  Assessment,
+  MixtapeConfig as GeneratedMixtapeConfig,
+  MixtapeDraft as GeneratedMixtapeDraft,
+  MixtapeRole,
+  Score,
+  ScoreResult,
+  Slot,
+} from "./bindings";
 import type { AiPlaylist, AiPlaylistTrack, AiUsage, BrowseRequest } from "./types";
 
-export const mixtapeRoles = ["opener", "builder", "breather", "closer"] as const;
-export type MixtapeRole = typeof mixtapeRoles[number];
-export type JevScore = { score: number; confidence: number };
-export type JevAssessment = { trackId: number } & Record<MixtapeRole | "sideA" | "sideB", JevScore>;
-export type JevResult = { assessments: JevAssessment[]; model: string; usage: AiUsage };
-export type MixtapeConfig = {
-  briefs: [string, string];
-  minutes: [number, number];
-  maxArtist: number;
-  maxAlbum: number;
-  weights: { atmosphere: number; role: number; rating: number };
-};
-export type MixtapeSlot = { trackId: number; role: MixtapeRole; locked: boolean; transitionToNext: boolean };
-export type MixtapeDraft = {
-  version: 1;
-  config: MixtapeConfig;
-  pool: AiPlaylistTrack[];
-  notes: Record<string, string>;
-  assessments: JevAssessment[];
-  scoredBriefs: [string, string] | null;
-  sides: [MixtapeSlot[], MixtapeSlot[]];
-};
+export const mixtapeRoles = ["opener", "builder", "breather", "closer"] as const satisfies readonly MixtapeRole[];
+
+// The mixtape shapes come from Rust (src/bindings.ts); only the role list above is UI-specific.
+export type { MixtapeRole };
+export type JevScore = Score;
+export type JevAssessment = Assessment;
+export type JevResult = ScoreResult;
+export type MixtapeConfig = GeneratedMixtapeConfig;
+export type MixtapeSlot = Slot;
+export type MixtapeDraft = GeneratedMixtapeDraft;
 
 export const defaultMixtapeConfig: MixtapeConfig = {
   briefs: ["Friday night: bright, inviting, gathering momentum", "The drive home: reflective, spacious, a gentle landing"],
@@ -46,7 +43,7 @@ export function validateMixtape(tape: MixtapeDraft) {
   if (config.briefs.some((brief) => !brief.trim() || brief.length > 600)) throw new Error("Describe each side in 1–600 characters.");
   if (config.minutes.some((minutes) => !Number.isInteger(minutes) || minutes < 1 || minutes > 90)) throw new Error("Each side must be between 1 and 90 whole minutes.");
   if ([config.maxArtist, config.maxAlbum].some((cap) => !Number.isInteger(cap) || cap < 1 || cap > 10)) throw new Error("Repeat caps must be between 1 and 10 across the whole tape.");
-  const weights = Object.values(config.weights);
+  const weights = Object.values(config.weights).map((weight) => weight ?? Number.NaN);
   if (weights.some((weight) => !Number.isFinite(weight) || weight < 0 || weight > 100) || weights.every((weight) => weight === 0)) throw new Error("Set at least one scoring weight above zero.");
   const tracks = new Map(pool.map((track) => [track.trackId, track]));
   const seen = new Set<number>();
@@ -76,8 +73,9 @@ export function candidateScore(tape: MixtapeDraft, track: AiPlaylistTrack, side:
   const assessment = tape.assessments.find((entry) => entry.trackId === track.trackId);
   const { atmosphere, role: roleWeight, rating } = tape.config.weights;
   if (!assessment) return (track.rating ?? 0) / 100;
-  const total = atmosphere + roleWeight + rating;
-  return (atmosphere * assessment[side === 0 ? "sideA" : "sideB"].score + roleWeight * assessment[role].score + rating * (track.rating ?? 0) / 100) / total;
+  const [wAtmosphere, wRole, wRating] = [atmosphere ?? 0, roleWeight ?? 0, rating ?? 0];
+  const total = wAtmosphere + wRole + wRating;
+  return (wAtmosphere * (assessment[side === 0 ? "sideA" : "sideB"].score ?? 0) + wRole * (assessment[role].score ?? 0) + wRating * (track.rating ?? 0) / 100) / total;
 }
 
 /** Locked slots retain their exact side, position, role and adjacent transition. */

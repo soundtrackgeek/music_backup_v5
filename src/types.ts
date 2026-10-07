@@ -32,6 +32,576 @@ import type {
   WishListEntity,
 } from "./bindings";
 
+// Types the backend sends or accepts come from Rust: `src/bindings.ts` is generated
+// (`npm run bindings`) and the names below re-export it. Three shapes are used:
+//   * plain re-exports;
+//   * `Complete<...>` for request structs whose fields have serde defaults, because
+//     the generated type marks those fields optional but the UI always builds them
+//     in full (a few request types that callers genuinely build partially keep the
+//     generated optional shape);
+//   * `X = X_Serialize` for types that serialize differently from how they
+//     deserialize (the shape the backend sends).
+// Add new backend types in Rust, not here.
+import type {
+  AddWishListMusicBrainzCandidateResponse,
+  AiCompileRequest,
+  AiConnectionTest,
+  AiCurrentViewAnswer,
+  AiKeyStatus,
+  AiLibraryAnalysis,
+  AiLibraryFinding,
+  AiMarkdownExportRequest,
+  AiMusicResearchAnswer,
+  AiMusicResearchExchange,
+  AiMusicResearchSource,
+  AiMusicResearchTurn,
+  AiPlaylistTrack,
+  AiQueryFollowUpContext,
+  AiUsage,
+  AlbumDebutTimelineAlbum,
+  AlbumDebutTimelineResponse,
+  AlbumDebutTimelineYear,
+  AlbumReview,
+  ArtistBiography,
+  ArtistChartTrack,
+  ArtistListResponse,
+  ArtistLovedTrack,
+  ArtistSummary,
+  ArtistTimelineAlbum,
+  ArtistTimelineArtist,
+  ArtistTimelineResponse,
+  ArtistTrackChartHistory,
+  ArtistTrackHighlights,
+  BillboardImportSummary,
+  BillboardSinglesImportSummary,
+  BrowseResponse,
+  BrowseRow,
+  CatalogConcentrationStats,
+  ConcentrationPoint,
+  ConfirmLibraryCompletionArtistMatchRequest,
+  CountryCatalogStats,
+  CoverImportSummary,
+  DatabaseBackup,
+  DatabaseRestoreSummary,
+  DecadeProgressStats,
+  DeemixAlbumDownloadPreflight,
+  DeemixAlbumDownloadSummary,
+  DeemixAlbumMatch,
+  DeemixAlbumSearchResponse,
+  DeemixConnectionTest,
+  DeemixCredentialStatus,
+  DiscogsConnectionTest,
+  DiscogsCredentialStatus,
+  DiscoveryAlbumCompletionStory,
+  DiscoveryAlbumPoint,
+  DiscoveryAnniversaryStory,
+  DiscoveryArtistCompletionStory,
+  DiscoveryArtistPoint,
+  DiscoveryChartSnapshot,
+  DiscoveryChartSnapshotRequest,
+  DiscoveryChartStory,
+  DiscoveryCompletionSnapshot,
+  DiscoveryCompletionSnapshotRequest,
+  DiscoveryDailyEdition,
+  DiscoveryDailyEditionArchive,
+  DiscoveryDailyEditionSnapshotResponse,
+  DiscoveryDeepCutGenre,
+  DiscoveryDeepCutSnapshot,
+  DiscoveryDeepCutSnapshotRequest,
+  DiscoveryDeepCutStory,
+  DiscoveryGenrePoint,
+  DiscoveryHeatmapCell,
+  DiscoveryLifeEventStory,
+  DiscoveryMission,
+  DiscoveryMixerRecommendation,
+  DiscoveryMixerRequest,
+  DiscoveryMixerResponse,
+  DiscoveryMixerSeedInput,
+  DiscoveryMixerSeedOption,
+  DiscoveryMixerSeedSearchRequest,
+  DiscoveryRecommendationAnchor,
+  DiscoveryRecommendationSnapshot,
+  DiscoveryRecommendationSnapshotRequest,
+  DiscoveryRecommendationStory,
+  DiscoveryResponse,
+  DiscoveryShelfExplorerRequest,
+  DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthItem,
+  DiscoverySourceHealthResponse,
+  DurationAlbumStat,
+  DurationAnalyticsStats,
+  ExternalDiscoveryItem,
+  GenreListResponse,
+  GenreProgressStats,
+  GenreSummary,
+  GenreTimelineAlbumPoint,
+  GenreTimelineGenre,
+  GenreTimelineResponse,
+  GenreTimelineYearCount,
+  ImportPreview,
+  ImportRun,
+  ImportSummary,
+  ImportSuspiciousAlbum,
+  LastFmAlbumPopularity,
+  LastFmAlbumTrackPopularity,
+  LastFmArtistImageRefreshSummary,
+  LastFmArtistPopularity,
+  LastFmArtistSimilarity,
+  LastFmConnectionTest,
+  LastFmCredentialStatus,
+  LastFmPopularTrack,
+  LastFmRelatedAlbum,
+  LastFmRelatedAlbums,
+  LastFmSimilarArtist,
+  LibraryCompletionArtistCandidate,
+  LibraryCompletionArtistDecision,
+  LibraryCompletionArtistEvidence,
+  LibraryCompletionArtistRequest,
+  LibraryCompletionArtistResponse,
+  LibraryCompletionArtistVerificationBatch,
+  LibraryCompletionArtistVerificationItemSummary,
+  LibraryCompletionArtistVerificationStatus,
+  LibraryCompletionAtlasCell,
+  LibraryCompletionCandidate,
+  LibraryCompletionCoverEnrichment,
+  LibraryCompletionDecision,
+  LibraryCompletionEvidence,
+  LibraryCompletionRequest,
+  LibraryCompletionResponse,
+  LibraryCompletionVerificationBatch,
+  LibraryCompletionVerificationItemSummary,
+  LibraryCompletionVerificationStatus,
+  LibraryHealthScore,
+  LibraryOverviewStats,
+  LibraryShapeStats,
+  LibraryStatus,
+  LibraryUpdate,
+  LibraryUpdateArtistResponse,
+  LibraryUpdateArtistSummary,
+  LibraryUpdateResponse,
+  LibraryUpdateSummary,
+  LovedDensityStat,
+  LovedTrackStats,
+  MetadataCoverageMetric,
+  MusicBrainzArtistCandidateRow,
+  MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistInfoImportRequest,
+  MusicBrainzArtistInfoImportRun,
+  MusicBrainzArtistInfoImportSummary,
+  MusicBrainzArtistInfoPreview,
+  MusicBrainzArtistInfoPreviewRow,
+  MusicBrainzArtistInfoStatus,
+  MusicBrainzArtistOriginCountryUpdate,
+  MusicBrainzArtistOriginImportRun,
+  MusicBrainzArtistRefreshResult,
+  MusicBrainzArtistReleaseRow,
+  MusicBrainzCacheStatus,
+  MusicBrainzCacheWarningExample,
+  MusicBrainzOriginCountryImportRequest,
+  MusicBrainzOriginCountryImportSummary,
+  MusicBrainzOriginCountryOption,
+  MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryPreviewRow,
+  MusicBrainzOriginCountryStatus,
+  MusicBrainzOverlaySyncLogEntry,
+  MusicBrainzOverlaySyncResult,
+  MusicDoctorBitrateStat,
+  MusicDoctorFormatStat,
+  MusicDoctorSource,
+  MusicDoctorStatus,
+  MusicDoctorSyncResult,
+  MusicMapArtist,
+  MusicMapGenreStat,
+  MusicMapLocationDetails,
+  MusicMapPoint,
+  MusicMapRefreshSummary,
+  MusicMapResponse,
+  MusicMapSummary,
+  MusicToolFieldDiff,
+  MusicToolFixDiff,
+  MusicToolFixHistoryEntry,
+  MusicToolFixSummary,
+  MusicToolIssueResponse,
+  MusicToolIssueRow,
+  MusicToolSummary,
+  MusicToolUndoSummary,
+  NewLibraryArtist,
+  NorsktoppenImportSummary,
+  OfficialUkImportSummary,
+  OutlierStat,
+  PerformanceProbeOperation,
+  PerformanceProbeResponse,
+  PlaylistAutomationStatus,
+  RatingBucket,
+  RatingEvent,
+  RatingHistoryPoint,
+  RatingProgressStats,
+  SaveDiscogsCredentialsRequest,
+  SaveLastFmApiKeyRequest,
+  SaveUsenetProfileRequest,
+  SetLibraryCompletionArtistDecisionRequest,
+  SetLibraryCompletionArtistVerificationStateRequest,
+  SetLibraryCompletionDecisionRequest,
+  SetLibraryCompletionVerificationStateRequest,
+  SetPlaylistAutomationRequest,
+  StatisticsResponse,
+  TiISkuddetImportSummary,
+  TrackDebutTimelineResponse,
+  TrackDebutTimelineTrack,
+  TrackDebutTimelineYear,
+  UsenetBootstrap,
+  UsenetConnectionTest,
+  UsenetDownloadRequest,
+  UsenetProfile,
+  UsenetSearchResponse,
+  UsenetSearchResult,
+  UsenetTransfer,
+  UsenetTransferQueue,
+  VgListaImportSummary,
+  WishListArtistAlbumDiscoveryRequest,
+  WishListArtistAlbumDiscoveryResponse,
+  WishListArtistAlbumDiscoveryRow,
+  WishListArtistAlbumSummary,
+  WishListItem,
+  WishListMissingAlbum,
+  WishListMusicBrainzCandidate,
+  WishListMusicBrainzSearchRequest,
+  WishListMusicBrainzSearchResponse,
+  WishListResponse,
+  YearProgressStats,
+  AiCompiledQuery_Serialize,
+  AiPlaylist_Serialize,
+  AiQueryExchange_Serialize,
+  AiSnapshot_Serialize,
+  AiSnapshotContent_Serialize,
+  AppSettings_Serialize,
+  ChartConfig_Serialize,
+  ExportPlaylistRequest_Serialize,
+  SaveAiSnapshotRequest_Serialize,
+  SavePlaylistRequest_Serialize,
+  SavedChart_Serialize,
+  SavedPlaylist_Serialize,
+  SmartPlaylistRefreshResult_Serialize,
+  AddWishListItemRequest as AddWishListItemRequest_Generated,
+  AiCurrentViewQuestion as AiCurrentViewQuestion_Generated,
+  AiLibraryAnalysisRequest as AiLibraryAnalysisRequest_Generated,
+  AiMusicResearchContext as AiMusicResearchContext_Generated,
+  AiMusicResearchRequest as AiMusicResearchRequest_Generated,
+  AiPlaylistBuildRequest as AiPlaylistBuildRequest_Generated,
+  ArtistListRequest as ArtistListRequest_Generated,
+  ArtistTimelineRequest as ArtistTimelineRequest_Generated,
+  BrowseFilters as BrowseFilters_Generated,
+  BrowseRequest as BrowseRequest_Generated,
+  BrowseSort as BrowseSort_Generated,
+  CoverImportRequest as CoverImportRequest_Generated,
+  DeemixAlbumDownloadPreflightRequest as DeemixAlbumDownloadPreflightRequest_Generated,
+  DeemixAlbumDownloadRequest as DeemixAlbumDownloadRequest_Generated,
+  DeemixAlbumSearchRequest as DeemixAlbumSearchRequest_Generated,
+  ExternalDiscoveryResponse as ExternalDiscoveryResponse_Generated,
+  GenreListRequest as GenreListRequest_Generated,
+  GenreProgressRequest as GenreProgressRequest_Generated,
+  GenreTimelineRequest as GenreTimelineRequest_Generated,
+  LibraryUpdateRequest as LibraryUpdateRequest_Generated,
+  MusicBrainzArtistExportRequest as MusicBrainzArtistExportRequest_Generated,
+  MusicBrainzArtistExportRow as MusicBrainzArtistExportRow_Generated,
+  MusicToolFixRequest as MusicToolFixRequest_Generated,
+  MusicToolIssueRequest as MusicToolIssueRequest_Generated,
+  SaveExternalDiscoveryRequest as SaveExternalDiscoveryRequest_Generated,
+  SavedExternalDiscovery as SavedExternalDiscovery_Generated,
+  SavedSearch as SavedSearch_Generated,
+  StartLibraryCompletionArtistVerificationRequest as StartLibraryCompletionArtistVerificationRequest_Generated,
+  StartLibraryCompletionVerificationRequest as StartLibraryCompletionVerificationRequest_Generated,
+  TextFilter as TextFilter_Generated,
+  UsenetSearchRequest as UsenetSearchRequest_Generated,
+  YearProgressRequest as YearProgressRequest_Generated,
+} from "./bindings";
+
+/**
+ * Request structs accept omitted fields (serde defaults), so the generated
+ * types mark them optional. The UI always builds them in full, so app code
+ * uses this deep `Complete` view of them.
+ */
+export type Complete<T> = T extends readonly unknown[]
+  ? { [K in keyof T]: Complete<T[K]> }
+  : T extends object
+    ? { [K in keyof T as [Exclude<T[K], undefined>] extends [never] ? never : K]-?: Complete<T[K]> }
+    : T;
+
+export type {
+  AddWishListMusicBrainzCandidateResponse,
+  AiCompileRequest,
+  AiConnectionTest,
+  AiCurrentViewAnswer,
+  AiKeyStatus,
+  AiLibraryAnalysis,
+  AiLibraryFinding,
+  AiMarkdownExportRequest,
+  AiMusicResearchAnswer,
+  AiMusicResearchExchange,
+  AiMusicResearchSource,
+  AiMusicResearchTurn,
+  AiPlaylistTrack,
+  AiQueryFollowUpContext,
+  AiUsage,
+  AlbumDebutTimelineAlbum,
+  AlbumDebutTimelineResponse,
+  AlbumDebutTimelineYear,
+  AlbumReview,
+  ArtistBiography,
+  ArtistChartTrack,
+  ArtistListResponse,
+  ArtistLovedTrack,
+  ArtistSummary,
+  ArtistTimelineAlbum,
+  ArtistTimelineArtist,
+  ArtistTimelineResponse,
+  ArtistTrackChartHistory,
+  ArtistTrackHighlights,
+  BillboardImportSummary,
+  BillboardSinglesImportSummary,
+  BrowseResponse,
+  BrowseRow,
+  CatalogConcentrationStats,
+  ConcentrationPoint,
+  ConfirmLibraryCompletionArtistMatchRequest,
+  CountryCatalogStats,
+  CoverImportSummary,
+  DatabaseBackup,
+  DatabaseRestoreSummary,
+  DecadeProgressStats,
+  DeemixAlbumDownloadPreflight,
+  DeemixAlbumDownloadSummary,
+  DeemixAlbumMatch,
+  DeemixAlbumSearchResponse,
+  DeemixConnectionTest,
+  DeemixCredentialStatus,
+  DiscogsConnectionTest,
+  DiscogsCredentialStatus,
+  DiscoveryAlbumCompletionStory,
+  DiscoveryAlbumPoint,
+  DiscoveryAnniversaryStory,
+  DiscoveryArtistCompletionStory,
+  DiscoveryArtistPoint,
+  DiscoveryChartSnapshot,
+  DiscoveryChartSnapshotRequest,
+  DiscoveryChartStory,
+  DiscoveryCompletionSnapshot,
+  DiscoveryCompletionSnapshotRequest,
+  DiscoveryDailyEdition,
+  DiscoveryDailyEditionArchive,
+  DiscoveryDailyEditionSnapshotResponse,
+  DiscoveryDeepCutGenre,
+  DiscoveryDeepCutSnapshot,
+  DiscoveryDeepCutSnapshotRequest,
+  DiscoveryDeepCutStory,
+  DiscoveryGenrePoint,
+  DiscoveryHeatmapCell,
+  DiscoveryLifeEventStory,
+  DiscoveryMission,
+  DiscoveryMixerRecommendation,
+  DiscoveryMixerRequest,
+  DiscoveryMixerResponse,
+  DiscoveryMixerSeedInput,
+  DiscoveryMixerSeedOption,
+  DiscoveryMixerSeedSearchRequest,
+  DiscoveryRecommendationAnchor,
+  DiscoveryRecommendationSnapshot,
+  DiscoveryRecommendationSnapshotRequest,
+  DiscoveryRecommendationStory,
+  DiscoveryResponse,
+  DiscoveryShelfExplorerRequest,
+  DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthItem,
+  DiscoverySourceHealthResponse,
+  DurationAlbumStat,
+  DurationAnalyticsStats,
+  ExternalDiscoveryItem,
+  GenreListResponse,
+  GenreProgressStats,
+  GenreSummary,
+  GenreTimelineAlbumPoint,
+  GenreTimelineGenre,
+  GenreTimelineResponse,
+  GenreTimelineYearCount,
+  ImportPreview,
+  ImportRun,
+  ImportSummary,
+  ImportSuspiciousAlbum,
+  LastFmAlbumPopularity,
+  LastFmAlbumTrackPopularity,
+  LastFmArtistImageRefreshSummary,
+  LastFmArtistPopularity,
+  LastFmArtistSimilarity,
+  LastFmConnectionTest,
+  LastFmCredentialStatus,
+  LastFmPopularTrack,
+  LastFmRelatedAlbum,
+  LastFmRelatedAlbums,
+  LastFmSimilarArtist,
+  LibraryCompletionArtistCandidate,
+  LibraryCompletionArtistDecision,
+  LibraryCompletionArtistEvidence,
+  LibraryCompletionArtistRequest,
+  LibraryCompletionArtistResponse,
+  LibraryCompletionArtistVerificationBatch,
+  LibraryCompletionArtistVerificationItemSummary,
+  LibraryCompletionArtistVerificationStatus,
+  LibraryCompletionAtlasCell,
+  LibraryCompletionCandidate,
+  LibraryCompletionCoverEnrichment,
+  LibraryCompletionDecision,
+  LibraryCompletionEvidence,
+  LibraryCompletionRequest,
+  LibraryCompletionResponse,
+  LibraryCompletionVerificationBatch,
+  LibraryCompletionVerificationItemSummary,
+  LibraryCompletionVerificationStatus,
+  LibraryHealthScore,
+  LibraryOverviewStats,
+  LibraryShapeStats,
+  LibraryStatus,
+  LibraryUpdate,
+  LibraryUpdateArtistResponse,
+  LibraryUpdateArtistSummary,
+  LibraryUpdateResponse,
+  LibraryUpdateSummary,
+  LovedDensityStat,
+  LovedTrackStats,
+  MetadataCoverageMetric,
+  MusicBrainzArtistCandidateRow,
+  MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistInfoImportRequest,
+  MusicBrainzArtistInfoImportRun,
+  MusicBrainzArtistInfoImportSummary,
+  MusicBrainzArtistInfoPreview,
+  MusicBrainzArtistInfoPreviewRow,
+  MusicBrainzArtistInfoStatus,
+  MusicBrainzArtistOriginCountryUpdate,
+  MusicBrainzArtistOriginImportRun,
+  MusicBrainzArtistRefreshResult,
+  MusicBrainzArtistReleaseRow,
+  MusicBrainzCacheStatus,
+  MusicBrainzCacheWarningExample,
+  MusicBrainzOriginCountryImportRequest,
+  MusicBrainzOriginCountryImportSummary,
+  MusicBrainzOriginCountryOption,
+  MusicBrainzOriginCountryPreview,
+  MusicBrainzOriginCountryPreviewRow,
+  MusicBrainzOriginCountryStatus,
+  MusicBrainzOverlaySyncLogEntry,
+  MusicBrainzOverlaySyncResult,
+  MusicDoctorBitrateStat,
+  MusicDoctorFormatStat,
+  MusicDoctorSource,
+  MusicDoctorStatus,
+  MusicDoctorSyncResult,
+  MusicMapArtist,
+  MusicMapGenreStat,
+  MusicMapLocationDetails,
+  MusicMapPoint,
+  MusicMapRefreshSummary,
+  MusicMapResponse,
+  MusicMapSummary,
+  MusicToolFieldDiff,
+  MusicToolFixDiff,
+  MusicToolFixHistoryEntry,
+  MusicToolFixSummary,
+  MusicToolIssueResponse,
+  MusicToolIssueRow,
+  MusicToolSummary,
+  MusicToolUndoSummary,
+  NewLibraryArtist,
+  NorsktoppenImportSummary,
+  OfficialUkImportSummary,
+  OutlierStat,
+  PerformanceProbeOperation,
+  PerformanceProbeResponse,
+  PlaylistAutomationStatus,
+  RatingBucket,
+  RatingEvent,
+  RatingHistoryPoint,
+  RatingProgressStats,
+  SaveDiscogsCredentialsRequest,
+  SaveLastFmApiKeyRequest,
+  SaveUsenetProfileRequest,
+  SetLibraryCompletionArtistDecisionRequest,
+  SetLibraryCompletionArtistVerificationStateRequest,
+  SetLibraryCompletionDecisionRequest,
+  SetLibraryCompletionVerificationStateRequest,
+  SetPlaylistAutomationRequest,
+  StatisticsResponse,
+  TiISkuddetImportSummary,
+  TrackDebutTimelineResponse,
+  TrackDebutTimelineTrack,
+  TrackDebutTimelineYear,
+  UsenetBootstrap,
+  UsenetConnectionTest,
+  UsenetDownloadRequest,
+  UsenetProfile,
+  UsenetSearchResponse,
+  UsenetSearchResult,
+  UsenetTransfer,
+  UsenetTransferQueue,
+  VgListaImportSummary,
+  WishListArtistAlbumDiscoveryRequest,
+  WishListArtistAlbumDiscoveryResponse,
+  WishListArtistAlbumDiscoveryRow,
+  WishListArtistAlbumSummary,
+  WishListItem,
+  WishListMissingAlbum,
+  WishListMusicBrainzCandidate,
+  WishListMusicBrainzSearchRequest,
+  WishListMusicBrainzSearchResponse,
+  WishListResponse,
+  YearProgressStats,
+};
+
+export type AiCompiledQuery = Complete<AiCompiledQuery_Serialize>;
+export type AiPlaylist = Complete<AiPlaylist_Serialize>;
+export type AiQueryExchange = Complete<AiQueryExchange_Serialize>;
+export type AiSnapshot = Complete<AiSnapshot_Serialize>;
+export type AiSnapshotContent = Complete<AiSnapshotContent_Serialize>;
+export type AppSettings = AppSettings_Serialize;
+export type ChartConfig = Complete<ChartConfig_Serialize>;
+export type ExportPlaylistRequest = Complete<ExportPlaylistRequest_Serialize>;
+export type SaveAiSnapshotRequest = Complete<SaveAiSnapshotRequest_Serialize>;
+export type SavePlaylistRequest = Complete<SavePlaylistRequest_Serialize>;
+export type SavedChart = Complete<SavedChart_Serialize>;
+export type SavedPlaylist = Complete<SavedPlaylist_Serialize>;
+export type SmartPlaylistRefreshResult = Complete<SmartPlaylistRefreshResult_Serialize>;
+export type AddWishListItemRequest = Complete<AddWishListItemRequest_Generated>;
+export type AiCurrentViewQuestion = Omit<Complete<AiCurrentViewQuestion_Generated>, "scopeLabel" | "scopeToResultLimit"> & Partial<Pick<Complete<AiCurrentViewQuestion_Generated>, "scopeLabel" | "scopeToResultLimit">>;
+export type AiLibraryAnalysisRequest = Complete<AiLibraryAnalysisRequest_Generated>;
+export type AiMusicResearchContext = Complete<AiMusicResearchContext_Generated>;
+export type AiMusicResearchRequest = Complete<AiMusicResearchRequest_Generated>;
+export type AiPlaylistBuildRequest = Complete<AiPlaylistBuildRequest_Generated>;
+export type ArtistListRequest = Complete<ArtistListRequest_Generated>;
+export type ArtistTimelineRequest = Complete<ArtistTimelineRequest_Generated>;
+export type BrowseFilters = Complete<BrowseFilters_Generated>;
+export type BrowseRequest = Complete<BrowseRequest_Generated>;
+export type BrowseSort = Complete<BrowseSort_Generated>;
+export type CoverImportRequest = Complete<CoverImportRequest_Generated>;
+export type DeemixAlbumDownloadPreflightRequest = Complete<DeemixAlbumDownloadPreflightRequest_Generated>;
+export type DeemixAlbumDownloadRequest = Complete<DeemixAlbumDownloadRequest_Generated>;
+export type DeemixAlbumSearchRequest = Complete<DeemixAlbumSearchRequest_Generated>;
+export type ExternalDiscoveryResponse = Complete<ExternalDiscoveryResponse_Generated>;
+export type GenreListRequest = Complete<GenreListRequest_Generated>;
+export type GenreProgressRequest = Complete<GenreProgressRequest_Generated>;
+export type GenreTimelineRequest = Complete<GenreTimelineRequest_Generated>;
+export type LibraryUpdateRequest = Complete<LibraryUpdateRequest_Generated>;
+export type MusicBrainzArtistExportRequest = Complete<MusicBrainzArtistExportRequest_Generated>;
+export type MusicBrainzArtistExportRow = Complete<MusicBrainzArtistExportRow_Generated>;
+export type MusicToolFixRequest = Complete<MusicToolFixRequest_Generated>;
+export type MusicToolIssueRequest = Complete<MusicToolIssueRequest_Generated>;
+export type SaveExternalDiscoveryRequest = Complete<SaveExternalDiscoveryRequest_Generated>;
+export type SavedExternalDiscovery = Complete<SavedExternalDiscovery_Generated>;
+export type SavedSearch = Complete<SavedSearch_Generated>;
+export type StartLibraryCompletionArtistVerificationRequest = Complete<StartLibraryCompletionArtistVerificationRequest_Generated>;
+export type StartLibraryCompletionVerificationRequest = Complete<StartLibraryCompletionVerificationRequest_Generated>;
+export type TextFilter = Complete<TextFilter_Generated>;
+export type UsenetSearchRequest = Complete<UsenetSearchRequest_Generated>;
+export type YearProgressRequest = Complete<YearProgressRequest_Generated>;
+
 export type {
   AiKeySource,
   AiLibraryLens,
@@ -66,153 +636,6 @@ export type {
   WishListEntity,
 };
 
-export type ImportRun = {
-  id: number;
-  sourcePath: string;
-  sourceSizeBytes: number;
-  startedAt: string;
-  completedAt: string | null;
-  status: string;
-  trackRows: number;
-  albumCount: number;
-  durationMs: number;
-  backupPath: string | null;
-  errorMessage: string | null;
-  addedTracks: number;
-  changedTracks: number;
-  removedTracks: number;
-  addedAlbums: number;
-  changedAlbums: number;
-  removedAlbums: number;
-  ratingEventsCount: number;
-};
-
-export type LibraryUpdateRequest = {
-  query: string;
-  changeKind: LibraryUpdateKind | null;
-  dateFrom: string | null;
-  limit: number;
-  offset: number;
-};
-
-export type LibraryUpdate = {
-  id: number;
-  importRunId: number | null;
-  createdAt: string;
-  changeKind: LibraryUpdateKind;
-  category: "album" | "metadata" | "tracks" | "ratings" | string;
-  albumId: string;
-  albumArtistDisplay: string | null;
-  album: string | null;
-  year: number | null;
-  field: string | null;
-  fieldLabel: string | null;
-  previousValue: string | null;
-  currentValue: string | null;
-  changeCount: number | null;
-  description: string;
-  sourceKind: string;
-  sourceLabel: string;
-  sourcePath: string | null;
-};
-
-export type LibraryUpdateSummary = {
-  all: number;
-  new: number;
-  changed: number;
-  removed: number;
-};
-
-export type LibraryUpdateResponse = {
-  rows: LibraryUpdate[];
-  total: number;
-  summary: LibraryUpdateSummary;
-  limit: number;
-  offset: number;
-};
-
-export type LibraryUpdateArtistSummary = {
-  artistKey: string;
-  artistName: string;
-  totalChanges: number;
-  tracksAdded: number;
-  tracksRemoved: number;
-  otherChanges: number;
-  albumsAdded: number;
-  albumsDeleted: number;
-  lastUpdatedAt: string;
-};
-
-export type NewLibraryArtist = {
-  artistKey: string;
-  artistName: string;
-  addedAt: string;
-};
-
-export type LibraryUpdateArtistResponse = {
-  rows: LibraryUpdateArtistSummary[];
-  newArtists: NewLibraryArtist[];
-  total: number;
-  summary: LibraryUpdateSummary;
-  limit: number;
-  offset: number;
-};
-
-export type LibraryStatus = {
-  dbPath: string;
-  hasDatabase: boolean;
-  trackCount: number;
-  albumCount: number;
-  coverCount: number;
-  importRunCount: number;
-  lastImport: ImportRun | null;
-};
-
-export type PerformanceProbeOperation = {
-  id: string;
-  label: string;
-  category: string;
-  status: "ok" | "failed";
-  durationMs: number;
-  totalCount: number | null;
-  rowCount: number | null;
-  detail: string;
-  errorMessage: string | null;
-};
-
-export type PerformanceProbeResponse = {
-  generatedAt: string;
-  databasePath: string;
-  trackCount: number;
-  albumCount: number;
-  totalDurationMs: number;
-  slowestOperationMs: number;
-  operations: PerformanceProbeOperation[];
-};
-
-export type DatabaseBackup = {
-  id: number | null;
-  createdAt: string;
-  operation: string;
-  sourcePath: string | null;
-  sourceSizeBytes: number;
-  backupPath: string;
-  fileSizeBytes: number;
-  trackRows: number | null;
-  albumCount: number | null;
-  schemaVersion: number | null;
-  exists: boolean;
-  canRestore: boolean;
-};
-
-export type DatabaseRestoreSummary = {
-  restoredBackup: DatabaseBackup;
-  preRestoreBackupPath: string | null;
-  trackCount: number;
-  albumCount: number;
-  schemaVersion: number;
-};
-
 export type ImportProgress = {
   status: string;
   sessionId: number | null;
@@ -221,57 +644,6 @@ export type ImportProgress = {
   totalBytes: number;
   albumCount: number;
   message: string;
-};
-
-export type ImportSuspiciousAlbum = {
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  year: number | null;
-  reason: string;
-  previousTrackCount: number | null;
-  currentTrackCount: number | null;
-};
-
-export type ImportPreview = {
-  sessionId: number;
-  sourcePath: string;
-  sourceSizeBytes: number;
-  sourceModifiedMs: number;
-  status: string;
-  processedRows: number;
-  processedBytes: number;
-  trackRows: number;
-  albumCount: number;
-  addedTracks: number;
-  changedTracks: number;
-  removedTracks: number;
-  addedAlbums: number;
-  changedAlbums: number;
-  removedAlbums: number;
-  suspiciousAlbumCount: number;
-  suspiciousAlbums: ImportSuspiciousAlbum[];
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-  importRunId: number | null;
-  errorMessage: string | null;
-  canResume: boolean;
-  sourceChanged: boolean;
-};
-
-export type ImportSummary = {
-  importRun: ImportRun;
-  trackRows: number;
-  albumCount: number;
-  durationMs: number;
-  backupPath: string | null;
-};
-
-export type CoverImportRequest = {
-  sourcePath: string;
-  extractEmbeddedFallback: boolean;
-  replaceExisting: boolean;
 };
 
 export type CoverImportProgress = {
@@ -285,309 +657,6 @@ export type CoverImportProgress = {
   missingCovers: number;
   percent: number;
   message: string;
-};
-
-export type CoverImportSummary = {
-  totalAlbums: number;
-  scannedAlbums: number;
-  newCoversFound: number;
-  importedCovers: number;
-  relinkedCovers: number;
-  skippedExisting: number;
-  missingCovers: number;
-  durationMs: number;
-};
-
-export type BillboardImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedAlbums: number;
-  datedAlbums: number;
-  durationMs: number;
-};
-
-export type BillboardSinglesImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedTracks: number;
-  datedTracks: number;
-  exactDates: number;
-  qualifiedDates: number;
-  missingDates: number;
-  invalidDates: number;
-  durationMs: number;
-};
-
-export type VgListaImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedItems: number;
-  datedItems: number;
-  durationMs: number;
-};
-
-export type OfficialUkImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedItems: number;
-  datedItems: number;
-  durationMs: number;
-};
-
-export type TiISkuddetImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedTracks: number;
-  datedTracks: number;
-  skippedRows: number;
-  durationMs: number;
-};
-
-export type NorsktoppenImportSummary = {
-  sourcePath: string;
-  filesScanned: number;
-  chartEntries: number;
-  matchedTracks: number;
-  datedTracks: number;
-  skippedRows: number;
-  durationMs: number;
-};
-
-export type AppSettings = {
-  backupRetention: number;
-  darkMode: boolean;
-  countryFlagDisplay: CountryFlagDisplay;
-  leftSidebarDefault: LeftSidebarMode;
-  rightSidebarDefault: RightSidebarMode;
-  importSourcePath: string;
-  coverSourcePath: string;
-  billboardSourcePath: string;
-  billboardSinglesSourcePath: string;
-  vgListaAlbumSourcePath: string;
-  vgListaSinglesSourcePath: string;
-  officialUkAlbumSourcePath: string;
-  officialUkSinglesSourcePath: string;
-  tiISkuddetSourcePath: string;
-  norsktoppenSourcePath: string;
-  deemixDownloadPath: string;
-  deemixDownloadQuality: DeemixDownloadQuality;
-  deemixDownloadFallback: boolean;
-  deemixDownloadOrganization: DeemixDownloadOrganization;
-  musicBrainzCachePath: string;
-  musicBrainzOverlaySyncPath: string;
-  musicBrainzOverlayAutoSyncMinutes: number;
-  musicDoctorDatabasePath: string;
-  musicDoctorAutoSync: boolean;
-  updateAutoCheckMinutes: number;
-  updatedAt: string | null;
-};
-
-export type MusicDoctorSource = {
-  path: string;
-  enabled: boolean;
-  lastScanAt: string | null;
-  fileCount: number;
-  totalBytes: number;
-};
-
-export type MusicDoctorFormatStat = {
-  format: string;
-  fileCount: number;
-  totalBytes: number;
-};
-
-export type MusicDoctorBitrateStat = {
-  band: string;
-  sortOrder: number;
-  fileCount: number;
-  totalBytes: number;
-};
-
-export type MusicDoctorStatus = {
-  databasePath: string;
-  resolvedPath: string;
-  exists: boolean;
-  valid: boolean;
-  state: string;
-  message: string;
-  schemaVersion: number | null;
-  fileSizeBytes: number;
-  latestScanId: number | null;
-  latestScanStatus: string | null;
-  latestScanCompletedAt: string | null;
-  sourceCount: number;
-  totalFiles: number;
-  audioFiles: number;
-  audioAlbums: number;
-  matchedTracks: number;
-  unmatchedLibraryTracks: number;
-  unmatchedDoctorAudio: number;
-  fileIssueCount: number;
-  lastSyncedAt: string | null;
-  needsSync: boolean;
-  syncInProgress: boolean;
-  sources: MusicDoctorSource[];
-  formatStats: MusicDoctorFormatStat[];
-  bitrateStats: MusicDoctorBitrateStat[];
-};
-
-export type MusicDoctorSyncResult = {
-  syncRunId: number;
-  databasePath: string;
-  scanId: number;
-  scanCompletedAt: string | null;
-  totalFiles: number;
-  audioFiles: number;
-  audioAlbums: number;
-  matchedTracks: number;
-  unmatchedLibraryTracks: number;
-  unmatchedDoctorAudio: number;
-  fileIssueCount: number;
-  durationMs: number;
-  completedAt: string;
-};
-
-export type MusicBrainzOverlaySyncResult = {
-  syncPath: string;
-  syncedAt: string;
-  importedCount: number;
-  exportedCount: number;
-  changedCount: number;
-  summary: string;
-  artistLinksImported: number;
-  artistLinksExported: number;
-  artistUnlinksImported: number;
-  artistUnlinksExported: number;
-  releaseDecisionsImported: number;
-  releaseDecisionsExported: number;
-  releaseDecisionClearsImported: number;
-  releaseDecisionClearsExported: number;
-  releaseStatusesImported: number;
-  releaseStatusesExported: number;
-  releaseGroupsImported: number;
-  releaseGroupsExported: number;
-};
-
-export type MusicBrainzOverlaySyncLogEntry = MusicBrainzOverlaySyncResult & {
-  id: number;
-};
-
-export type MusicBrainzCacheWarningExample = {
-  mbid: string;
-  cachedNameCount: number;
-  releaseGroupCount: number;
-  cachedNames: string[];
-};
-
-export type MusicBrainzCacheStatus = {
-  cachePath: string;
-  resolvedPath: string;
-  exists: boolean;
-  valid: boolean;
-  state: "available" | "warning" | "unavailable" | "invalid";
-  message: string;
-  fileSizeBytes: number;
-  artistCount: number;
-  distinctMbidCount: number;
-  duplicateMbidCount: number;
-  suspiciousMappingCount: number;
-  releaseGroupCount: number;
-  officialReleaseGroupCount: number;
-  pureAlbumReleaseGroupCount: number;
-  releaseYearMin: number | null;
-  releaseYearMax: number | null;
-  cacheDateMin: string | null;
-  cacheDateMax: string | null;
-  warningExamples: MusicBrainzCacheWarningExample[];
-};
-
-export type MusicBrainzOriginCountryOption = {
-  code: string;
-  name: string;
-  artistCount: number;
-};
-
-export type MusicBrainzArtistOriginImportRun = {
-  id: number;
-  scope: string;
-  status: string;
-  totalArtists: number;
-  eligibleCount: number;
-  fetchedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  lastProcessedArtistKey: string | null;
-  startedAt: string;
-  completedAt: string | null;
-  errorSummary: string | null;
-};
-
-export type MusicBrainzOriginCountryStatus = {
-  totalAlbumArtists: number;
-  importedOrigins: number;
-  countryCount: number;
-  manualOrigins: number;
-  unresolvedOrigins: number;
-  missingOrigins: number;
-  lastRun: MusicBrainzArtistOriginImportRun | null;
-  countries: MusicBrainzOriginCountryOption[];
-};
-
-export type MusicBrainzOriginCountryPreviewRow = {
-  localArtistKey: string;
-  displayArtist: string;
-  albumCount: number;
-  musicbrainzMbid: string | null;
-  matchedName: string | null;
-  matchMethod: string;
-  artistLinkState: "none" | "unverified" | "verified" | "ignored" | string;
-  suspectMapping: boolean;
-  existingCountryCode: string | null;
-  existingCountryName: string | null;
-  existingReviewState: string | null;
-  status:
-    | "eligible"
-    | "alreadyImported"
-    | "manual"
-    | "skipped"
-    | "unresolved"
-    | string;
-  skippedReason: string | null;
-};
-
-export type MusicBrainzOriginCountryPreview = {
-  totalAlbumArtists: number;
-  eligibleCount: number;
-  alreadyImportedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  estimatedSeconds: number;
-  rows: MusicBrainzOriginCountryPreviewRow[];
-};
-
-export type MusicBrainzOriginCountryImportRequest = {
-  artistKeys?: string[];
-  refetch?: boolean;
-  limit?: number | null;
-};
-
-export type MusicBrainzOriginCountryImportSummary = {
-  run: MusicBrainzArtistOriginImportRun;
-  totalAlbumArtists: number;
-  eligibleCount: number;
-  fetchedCount: number;
-  storedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  cancelled: boolean;
-  rows: MusicBrainzOriginCountryPreviewRow[];
 };
 
 export type MusicBrainzOriginCountryImportProgress = {
@@ -606,89 +675,6 @@ export type MusicBrainzOriginCountryImportProgress = {
   currentArtistKey: string | null;
   currentMbid: string | null;
   message: string;
-};
-
-export type MusicBrainzArtistInfoImportRun = {
-  id: number;
-  scope: string;
-  status: string;
-  totalArtists: number;
-  eligibleCount: number;
-  fetchedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  lastProcessedArtistKey: string | null;
-  startedAt: string;
-  completedAt: string | null;
-  errorSummary: string | null;
-};
-
-export type MusicBrainzArtistInfoStatus = {
-  totalAlbumArtists: number;
-  importedInfos: number;
-  personArtists: number;
-  groupArtists: number;
-  genderedArtists: number;
-  bornArtists: number;
-  diedArtists: number;
-  foundedArtists: number;
-  dissolvedArtists: number;
-  missingInfos: number;
-  lastRun: MusicBrainzArtistInfoImportRun | null;
-};
-
-export type MusicBrainzArtistInfoPreviewRow = {
-  localArtistKey: string;
-  displayArtist: string;
-  albumCount: number;
-  musicbrainzMbid: string | null;
-  matchedName: string | null;
-  matchMethod: string;
-  artistLinkState: "none" | "unverified" | "verified" | "ignored" | string;
-  suspectMapping: boolean;
-  existingSortName: string | null;
-  existingArtistType: string | null;
-  existingGender: string | null;
-  existingBeginDate: string | null;
-  existingBeginYear: number | null;
-  existingEndDate: string | null;
-  existingEndYear: number | null;
-  existingEnded: boolean | null;
-  existingBeginAreaName: string | null;
-  existingEndAreaName: string | null;
-  existingReviewState: string | null;
-  status: "eligible" | "alreadyImported" | "skipped" | "unresolved" | string;
-  skippedReason: string | null;
-};
-
-export type MusicBrainzArtistInfoPreview = {
-  totalAlbumArtists: number;
-  eligibleCount: number;
-  alreadyImportedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  estimatedSeconds: number;
-  rows: MusicBrainzArtistInfoPreviewRow[];
-};
-
-export type MusicBrainzArtistInfoImportRequest = {
-  artistKeys?: string[];
-  refetch?: boolean;
-  limit?: number | null;
-};
-
-export type MusicBrainzArtistInfoImportSummary = {
-  run: MusicBrainzArtistInfoImportRun;
-  totalAlbumArtists: number;
-  eligibleCount: number;
-  fetchedCount: number;
-  storedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  cancelled: boolean;
-  rows: MusicBrainzArtistInfoPreviewRow[];
 };
 
 export type MusicBrainzArtistInfoImportProgress = {
@@ -712,359 +698,12 @@ export type MusicBrainzArtistInfoImportProgress = {
 export type MusicBrainzReleaseDecision =
   "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
 
-export type MusicBrainzArtistReleaseRow = {
-  releaseMbid: string;
-  title: string;
-  year: number | null;
-  trackCount: number | null;
-  status: "owned" | "missing" | "excluded";
-  localAlbumId: string | null;
-  localAlbumTitle: string | null;
-  localYear: number | null;
-  matchMethod: string;
-  confidence: number;
-  decision: MusicBrainzReleaseDecision;
-};
-
-export type MusicBrainzArtistExportRow = {
-  releaseMbid: string;
-  title: string;
-  year: number | null;
-  status: "owned" | "missing" | "excluded";
-  localAlbumTitle: string | null;
-  localYear: number | null;
-  matchMethod: string;
-  confidence: number;
-};
-
-export type MusicBrainzArtistExportRequest = {
-  artistKey: string;
-  artistName: string;
-  musicbrainzMbid: string | null;
-  matchedCacheName: string | null;
-  matchMethod: string;
-  artistLinkState: "none" | "unverified" | "verified" | "ignored";
-  artistLinkIgnored: boolean;
-  rows: MusicBrainzArtistExportRow[];
-  format: string;
-};
-
-export type MusicBrainzArtistRefreshResult = {
-  artistKey: string;
-  artistName: string;
-  musicbrainzMbid: string;
-  fetchedCount: number;
-  storedCount: number;
-  fetchedAt: string;
-  origin: MusicBrainzArtistOriginCountryUpdate | null;
-};
-
-export type MusicBrainzArtistOriginCountryUpdate = {
-  artistKey: string;
-  artistName: string;
-  musicbrainzMbid: string | null;
-  originCountryCode: string | null;
-  originCountryName: string | null;
-  originCountryRawArea: string | null;
-  originCountryReviewState: string | null;
-};
-
-export type MusicBrainzArtistCandidateRow = {
-  name: string;
-  mbid: string;
-  matchMethod: string;
-  score: number;
-  cachedNameCount: number;
-  totalReleaseGroupCount: number;
-  suspectMapping: boolean;
-};
-
-export type MusicBrainzArtistDiscographyResponse = {
-  artistKey: string;
-  artistName: string;
-  state:
-    | "available"
-    | "warning"
-    | "unavailable"
-    | "invalid"
-    | "notFound"
-    | "ignored";
-  message: string;
-  cachePath: string;
-  resolvedPath: string;
-  musicbrainzMbid: string | null;
-  matchedCacheName: string | null;
-  matchMethod: string;
-  artistLinkState: "none" | "unverified" | "verified" | "ignored";
-  artistLinkIgnored: boolean;
-  suspectMapping: boolean;
-  cachedNameCount: number;
-  totalReleaseGroupCount: number;
-  pureAlbumCount: number;
-  ownedCount: number;
-  missingCount: number;
-  excludedCount: number;
-  localAlbumCount: number;
-  completion: number | null;
-  releaseGroupSource: "cache" | "refreshed";
-  releaseGroupUpdatedAt: string | null;
-  releases: MusicBrainzArtistReleaseRow[];
-  candidates: MusicBrainzArtistCandidateRow[];
-};
-
-export type AiKeyStatus = {
-  configured: boolean;
-  source: AiKeySource;
-  model: string;
-};
-
-export type AiUsage = {
-  inputTokens: number | null;
-  cachedInputTokens: number | null;
-  outputTokens: number | null;
-};
-
-export type AiMusicResearchContext = {
-  workspace: string;
-  selectedEntityType: AiMusicResearchEntity | null;
-  selectedEntityId: string | null;
-  selectedLabel: string | null;
-  selectedSubtitle: string | null;
-};
-
-export type AiMusicResearchTurn = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-export type AiMusicResearchRequest = {
-  question: string;
-  context: AiMusicResearchContext;
-  conversation: AiMusicResearchTurn[];
-};
-
-export type AiMusicResearchSource = {
-  title: string;
-  url: string;
-};
-
-export type AiMusicResearchAnswer = {
-  answer: string;
-  sources: AiMusicResearchSource[];
-  model: string;
-  usage: AiUsage;
-  usedWebSearch: boolean;
-  localInspectionCount: number;
-};
-
-export type AiMusicResearchExchange = {
-  question: string;
-  result: AiMusicResearchAnswer;
-};
-
-export type AiQueryFollowUpContext = {
-  previousPrompt: string;
-  previousSummary: string;
-  previousAnswer: string;
-};
-
-export type AiCompileRequest = {
-  prompt: string;
-  target: AiQueryTarget;
-  currentView?: BrowseView | null;
-  followUp?: AiQueryFollowUpContext | null;
-};
-
-export type AiCurrentViewQuestion = {
-  question: string;
-  request: BrowseRequest;
-  scopeLabel?: string;
-  scopeToResultLimit?: boolean;
-};
-
-export type AiCurrentViewAnswer = {
-  answer: string;
-  view: BrowseView;
-  matchingRows: number;
-  analysisCount: number;
-  namedRowsShared: number;
-  model: string;
-  usage: AiUsage;
-};
-
-export type AiQueryExchange = {
-  prompt: string;
-  result: AiCompiledQuery;
-  answer?: AiCurrentViewAnswer | null;
-};
-
-export type AiLibraryAnalysisRequest = {
-  lens: AiLibraryLens;
-  focus: string;
-};
-
-export type AiLibraryFinding = {
-  title: string;
-  evidence: string;
-  interpretation: string;
-};
-
-export type AiLibraryAnalysis = {
-  lens: AiLibraryLens;
-  headline: string;
-  summary: string;
-  findings: AiLibraryFinding[];
-  nextQuestions: string[];
-  profileSections: string[];
-  aggregatePointsShared: number;
-  model: string;
-  usage: AiUsage;
-};
-
 export type AiSnapshotKind =
   | AiQueryTarget
   | "searchAnswer"
   | "chartAnswer"
   | "libraryAnalysis"
   | "musicResearch";
-
-export type AiSnapshotContent =
-  | {
-      kind: "search";
-      prompt: string;
-      result: AiCompiledQuery;
-      answer?: AiCurrentViewAnswer | null;
-      exchanges?: AiQueryExchange[];
-    }
-  | {
-      kind: "chart";
-      prompt: string;
-      result: AiCompiledQuery;
-      answer?: AiCurrentViewAnswer | null;
-      exchanges?: AiQueryExchange[];
-    }
-  | {
-      kind: "searchAnswer";
-      prompt: string;
-      request: BrowseRequest;
-      result: AiCurrentViewAnswer;
-    }
-  | {
-      kind: "chartAnswer";
-      prompt: string;
-      request: BrowseRequest;
-      result: AiCurrentViewAnswer;
-    }
-  | {
-      kind: "libraryAnalysis";
-      prompt: string;
-      result: AiLibraryAnalysis;
-    }
-  | {
-      kind: "musicResearch";
-      prompt: string;
-      context: AiMusicResearchContext;
-      exchanges: AiMusicResearchExchange[];
-    };
-
-export type AiSnapshot = {
-  id: number;
-  title: string;
-  content: AiSnapshotContent;
-  libraryImportRunId: number | null;
-  libraryImportedAt: string | null;
-  libraryAlbumCount: number;
-  libraryTrackCount: number;
-  createdAt: string;
-};
-
-export type SaveAiSnapshotRequest = {
-  title: string;
-  content: AiSnapshotContent;
-};
-
-export type AiPlaylistBuildRequest = {
-  prompt: string;
-  sourceRequest?: BrowseRequest | null;
-};
-
-export type AiPlaylistTrack = {
-  trackId: number;
-  albumId: string;
-  album: string | null;
-  albumArtist: string | null;
-  displayArtist: string | null;
-  title: string | null;
-  genre: string | null;
-  year: number | null;
-  seconds: number;
-  rating: number | null;
-  loved: boolean;
-  filePath: string | null;
-  filename: string | null;
-};
-
-export type AiPlaylist = {
-  mixtape?: import("./mixtape").MixtapeDraft | null;
-  prompt: string;
-  name: string;
-  description: string;
-  request: BrowseRequest;
-  strategy: AiPlaylistStrategy;
-  targetTrackCount: number;
-  targetMinutes: number;
-  maxTracksPerArtist: number;
-  maxTracksPerAlbum: number;
-  model: string;
-  usage: AiUsage;
-  matchingTrackCount: number;
-  candidateCount: number;
-  totalSeconds: number;
-  tracks: AiPlaylistTrack[];
-};
-
-export type SavePlaylistRequest = {
-  id: number | null;
-  name: string;
-  playlist: AiPlaylist;
-};
-
-export type ExportPlaylistRequest = {
-  name: string;
-  playlist: AiPlaylist;
-};
-
-export type SavedPlaylist = {
-  id: number;
-  name: string;
-  playlist: AiPlaylist;
-  libraryImportRunId: number | null;
-  libraryImportedAt: string | null;
-  libraryAlbumCount: number;
-  libraryTrackCount: number;
-  createdAt: string;
-  updatedAt: string;
-  automation: PlaylistAutomationStatus;
-};
-
-export type PlaylistAutomationStatus = {
-  smart: boolean;
-  lastEvaluatedAt: string | null;
-  lastError: string | null;
-  desiredCount: number;
-};
-
-export type SetPlaylistAutomationRequest = {
-  id: number;
-  smart: boolean;
-};
-
-export type SmartPlaylistRefreshResult = {
-  playlist: SavedPlaylist;
-  desiredCount: number;
-  previewCount: number;
-  refreshedAt: string;
-};
 
 export type ExternalDiscoveryPlan = {
   prompt: string;
@@ -1083,521 +722,10 @@ export type ExternalDiscoveryPlan = {
   usage: AiUsage;
 };
 
-export type ExternalDiscoveryItem = {
-  id: string;
-  entity: ExternalDiscoveryEntity;
-  title: string;
-  artist: string;
-  anchor: string | null;
-  year: number | null;
-  country: string | null;
-  itemType: string | null;
-  tags: string[];
-  score: number;
-  evidence: string;
-  url: string;
-};
-
-export type ExternalDiscoveryResponse = {
-  prompt: string;
-  title: string;
-  summary: string;
-  plan: ExternalDiscoveryPlan;
-  items: ExternalDiscoveryItem[];
-  source: "MusicBrainz";
-  fetchedAt: string;
-  catalogCandidateCount: number;
-  excludedOwnedCount: number;
-  limitations: string[];
-};
-
-export type SaveExternalDiscoveryRequest = {
-  id: number | null;
-  name: string;
-  response: ExternalDiscoveryResponse;
-};
-
-export type SavedExternalDiscovery = {
-  id: number;
-  name: string;
-  response: ExternalDiscoveryResponse;
-  libraryImportRunId: number | null;
-  libraryImportedAt: string | null;
-  libraryAlbumCount: number;
-  libraryTrackCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type AddWishListItemRequest = {
-  entity: WishListEntity;
-  title: string;
-  artist: string;
-  year: number | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-  source: string;
-};
-
-export type WishListItem = AddWishListItemRequest & {
-  id: number;
-  createdAt: string;
-  downloadedDeezerAlbumId: string | null;
-  downloadedPath: string | null;
-  downloadedAt: string | null;
-  artistAlbumSummary: WishListArtistAlbumSummary | null;
-};
-
-export type WishListMissingAlbum = {
-  releaseGroupId: string;
-  title: string;
-  year: number | null;
-  musicbrainzUrl: string;
-};
-
-export type WishListArtistAlbumSummary = {
-  officialAlbumCount: number;
-  ownedAlbumCount: number;
-  missingAlbumCount: number;
-  missingAlbums: WishListMissingAlbum[];
-  updatedAt: string;
-};
-
-export type WishListResponse = {
-  items: WishListItem[];
-  autoRemovedCount: number;
-};
-
-export type WishListMusicBrainzSearchRequest = {
-  entity: WishListEntity;
-  query: string;
-  artist?: string;
-  year?: number;
-};
-
-export type WishListMusicBrainzCandidate = {
-  entity: WishListEntity;
-  title: string;
-  artist: string;
-  year: number | null;
-  musicbrainzId: string;
-  musicbrainzUrl: string;
-  disambiguation: string | null;
-  country: string | null;
-  score: number;
-};
-
-export type WishListMusicBrainzSearchResponse = {
-  entity: WishListEntity;
-  query: string;
-  candidates: WishListMusicBrainzCandidate[];
-  searchedAt: string;
-};
-
-export type AddWishListMusicBrainzCandidateResponse = {
-  added: boolean;
-  item: WishListItem | null;
-  message: string;
-  artistAlbumSummary: WishListArtistAlbumSummary | null;
-};
-
-export type WishListArtistAlbumDiscoveryRequest = {
-  wishListItemId: number;
-};
-
-export type WishListArtistAlbumDiscoveryRow = {
-  releaseGroupId: string;
-  title: string;
-  year: number | null;
-  secondaryTypes: string[];
-  musicbrainzUrl: string;
-  deemixMatches: DeemixAlbumMatch[];
-  deemixError: string | null;
-  downloadedDeezerAlbumId: string | null;
-  downloadedPath: string | null;
-  downloadedAt: string | null;
-  inLibrary: boolean;
-};
-
-export type WishListArtistAlbumDiscoveryResponse = {
-  wishListItemId: number;
-  artist: string;
-  musicbrainzId: string;
-  officialAlbumCount: number;
-  searchedAlbumCount: number;
-  matchedAlbumCount: number;
-  truncated: boolean;
-  albums: WishListArtistAlbumDiscoveryRow[];
-  albumSummary: WishListArtistAlbumSummary;
-  searchedAt: string;
-};
-
-export type LibraryCompletionEvidence = {
-  source: "billboard" | "officialUk" | "vgLista";
-  label: string;
-  bestRank: number;
-  firstYear: number;
-  lastYear: number;
-  appearances: number;
-};
-
-export type LibraryCompletionCandidate = {
-  id: string;
-  artist: string;
-  title: string;
-  chartYear: number;
-  confidence: LibraryCompletionConfidence;
-  status: LibraryCompletionStatus;
-  wishListItemId: number | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-  coverUrl: string | null;
-  coverStatus: "checking" | "available" | "unavailable" | "failed" | null;
-  coverProvider: "musicbrainz" | "discogs" | null;
-  coverMessage: string | null;
-  coverCheckedAt: string | null;
-  verificationStatus:
-    | "unverified"
-    | "queued"
-    | "checking"
-    | "verified"
-    | "noMatch"
-    | "ambiguous"
-    | "failed";
-  verificationProvider: "musicbrainz" | "discogs" | null;
-  verificationMessage: string | null;
-  verificationCheckedAt: string | null;
-  musicbrainzVerificationStatus: "verified" | "noMatch" | "ambiguous" | "failed" | null;
-  musicbrainzVerificationMessage: string | null;
-  discogsVerificationStatus: "verified" | "noMatch" | "ambiguous" | "failed" | null;
-  discogsVerificationMessage: string | null;
-  discogsMasterId: string | null;
-  discogsUrl: string | null;
-  evidence: LibraryCompletionEvidence[];
-};
-
-export type LibraryCompletionCoverEnrichment = {
-  candidateId: string;
-  state: Exclude<LibraryCompletionCandidate["coverStatus"], null>;
-  provider: LibraryCompletionCandidate["coverProvider"];
-  message: string;
-  hasCover: boolean;
-  checkedAt: string;
-};
-
-export type LibraryCompletionAtlasCell = {
-  source: LibraryCompletionEvidence["source"];
-  label: string;
-  decade: number;
-  owned: number;
-  candidates: number;
-  verified: number;
-  wanted: number;
-  needsReview: number;
-  excluded: number;
-  total: number;
-};
-
-export type LibraryCompletionResponse = {
-  generatedAt: string;
-  totalChartAlbums: number;
-  totalCandidates: number;
-  returnedCandidates: number;
-  truncated: boolean;
-  candidates: LibraryCompletionCandidate[];
-  atlas: LibraryCompletionAtlasCell[];
-};
-
-export type LibraryCompletionRequest = {
-  source?: LibraryCompletionEvidence["source"] | null;
-  decade?: number | null;
-  yearFrom?: number | null;
-  yearTo?: number | null;
-};
-
-export type SetLibraryCompletionDecisionRequest = {
-  candidateId: string;
-  artist: string;
-  title: string;
-  chartYear: number;
-  source: string;
-  status: LibraryCompletionStatus;
-  wishListItemId: number | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-};
-
-export type LibraryCompletionDecision = {
-  candidateId: string;
-  status: LibraryCompletionStatus;
-  wishListItemId: number | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-  updatedAt: string;
-};
-
-export type StartLibraryCompletionVerificationRequest = {
-  scope: "candidate" | "selection" | "campaign";
-  candidateIds: string[];
-  source: LibraryCompletionEvidence["source"] | null;
-  decade: number | null;
-  label: string | null;
-};
-
-export type SetLibraryCompletionVerificationStateRequest = {
-  batchId: number;
-  state: "running" | "paused";
-};
-
-export type LibraryCompletionVerificationItemSummary = {
-  candidateId: string;
-  artist: string;
-  title: string;
-  state: Exclude<LibraryCompletionCandidate["verificationStatus"], "unverified">;
-  provider: "musicbrainz" | "discogs";
-  message: string | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-  musicbrainzVerificationStatus: LibraryCompletionCandidate["musicbrainzVerificationStatus"];
-  musicbrainzVerificationMessage: string | null;
-  discogsVerificationStatus: LibraryCompletionCandidate["discogsVerificationStatus"];
-  discogsVerificationMessage: string | null;
-  discogsMasterId: string | null;
-  discogsUrl: string | null;
-  updatedAt: string;
-};
-
-export type LibraryCompletionVerificationBatch = {
-  id: number;
-  label: string;
-  source: LibraryCompletionEvidence["source"] | null;
-  decade: number | null;
-  state: "running" | "paused" | "completed";
-  totalCount: number;
-  queuedCount: number;
-  checkingCount: number;
-  verifiedCount: number;
-  discogsVerifiedCount: number;
-  noMatchCount: number;
-  ambiguousCount: number;
-  failedCount: number;
-  cachedCount: number;
-  completedCount: number;
-  estimatedSecondsRemaining: number;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-};
-
-export type LibraryCompletionVerificationStatus = {
-  batch: LibraryCompletionVerificationBatch | null;
-  recentItems: LibraryCompletionVerificationItemSummary[];
-};
-
 export type LibraryCompletionArtistChartSource =
   | LibraryCompletionEvidence["source"]
   | "tiISkuddet"
   | "norsktoppen";
-
-export type LibraryCompletionArtistEvidence = {
-  source: LibraryCompletionArtistChartSource;
-  chartKind: "albums" | "singles";
-  label: string;
-  bestRank: number;
-  firstYear: number;
-  lastYear: number;
-  appearances: number;
-};
-
-export type LibraryCompletionArtistCandidate = {
-  id: string;
-  artist: string;
-  firstChartYear: number;
-  confidence: Exclude<LibraryCompletionConfidence, "needsReview">;
-  status: LibraryCompletionStatus;
-  wishListItemId: number | null;
-  verificationStatus: LibraryCompletionCandidate["verificationStatus"];
-  verificationMessage: string | null;
-  verificationCheckedAt: string | null;
-  musicbrainzVerificationStatus: LibraryCompletionCandidate["musicbrainzVerificationStatus"];
-  musicbrainzVerificationMessage: string | null;
-  musicbrainzId: string | null;
-  musicbrainzUrl: string | null;
-  officialAlbumCount: number;
-  discogsVerificationStatus: LibraryCompletionCandidate["discogsVerificationStatus"];
-  discogsVerificationMessage: string | null;
-  discogsMasterId: string | null;
-  discogsUrl: string | null;
-  discogsStudioAlbumTitle: string | null;
-  evidence: LibraryCompletionArtistEvidence[];
-};
-
-export type LibraryCompletionArtistResponse = {
-  generatedAt: string;
-  totalChartArtists: number;
-  ownedArtistCount: number;
-  totalCandidates: number;
-  returnedCandidates: number;
-  truncated: boolean;
-  candidates: LibraryCompletionArtistCandidate[];
-};
-
-export type LibraryCompletionArtistRequest = {
-  source?: LibraryCompletionArtistChartSource | null;
-  chartKind?: LibraryCompletionArtistEvidence["chartKind"] | null;
-  yearFrom?: number | null;
-  yearTo?: number | null;
-};
-
-export type StartLibraryCompletionArtistVerificationRequest = {
-  artistIds: string[];
-  label: string | null;
-};
-
-export type SetLibraryCompletionArtistVerificationStateRequest = {
-  batchId: number;
-  state: "running" | "paused";
-};
-
-export type ConfirmLibraryCompletionArtistMatchRequest = {
-  artistId: string;
-  candidate: WishListMusicBrainzCandidate;
-};
-
-export type SetLibraryCompletionArtistDecisionRequest = {
-  artistId: string;
-  artist: string;
-  status: LibraryCompletionStatus;
-};
-
-export type LibraryCompletionArtistDecision = {
-  artistId: string;
-  status: LibraryCompletionStatus;
-  wishListItemId: number | null;
-  missingAlbumCount: number | null;
-  message: string;
-  updatedAt: string;
-};
-
-export type LibraryCompletionArtistVerificationItemSummary = {
-  artistId: string;
-  artist: string;
-  state: Exclude<LibraryCompletionArtistCandidate["verificationStatus"], "unverified">;
-  provider: "musicbrainz" | "discogs";
-  message: string | null;
-  officialAlbumCount: number;
-  updatedAt: string;
-};
-
-export type LibraryCompletionArtistVerificationBatch = {
-  id: number;
-  label: string;
-  state: "running" | "paused" | "completed";
-  totalCount: number;
-  queuedCount: number;
-  checkingCount: number;
-  verifiedCount: number;
-  noMatchCount: number;
-  ambiguousCount: number;
-  failedCount: number;
-  completedCount: number;
-  estimatedSecondsRemaining: number;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-};
-
-export type LibraryCompletionArtistVerificationStatus = {
-  batch: LibraryCompletionArtistVerificationBatch | null;
-  recentItems: LibraryCompletionArtistVerificationItemSummary[];
-};
-
-export type DiscogsCredentialStatus = {
-  configured: boolean;
-  source: "windowsCredentialManager" | "none";
-};
-
-export type DiscogsConnectionTest = {
-  authenticated: boolean;
-  rateLimit: number | null;
-  rateLimitRemaining: number | null;
-  message: string;
-};
-
-export type SaveDiscogsCredentialsRequest = {
-  consumerKey: string;
-  consumerSecret: string;
-};
-
-export type DeemixCredentialStatus = {
-  configured: boolean;
-  source: DeemixCredentialSource;
-};
-
-export type DeemixConnectionTest = {
-  accountName: string;
-  userId: string;
-  country: string | null;
-  canStreamHq: boolean;
-  canStreamLossless: boolean;
-  message: string;
-};
-
-export type DeemixAlbumSearchRequest = {
-  title: string;
-  artist: string;
-  year: number | null;
-  limit?: number;
-};
-
-export type DeemixAlbumMatch = {
-  id: string;
-  title: string;
-  artist: string;
-  year: number | null;
-  trackCount: number | null;
-  recordType: string | null;
-  explicit: boolean;
-  deezerUrl: string;
-  matchScore: number;
-  matchLevel: "exact" | "likely" | "possible";
-  downloadedAt: string | null;
-  downloadedPath: string | null;
-};
-
-export type DeemixAlbumSearchResponse = {
-  query: string;
-  total: number;
-  matches: DeemixAlbumMatch[];
-  searchedAt: string;
-};
-
-export type DeemixAlbumDownloadRequest = {
-  albumId: string;
-  requestId: string;
-  wishListItemId: number | null;
-  musicbrainzReleaseGroupId: string | null;
-  expectedArtist: string;
-  expectedAlbum: string;
-  expectedYear: number | null;
-  allowDuplicate: boolean;
-};
-
-export type DeemixAlbumDownloadPreflightRequest = {
-  albumId: string;
-  wishListItemId: number | null;
-  musicbrainzReleaseGroupId: string | null;
-  artist: string;
-  album: string;
-  year: number | null;
-};
-
-export type DeemixAlbumDownloadPreflight = {
-  alreadyDownloaded: boolean;
-  destinationPath: string | null;
-  downloadedAt: string | null;
-  message: string;
-};
 
 export type DeemixAlbumDownloadPhase =
   | "metadata"
@@ -1617,80 +745,19 @@ export type DeemixAlbumDownloadProgress = {
   totalTracks: number;
 };
 
-export type DeemixAlbumDownloadSummary = {
-  requestId: string;
-  albumId: string;
-  artist: string;
-  album: string;
-  year: number | null;
-  quality: DeemixDownloadQuality;
-  destinationPath: string;
-  coverPath: string | null;
-  warning: string | null;
-  trackCount: number;
-  completedAt: string;
-};
+export type SoulseekConnectionState = import("./bindings").ConnectionState;
 
-export type SoulseekConnectionState =
-  | "unconfigured"
-  | "offline"
-  | "connecting"
-  | "authenticating"
-  | "online"
-  | "reconnecting"
-  | "error";
+export type SoulseekConnectionProfile = import("./bindings").ConnectionProfile;
 
-export type SoulseekConnectionProfile = {
-  username: string;
-  serverHost: string;
-  serverPort: number;
-  downloadDirectory: string;
-  rememberPassword: boolean;
-  autoConnect: boolean;
-};
+export type SoulseekConnectionSnapshot = import("./bindings").ConnectionSnapshot;
 
-export type SoulseekConnectionSnapshot = {
-  state: SoulseekConnectionState;
-  username: string | null;
-  server: string | null;
-  message: string;
-  attempt: number;
-  connectedAtMs: number | null;
-  retryInSeconds: number | null;
-  updatedAtMs: number;
-};
+export type SoulseekConnectionBootstrap = import("./bindings").ConnectionBootstrap;
 
-export type SoulseekConnectionBootstrap = {
-  profile: SoulseekConnectionProfile | null;
-  suggestedProfile: SoulseekConnectionProfile;
-  hasPassword: boolean;
-  snapshot: SoulseekConnectionSnapshot;
-  diagnosticsPath: string;
-};
+export type SaveSoulseekConnectionRequest = import("./bindings").SaveConnectionRequest;
 
-export type SaveSoulseekConnectionRequest = {
-  profile: SoulseekConnectionProfile;
-  password: string | null;
-};
+export type SoulseekSearchState = import("./bindings").SearchState;
 
-export type SoulseekSearchState =
-  | "idle"
-  | "searching"
-  | "completed"
-  | "stopped"
-  | "error";
-
-export type SoulseekSearchSnapshot = {
-  state: SoulseekSearchState;
-  token: number | null;
-  clientId: string;
-  query: string;
-  resultCount: number;
-  peerCount: number;
-  message: string;
-  startedAtMs: number | null;
-  finishedAtMs: number | null;
-};
+export type SoulseekSearchSnapshot = import("./bindings").SearchSnapshot;
 
 export type SoulseekSearchResult = {
   id: string;
@@ -1745,1119 +812,19 @@ export type SoulseekReleaseDownloadRequest = {
   alternatives: never[];
 };
 
-export type SoulseekTransferStatus =
-  | "queued"
-  | "retrying"
-  | "requesting"
-  | "remotelyQueued"
-  | "connecting"
-  | "downloading"
-  | "paused"
-  | "completed"
-  | "failed";
+export type SoulseekTransferStatus = import("./bindings").TransferStatus;
 
-export type SoulseekTransfer = {
-  id: string;
-  releaseId: string | null;
-  releaseTitle: string | null;
-  releaseFolder: string | null;
-  fileIndex: number | null;
-  fileCount: number | null;
-  expectedTrackCount: number | null;
-  releaseGroupId: string | null;
-  title: string;
-  username: string;
-  remoteFilename: string;
-  sizeBytes: number;
-  transferredBytes: number;
-  speedBytesPerSecond: number;
-  etaSeconds: number | null;
-  status: SoulseekTransferStatus;
-  queuePosition: number | null;
-  localPath: string;
-  error: string | null;
-  createdAtMs: number;
-  updatedAtMs: number;
-};
+export type SoulseekTransfer = import("./bindings").TransferSnapshot;
 
-export type SoulseekTransferQueue = {
-  transfers: SoulseekTransfer[];
-  activeCount: number;
-  maxConcurrentDownloads: number;
-  relaySuggestionMinutes: number;
-  soundcheckEnabled: boolean;
-  safetyState: "running" | "draining" | "pausedForRestart";
-};
+export type SoulseekTransferQueue = import("./bindings").TransferQueueSnapshot;
 
-export type SoulseekSharedRoot = {
-  id: string;
-  path: string;
-  alias: string;
-  enabled: boolean;
-  fileCount: number;
-  directoryCount: number;
-  totalSizeBytes: number;
-  error: string | null;
-};
+export type SoulseekSharedRoot = import("./bindings").SharedRootSnapshot;
 
-export type SoulseekLocalShares = {
-  roots: SoulseekSharedRoot[];
-  uploadSlots: number;
-  scanning: boolean;
-  totalFileCount: number;
-  totalDirectoryCount: number;
-  totalSizeBytes: number;
-  lastScanAtMs: number | null;
-};
+export type SoulseekLocalShares = import("./bindings").LocalSharesSnapshot;
 
-export type SoulseekUpload = {
-  id: string;
-  username: string;
-  remoteFilename: string;
-  filename: string;
-  sizeBytes: number;
-  transferredBytes: number;
-  speedBytesPerSecond: number;
-  etaSeconds: number | null;
-  status: "queued" | "connecting" | "uploading" | "completed" | "failed" | "cancelled";
-  queuePosition: number | null;
-  error: string | null;
-  createdAtMs: number;
-  updatedAtMs: number;
-};
+export type SoulseekUpload = import("./bindings").UploadSnapshot;
 
-export type SoulseekUploadQueue = {
-  uploads: SoulseekUpload[];
-  activeCount: number;
-  queuedCount: number;
-  sessionUploadedBytes: number;
-};
-
-export type UsenetProfile = {
-  prowlarrUrl: string;
-  newsHost: string;
-  newsPort: number;
-  useTls: boolean;
-  username: string;
-  downloadDirectory: string;
-  connections: number;
-};
-
-export type UsenetBootstrap = {
-  profile: UsenetProfile;
-  hasProwlarrApiKey: boolean;
-  hasNewsPassword: boolean;
-  extractorPath: string | null;
-  par2Path: string | null;
-};
-
-export type SaveUsenetProfileRequest = {
-  profile: UsenetProfile;
-  prowlarrApiKey: string | null;
-  newsPassword: string | null;
-};
-
-export type UsenetConnectionTest = {
-  prowlarrVersion: string;
-  newsServer: string;
-  extractorPath: string | null;
-  par2Path: string | null;
-  message: string;
-};
-
-export type UsenetSearchRequest = {
-  title: string;
-  artist: string;
-  year: number | null;
-  limit?: number;
-};
-
-export type UsenetSearchResult = {
-  guid: string;
-  title: string;
-  indexer: string;
-  sizeBytes: number;
-  ageDays: number;
-  grabs: number | null;
-  publishDate: string | null;
-  downloadUrl: string;
-  infoUrl: string | null;
-  categories: string[];
-  matchScore: number;
-};
-
-export type UsenetSearchResponse = {
-  query: string;
-  results: UsenetSearchResult[];
-  searchedAt: string;
-};
-
-export type UsenetDownloadRequest = {
-  guid: string;
-  title: string;
-  indexer: string;
-  downloadUrl: string;
-  sizeBytes: number;
-  expectedArtist: string;
-  expectedAlbum: string;
-  expectedYear: number | null;
-  releaseGroupId: string | null;
-};
-
-export type UsenetTransfer = {
-  id: string;
-  guid: string;
-  title: string;
-  indexer: string;
-  status: UsenetTransferStatus;
-  progressPercent: number;
-  downloadedBytes: number;
-  totalBytes: number;
-  message: string;
-  destinationPath: string | null;
-  error: string | null;
-  releaseGroupId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type UsenetTransferQueue = {
-  transfers: UsenetTransfer[];
-  activeCount: number;
-};
-
-export type AiConnectionTest = {
-  model: string;
-  message: string;
-  usage: AiUsage;
-};
-
-export type TextFilter = {
-  operator: TextFilterOperator;
-  value: string;
-};
-
-export type BrowseFilters = {
-  albumIds: string[];
-  trackIds: number[];
-  artistKeys: string[];
-  albumTitle: TextFilter;
-  trackTitle: TextFilter;
-  albumArtist: TextFilter;
-  displayArtist: TextFilter;
-  publisher: TextFilter;
-  filePath: TextFilter;
-  filename: TextFilter;
-  hasTrackText: string;
-  genres: string[];
-  excludedGenres: string[];
-  missingFields: string[];
-  billboardRankMin: number | null;
-  billboardRankMax: number | null;
-  billboardSingleRankMin: number | null;
-  billboardSingleRankMax: number | null;
-  billboardSingleDebutDateFrom: string | null;
-  billboardSingleDebutDateTo: string | null;
-  billboardDebutWeekFrom: string | null;
-  billboardDebutWeekTo: string | null;
-  vgListaRankMin: number | null;
-  vgListaRankMax: number | null;
-  vgListaDebutWeekFrom: string | null;
-  vgListaDebutWeekTo: string | null;
-  officialUkRankMin: number | null;
-  officialUkRankMax: number | null;
-  officialUkDebutWeekFrom: string | null;
-  officialUkDebutWeekTo: string | null;
-  tiISkuddetRankMin: number | null;
-  tiISkuddetRankMax: number | null;
-  tiISkuddetDebutWeekFrom: string | null;
-  tiISkuddetDebutWeekTo: string | null;
-  norsktoppenRankMin: number | null;
-  norsktoppenRankMax: number | null;
-  norsktoppenDebutWeekFrom: string | null;
-  norsktoppenDebutWeekTo: string | null;
-  yearFrom: number | null;
-  yearTo: number | null;
-  releaseYearFrom: number | null;
-  releaseYearTo: number | null;
-  totalMinutesMin: number | null;
-  totalMinutesMax: number | null;
-  trackCountMin: number | null;
-  trackCountMax: number | null;
-  ratedTracksMin: number | null;
-  ratedTracksMax: number | null;
-  albumRatingMin: number | null;
-  albumRatingMax: number | null;
-  trackRatingMin: number | null;
-  trackRatingMax: number | null;
-  ratingCompletenessMin: number | null;
-  ratingCompletenessMax: number | null;
-  notFullyRated: boolean;
-  lovedTracksMin: number | null;
-  lovedTracksMax: number | null;
-  bitrateKbpsMin: number | null;
-  bitrateKbpsMax: number | null;
-  mixedAudioQuality: boolean;
-  originCountryCodes: string[];
-  excludedOriginCountryCodes: string[];
-  missingOriginCountry: boolean;
-  artistType: string;
-  artistGender: string;
-  artistBornYearFrom: number | null;
-  artistBornYearTo: number | null;
-  artistDied: boolean;
-  artistDiedYearFrom: number | null;
-  artistDiedYearTo: number | null;
-  artistFoundedYearFrom: number | null;
-  artistFoundedYearTo: number | null;
-  artistDissolved: boolean;
-  artistDissolvedYearFrom: number | null;
-  artistDissolvedYearTo: number | null;
-};
-
-export type BrowseSort = {
-  field: string;
-  direction: "asc" | "desc";
-};
-
-export type BrowseRequest = {
-  view: BrowseView;
-  searchText: string;
-  filters: BrowseFilters;
-  sort: BrowseSort;
-  limit: number;
-  offset: number;
-};
-
-export type ArtistListRequest = {
-  searchText: string;
-  sort: BrowseSort;
-  limit: number;
-  offset: number;
-};
-
-export type ArtistSummary = {
-  id: string;
-  name: string;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  totalSeconds: number;
-  lovedTracks: number;
-  tmoeSeconds: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumRating: number | null;
-  averageAlbumScore: number | null;
-  firstYear: number | null;
-  lastYear: number | null;
-  topGenre: string | null;
-  musicBrainzMbid: string | null;
-  musicBrainzSortName: string | null;
-  musicBrainzArtistType: string | null;
-  musicBrainzGender: string | null;
-  musicBrainzBeginDate: string | null;
-  musicBrainzBeginYear: number | null;
-  musicBrainzEndDate: string | null;
-  musicBrainzEndYear: number | null;
-  musicBrainzEnded: boolean | null;
-  musicBrainzBeginAreaName: string | null;
-  musicBrainzEndAreaName: string | null;
-  musicBrainzInfoReviewState: string | null;
-  musicBrainzInfoFetchedAt: string | null;
-  originCountryCode: string | null;
-  originCountryName: string | null;
-  originCountryRawArea: string | null;
-  originCountryReviewState: string | null;
-  portraitAvailable?: boolean;
-  representativeAlbumId?: string | null;
-  representativeAlbum?: string | null;
-  representativeCoverPath?: string | null;
-};
-
-export type ArtistListResponse = {
-  rows: ArtistSummary[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-export type ArtistLovedTrack = {
-  trackId: number;
-  title: string;
-  displayArtist: string;
-  album: string | null;
-  year: number | null;
-  seconds: number | null;
-  rating: number | null;
-};
-
-export type ArtistTrackChartHistory = {
-  chart: TimelineChartSource | `published:${string}`;
-  entryDate: string | null;
-  endDate: string | null;
-  weeksOnChart: number | null;
-  peak: number;
-};
-
-export type ArtistChartTrack = {
-  trackId: number;
-  title: string;
-  displayArtist: string;
-  album: string | null;
-  year: number | null;
-  charts: ArtistTrackChartHistory[];
-};
-
-export type ArtistTrackHighlights = {
-  artistId: string;
-  artistName: string;
-  lovedTracks: ArtistLovedTrack[];
-  chartTracks: ArtistChartTrack[];
-};
-
-export type GenreListRequest = {
-  searchText: string;
-  sort: BrowseSort;
-  limit: number;
-  offset: number;
-};
-
-export type GenreSummary = {
-  id: string;
-  name: string;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  totalSeconds: number;
-  lovedTracks: number;
-  tmoeSeconds: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumRating: number | null;
-  averageAlbumScore: number | null;
-  firstYear: number | null;
-  lastYear: number | null;
-  topArtist: string | null;
-};
-
-export type GenreListResponse = {
-  rows: GenreSummary[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-export type GenreTimelineRequest = {
-  yearFrom: number | null;
-  yearTo: number | null;
-  genres: string[];
-  excludedGenres: string[];
-  genreLimit: number;
-  albumPointLimit: number;
-};
-
-export type GenreTimelineGenre = {
-  id: string;
-  name: string;
-  albumCount: number;
-  firstYear: number;
-  lastYear: number;
-  peakYear: number;
-  peakAlbumCount: number;
-};
-
-export type GenreTimelineYearCount = {
-  genreId: string;
-  year: number;
-  albumCount: number;
-};
-
-export type GenreTimelineAlbumPoint = {
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  genreId: string;
-  genre: string;
-  year: number;
-};
-
-export type GenreTimelineResponse = {
-  genres: GenreTimelineGenre[];
-  yearCounts: GenreTimelineYearCount[];
-  albums: GenreTimelineAlbumPoint[];
-  matchingAlbumCount: number;
-  matchingGenreCount: number;
-  datedAlbumCount: number;
-  availableYearFrom: number | null;
-  availableYearTo: number | null;
-};
-
-export type ArtistTimelineRequest = {
-  yearFrom: number | null;
-  yearTo: number | null;
-  genres: string[];
-  excludedGenres: string[];
-  artists: string[];
-  artistLimit: number;
-  metric: ArtistTimelineMetric;
-};
-
-export type ArtistTimelineArtist = {
-  id: string;
-  name: string;
-  albumCount: number;
-  firstYear: number;
-  lastYear: number;
-  averageAlbumScore: number | null;
-  lovedTracks: number;
-  topGenre: string | null;
-  portraitAvailable: boolean;
-  representativeAlbumId: string | null;
-  representativeAlbum: string | null;
-  representativeCoverPath: string | null;
-};
-
-export type ArtistTimelineAlbum = {
-  albumId: string;
-  album: string | null;
-  artistId: string;
-  artist: string;
-  year: number;
-  albumScore: number | null;
-  lovedTracks: number;
-  billboardRank: number | null;
-  officialUkRank: number | null;
-  vgListaRank: number | null;
-  chartPeak: number;
-  coverPath: string | null;
-};
-
-export type ArtistTimelineResponse = {
-  artists: ArtistTimelineArtist[];
-  albums: ArtistTimelineAlbum[];
-  matchingAlbumCount: number;
-  matchingArtistCount: number;
-  datedAlbumCount: number;
-  availableYearFrom: number | null;
-  availableYearTo: number | null;
-};
-
-export type LastFmCredentialStatus = {
-  configured: boolean;
-  source: "windowsCredentialManager" | "none";
-};
-
-export type LastFmConnectionTest = {
-  authenticated: boolean;
-  message: string;
-};
-
-export type SaveLastFmApiKeyRequest = {
-  apiKey: string;
-};
-
-export type LastFmArtistImageRefreshSummary = {
-  requested: number;
-  downloaded: number;
-  unavailable: number;
-  failed: number;
-  remaining: number;
-  message: string;
-};
-
-export type LastFmPopularTrack = {
-  rank: number;
-  trackId: number;
-  albumId: string;
-  album: string | null;
-  year: number | null;
-  title: string;
-  artist: string;
-  listeners: number;
-  playCount: number;
-  seconds: number | null;
-  sourceUrl: string | null;
-};
-
-export type LastFmArtistPopularity = {
-  artistId: string;
-  artistName: string;
-  sourceUrl: string | null;
-  fetchedAt: string | null;
-  cached: boolean;
-  stale: boolean;
-  tracks: LastFmPopularTrack[];
-  message: string;
-};
-
-export type LastFmSimilarArtist = {
-  rank: number;
-  name: string;
-  musicbrainzMbid: string | null;
-  matchScore: number;
-  sourceUrl: string | null;
-  localArtistId: string | null;
-  localArtistName: string | null;
-  localAlbumCount: number;
-  portraitAvailable: boolean;
-  representativeAlbumId: string | null;
-  representativeAlbum: string | null;
-  representativeCoverPath: string | null;
-};
-
-export type LastFmArtistSimilarity = {
-  artistId: string;
-  artistName: string;
-  sourceUrl: string | null;
-  fetchedAt: string | null;
-  cached: boolean;
-  stale: boolean;
-  artists: LastFmSimilarArtist[];
-  message: string;
-};
-
-export type ArtistBiography = {
-  artistId: string;
-  artistName: string;
-  musicbrainzMbid: string | null;
-  wikidataId: string | null;
-  wikipediaLanguage: string | null;
-  wikipediaTitle: string | null;
-  biography: string | null;
-  sourceUrl: string | null;
-  fetchedAt: string | null;
-  cached: boolean;
-  stale: boolean;
-  message: string;
-};
-
-export type AlbumReview = {
-  albumId: string;
-  albumArtist: string;
-  albumTitle: string;
-  releaseGroupMbid: string | null;
-  reviewId: string | null;
-  review: string | null;
-  reviewerName: string | null;
-  rating: number | null;
-  language: string | null;
-  reviewSource: string | null;
-  sourceUrl: string | null;
-  licenseId: string | null;
-  licenseName: string | null;
-  licenseUrl: string | null;
-  fetchedAt: string | null;
-  cached: boolean;
-  stale: boolean;
-  message: string;
-};
-
-export type LastFmAlbumTrackPopularity = {
-  trackId: number;
-  title: string;
-  listeners: number;
-  playCount: number;
-  albumRank: number | null;
-  sourceUrl: string | null;
-};
-
-export type LastFmAlbumPopularity = {
-  artistId: string;
-  albumId: string;
-  sourceUrl: string | null;
-  fetchedAt: string | null;
-  totalTracks: number;
-  resolvedTracks: number;
-  availableTracks: number;
-  stale: boolean;
-  tracks: LastFmAlbumTrackPopularity[];
-  message: string;
-};
-
-export type LastFmRelatedAlbum = {
-  rank: number;
-  artistName: string;
-  artistMbid: string | null;
-  albumTitle: string;
-  albumMbid: string | null;
-  sourceUrl: string | null;
-  sharedTags: string[];
-  artistSimilarity: number | null;
-  localAlbumId: string | null;
-  localAlbumArtist: string | null;
-  localAlbumTitle: string | null;
-  localYear: number | null;
-  localCoverPath: string | null;
-  localCoverMimeType: string | null;
-};
-
-export type LastFmRelatedAlbums = {
-  albumId: string;
-  albumArtist: string;
-  albumTitle: string;
-  sourceUrl: string | null;
-  sourceTags: string[];
-  fetchedAt: string | null;
-  cached: boolean;
-  stale: boolean;
-  albums: LastFmRelatedAlbum[];
-  message: string;
-};
-
-export type DiscoveryResponse = {
-  dailyEdition: DiscoveryDailyEdition;
-  dailyEditionArchive: DiscoveryDailyEditionArchive;
-  heatmap: DiscoveryHeatmapCell[];
-  backlogMissions: DiscoveryMission[];
-  smartMissions: DiscoveryMission[];
-  loveRatingPoints: DiscoveryAlbumPoint[];
-  genrePoints: DiscoveryGenrePoint[];
-  artistPoints: DiscoveryArtistPoint[];
-  generatedAt: string | null;
-};
-
-export type DiscoveryDailyEditionArchive = {
-  availableDates: string[];
-  snapshotCreatedAt: string;
-  retentionDays: number;
-  isArchived: boolean;
-  today: string;
-};
-
-export type DiscoveryDailyEditionSnapshotResponse = {
-  dailyEdition: DiscoveryDailyEdition;
-  archive: DiscoveryDailyEditionArchive;
-};
-
-export type DiscoverySourceHealthItem = {
-  id: string;
-  label: string;
-  state: DiscoverySourceHealthState;
-  coverageCount: number;
-  totalCount: number;
-  coveragePercent: number;
-  coverageLabel: string;
-  lastSuccessfulUpdate: string | null;
-  freshnessLabel: string;
-  shelves: string[];
-  details: string[];
-  sparseReasons: string[];
-  action: DiscoverySourceHealthAction;
-  actionLabel: string;
-};
-
-export type DiscoverySourceHealthResponse = {
-  checkedAt: string;
-  editionDate: string;
-  overallState: DiscoverySourceHealthState;
-  healthyCount: number;
-  staleCount: number;
-  missingCount: number;
-  sources: DiscoverySourceHealthItem[];
-};
-
-export type DiscoveryDailyEdition = {
-  date: string;
-  anniversaryYears: number;
-  anniversaries: DiscoveryAnniversaryStory[];
-  lifeEvents: DiscoveryLifeEventStory[];
-  chartSnapshot: DiscoveryChartSnapshot;
-  deepCutSnapshot: DiscoveryDeepCutSnapshot;
-  completionSnapshot: DiscoveryCompletionSnapshot;
-  recommendationSnapshot: DiscoveryRecommendationSnapshot;
-  listeningEvidenceNote: string;
-};
-
-export type DiscoveryShelfExplorerRequest = {
-  shelf: DiscoveryShelf;
-  date?: string;
-  anniversaryYears?: number;
-  eventType?: "birthday" | "memorial";
-  source?: string;
-  year?: number;
-  week?: number;
-  decade?: number;
-  genre?: string;
-  mode?: string;
-  connection?: string;
-  query?: string;
-  sort?: string;
-  seed?: number;
-  limit?: number;
-  offset?: number;
-};
-
-export type DiscoveryShelfExplorerResponse = {
-  shelf: DiscoveryShelf;
-  title: string;
-  evidenceNote: string;
-  total: number;
-  limit: number;
-  offset: number;
-  seed: number;
-  anniversaryYears: number | null;
-  eventType: string | null;
-  source: string | null;
-  sourceLabel: string | null;
-  year: number | null;
-  week: number | null;
-  decade: number | null;
-  genre: string | null;
-  mode: string | null;
-  connection: string | null;
-  query: string | null;
-  sort: string;
-  availableYears: number[];
-  availableWeeks: number[];
-  availableGenres: DiscoveryDeepCutGenre[];
-  anniversaries: DiscoveryAnniversaryStory[];
-  lifeEvents: DiscoveryLifeEventStory[];
-  chartStories: DiscoveryChartStory[];
-  deepCuts: DiscoveryDeepCutStory[];
-  artistCompletions: DiscoveryArtistCompletionStory[];
-  albumCompletions: DiscoveryAlbumCompletionStory[];
-  recommendations: DiscoveryRecommendationStory[];
-  anchors: DiscoveryRecommendationAnchor[];
-};
-
-export type DiscoveryRecommendationSnapshotRequest = {
-  mode?: DiscoveryRecommendationMode;
-};
-
-export type DiscoveryRecommendationSnapshot = {
-  mode: DiscoveryRecommendationMode;
-  anchors: DiscoveryRecommendationAnchor[];
-  matchingCount: number;
-  lastfmLinkedCount: number;
-  stories: DiscoveryRecommendationStory[];
-  evidence: string;
-};
-
-export type DiscoveryCompletionSnapshotRequest = {
-  mode?: DiscoveryCompletionMode;
-  year?: number;
-  decade?: number;
-  genre?: string;
-};
-
-export type DiscoveryCompletionSnapshot = {
-  mode: DiscoveryCompletionMode;
-  year: number | null;
-  decade: number | null;
-  genre: string | null;
-  availableYears: number[];
-  availableGenres: DiscoveryDeepCutGenre[];
-  matchingCount: number;
-  artistStories: DiscoveryArtistCompletionStory[];
-  albumStories: DiscoveryAlbumCompletionStory[];
-};
-
-export type DiscoveryDeepCutSnapshotRequest = {
-  year?: number;
-  decade?: number;
-  genre?: string;
-};
-
-export type DiscoveryDeepCutSnapshot = {
-  year: number | null;
-  decade: number | null;
-  genre: string | null;
-  availableYears: number[];
-  availableGenres: DiscoveryDeepCutGenre[];
-  matchingAlbumCount: number;
-  stories: DiscoveryDeepCutStory[];
-};
-
-export type DiscoveryDeepCutGenre = {
-  id: string;
-  label: string;
-};
-
-export type DiscoveryChartSnapshotRequest = {
-  source?: DiscoveryChartSource;
-  year?: number;
-  week?: number;
-  random?: boolean;
-};
-
-export type DiscoveryChartSnapshot = {
-  source: DiscoveryChartSource;
-  sourceLabel: string;
-  year: number | null;
-  week: number | null;
-  availableYears: number[];
-  availableWeeks: number[];
-  stories: DiscoveryChartStory[];
-};
-
-export type DiscoveryAnniversaryStory = {
-  albumId: string;
-  album: string;
-  artist: string;
-  releaseYear: number;
-  yearsAgo: number;
-  coverPath: string | null;
-  evidence: string;
-  chartEvidence: string[];
-  selectionReason: string;
-};
-
-export type DiscoveryLifeEventStory = {
-  artistId: string;
-  artist: string;
-  eventType: "birthday" | "memorial" | string;
-  eventDate: string;
-  years: number;
-  dayOffset: number;
-  albumCount: number;
-  lovedTracks: number;
-  portraitAvailable: boolean;
-  representativeAlbumId: string | null;
-  representativeAlbum: string | null;
-  representativeCoverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryChartStory = {
-  entity: "album" | "track" | string;
-  albumId: string;
-  trackId: number | null;
-  title: string;
-  artist: string;
-  album: string | null;
-  chart: string;
-  rank: number;
-  chartDate: string | null;
-  chartYear: number;
-  loved: boolean;
-  coverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryDeepCutStory = {
-  trackId: number;
-  title: string;
-  albumId: string;
-  album: string;
-  artist: string;
-  trackNumber: number | null;
-  timeSeconds: number | null;
-  albumRating: number;
-  releaseYear: number | null;
-  genre: string;
-  coverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryArtistCompletionStory = {
-  artistId: string;
-  artist: string;
-  musicbrainzMbid: string;
-  ownedAlbumCount: number;
-  officialAlbumCount: number;
-  missingAlbumCount: number;
-  completionPercent: number;
-  missingReleaseTitle: string;
-  missingReleaseYear: number | null;
-  genre: string;
-  portraitAvailable: boolean;
-  representativeAlbumId: string | null;
-  representativeAlbum: string | null;
-  representativeCoverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryAlbumCompletionStory = {
-  albumId: string;
-  album: string;
-  artist: string;
-  releaseYear: number | null;
-  genre: string;
-  totalTracks: number;
-  ratedTracks: number;
-  unratedTracks: number;
-  completionPercent: number;
-  coverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryRecommendationAnchor = {
-  albumId: string;
-  album: string;
-  artist: string;
-  signal: string;
-  coverPath: string | null;
-  evidence: string;
-};
-
-export type DiscoveryRecommendationStory = {
-  albumId: string;
-  album: string;
-  artist: string;
-  lovedTracks: number;
-  albumScore: number | null;
-  ratedTracks: number;
-  totalTracks: number;
-  ratingCompleteness: number;
-  coverPath: string | null;
-  reason: string;
-  anchorAlbumId: string;
-  anchorAlbum: string;
-  anchorArtist: string;
-  evidence: string;
-};
-
-export type DiscoveryMixerSeedOption = {
-  kind: DiscoveryMixerSeedKind;
-  id: string;
-  title: string;
-  subtitle: string;
-  artist: string | null;
-  coverPath: string | null;
-};
-
-export type DiscoveryMixerSeedSearchRequest = {
-  query?: string;
-  kind?: DiscoveryMixerSeedKind;
-  limit?: number;
-};
-
-export type DiscoveryMixerSeedInput = Pick<
-  DiscoveryMixerSeedOption,
-  "kind" | "id"
->;
-
-export type DiscoveryMixerRequest = {
-  seeds: DiscoveryMixerSeedInput[];
-  explorePercent?: number;
-  limit?: number;
-};
-
-export type DiscoveryMixerRecommendation = {
-  albumId: string;
-  album: string;
-  artist: string;
-  releaseYear: number | null;
-  genre: string;
-  coverPath: string | null;
-  ratingCompleteness: number;
-  reason: string;
-  seedLabels: string[];
-  evidence: string[];
-  rankingScore: number;
-};
-
-export type DiscoveryMixerResponse = {
-  seeds: DiscoveryMixerSeedOption[];
-  explorePercent: number;
-  matchingCount: number;
-  lastfmLinkedCount: number;
-  recommendations: DiscoveryMixerRecommendation[];
-  evidence: string;
-};
-
-export type DiscoveryHeatmapCell = {
-  genreId: string;
-  genre: string;
-  year: number;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumScore: number | null;
-};
-
-export type DiscoveryMission = {
-  id: string;
-  title: string;
-  description: string;
-  actionLabel: string;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  averageAlbumScore: number | null;
-  averageRatingCompleteness: number | null;
-  genreId: string | null;
-  genre: string | null;
-  artistId: string | null;
-  artist: string | null;
-  yearFrom: number | null;
-  yearTo: number | null;
-  ratedTracksMin: number | null;
-  ratingCompletenessMin: number | null;
-  ratingCompletenessMax: number | null;
-  lovedTracksMin: number | null;
-  sortField: string;
-  sortDirection: "asc" | "desc";
-  limit: number;
-};
-
-export type DiscoveryAlbumPoint = {
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  genreId: string | null;
-  genre: string | null;
-  year: number | null;
-  lovedTracks: number;
-  albumScore: number | null;
-  effectiveAlbumRating: number | null;
-  ratingCompleteness: number;
-  totalSeconds: number;
-};
-
-export type DiscoveryGenrePoint = {
-  genreId: string;
-  genre: string;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  totalSeconds: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumScore: number | null;
-};
-
-export type DiscoveryArtistPoint = {
-  artistId: string;
-  artist: string;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  totalSeconds: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumScore: number | null;
-  topGenre: string | null;
-};
-
-export type MusicToolSummary = {
-  id: string;
-  label: string;
-  description: string;
-  severity: MusicToolSeverity;
-  scope: MusicToolScope;
-  issueCount: number;
-  albumCount: number;
-  trackCount: number;
-};
-
-export type MusicToolIssueRequest = {
-  toolId: string;
-  requestId: string;
-  searchText: string;
-  sort: BrowseSort;
-  limit: number;
-  offset: number;
-};
+export type SoulseekUploadQueue = import("./bindings").UploadQueueSnapshot;
 
 export type MusicToolProgress = {
   toolId: string;
@@ -2867,323 +834,12 @@ export type MusicToolProgress = {
   message: string;
 };
 
-export type MusicToolIssueRow = {
-  id: string;
-  toolId: string;
-  severity: MusicToolSeverity;
-  entityType: MusicToolScope;
-  albumId: string;
-  trackId: number | null;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  title: string | null;
-  canonicalGenre: string | null;
-  year: number | null;
-  detail: string;
-  value: string | null;
-  filename: string | null;
-  filePath: string | null;
-  billboard?: string | null;
-  officialUk?: string | null;
-  vgLista?: string | null;
-  tiISkuddet?: string | null;
-  norsktoppen?: string | null;
-};
-
-export type MusicToolIssueResponse = {
-  tool: MusicToolSummary;
-  rows: MusicToolIssueRow[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-export type MusicToolFixRequest = {
-  toolId: string;
-  issueIds: string[];
-  apply: boolean;
-};
-
-export type MusicToolFieldDiff = {
-  field: string;
-  label: string;
-  before: string | null;
-  after: string | null;
-};
-
-export type MusicToolFixDiff = {
-  id: string;
-  entityType: "tracks" | "albums";
-  entityId: string;
-  albumId: string;
-  trackId: number | null;
-  label: string;
-  context: string | null;
-  confidence: MusicToolFixConfidence;
-  sourceWarning: string;
-  changes: MusicToolFieldDiff[];
-};
-
-export type MusicToolFixSummary = {
-  repairId: number | null;
-  toolId: string;
-  action: string;
-  applied: boolean;
-  confidence: MusicToolFixConfidence;
-  sourceWarning: string;
-  requestedCount: number;
-  fixableCount: number;
-  affectedAlbumCount: number;
-  affectedTrackCount: number;
-  changedAlbumCount: number;
-  changedTrackCount: number;
-  skippedCount: number;
-  backupPath: string | null;
-  message: string;
-  diffs: MusicToolFixDiff[];
-};
-
-export type MusicToolFixHistoryEntry = {
-  id: number;
-  toolId: string;
-  toolLabel: string;
-  action: string;
-  status: "applied" | "undone";
-  confidence: MusicToolFixConfidence;
-  requestedCount: number;
-  fixableCount: number;
-  affectedAlbumCount: number;
-  affectedTrackCount: number;
-  changedAlbumCount: number;
-  changedTrackCount: number;
-  diffCount: number;
-  backupPath: string | null;
-  undoBackupPath: string | null;
-  sourceWarning: string;
-  message: string;
-  createdAt: string;
-  undoneAt: string | null;
-  canUndo: boolean;
-};
-
-export type MusicToolUndoSummary = {
-  run: MusicToolFixHistoryEntry;
-  restoredAlbumCount: number;
-  restoredTrackCount: number;
-  backupPath: string | null;
-  message: string;
-};
-
-export type BrowseRow = {
-  id: string;
-  trackId: number | null;
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  displayArtist: string | null;
-  title: string | null;
-  canonicalGenre: string | null;
-  publisher: string | null;
-  year: number | null;
-  releaseYear: number | null;
-  totalTracks: number | null;
-  ratedTracks: number | null;
-  ratingCompleteness: number | null;
-  totalSeconds: number | null;
-  lovedTracks: number | null;
-  tmoeSeconds: number | null;
-  aeRatio: number | null;
-  effectiveAlbumRating: number | null;
-  albumScore: number | null;
-  billboardRank: number | null;
-  billboardYear: number | null;
-  billboardDebutYear: number | null;
-  billboardDebutMonth: number | null;
-  billboardDebutWeek: number | null;
-  billboardDebutWeekKey: string | null;
-  billboardSingleRank: number | null;
-  billboardSingleYear: number | null;
-  billboardSingleDebutDate: string | null;
-  billboardSingleDebutYear: number | null;
-  billboardSingleDebutMonth: number | null;
-  billboardSingleDebutWeek: number | null;
-  billboardSingleDebutWeekKey: string | null;
-  vgListaRank: number | null;
-  vgListaYear: number | null;
-  vgListaDebutYear: number | null;
-  vgListaDebutMonth: number | null;
-  vgListaDebutWeek: number | null;
-  vgListaDebutWeekKey: string | null;
-  officialUkRank: number | null;
-  officialUkYear: number | null;
-  officialUkDebutYear: number | null;
-  officialUkDebutMonth: number | null;
-  officialUkDebutWeek: number | null;
-  officialUkDebutWeekKey: string | null;
-  tiISkuddetRank: number | null;
-  tiISkuddetYear: number | null;
-  tiISkuddetDebutDate: string | null;
-  tiISkuddetDebutYear: number | null;
-  tiISkuddetDebutMonth: number | null;
-  tiISkuddetDebutWeek: number | null;
-  tiISkuddetDebutWeekKey: string | null;
-  norsktoppenRank: number | null;
-  norsktoppenYear: number | null;
-  norsktoppenDebutDate: string | null;
-  norsktoppenDebutYear: number | null;
-  norsktoppenDebutMonth: number | null;
-  norsktoppenDebutWeek: number | null;
-  norsktoppenDebutWeekKey: string | null;
-  trackSeconds: number | null;
-  normalizedRating: number | null;
-  discNumber: number | null;
-  trackNumber: number | null;
-  love: string | null;
-  filePath: string | null;
-  filename: string | null;
-  coverPath: string | null;
-  coverMimeType: string | null;
-  originCountryCode: string | null;
-  originCountryName: string | null;
-  originCountryRawArea: string | null;
-  originCountryReviewState: string | null;
-  fileFormat?: string | null;
-  bitrateKbps?: number | null;
-  qualityFileSizeBytes?: number | null;
-  doctorDurationMs?: number | null;
-  qualityTrackCount?: number | null;
-  minBitrateKbps?: number | null;
-  avgBitrateKbps?: number | null;
-  maxBitrateKbps?: number | null;
-  below320Tracks?: number | null;
-  mixedAudioQuality?: boolean | null;
-};
-
-export type BrowseResponse = {
-  view: BrowseView;
-  rows: BrowseRow[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-export type AlbumDebutTimelineAlbum = {
-  id: string;
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  canonicalGenre: string | null;
-  year: number | null;
-  albumScore: number | null;
-  billboardRank: number | null;
-  billboardYear: number | null;
-  billboardDebutYear: number;
-  billboardDebutMonth: number;
-  billboardDebutWeek: number;
-  billboardDebutWeekKey: string;
-  coverPath: string | null;
-  coverMimeType: string | null;
-};
-
-export type AlbumDebutTimelineYear = {
-  year: number;
-  albumCount: number;
-  representativeAlbum: AlbumDebutTimelineAlbum | null;
-};
-
-export type AlbumDebutTimelineResponse = {
-  years: AlbumDebutTimelineYear[];
-  selectedYear: number | null;
-  albums: AlbumDebutTimelineAlbum[];
-  datedAlbumCount: number;
-  undatedAlbumCount: number;
-};
-
-export type TrackDebutTimelineTrack = {
-  id: string;
-  trackId: number;
-  albumId: string;
-  title: string | null;
-  displayArtist: string | null;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  canonicalGenre: string | null;
-  year: number | null;
-  normalizedRating: number | null;
-  love: string | null;
-  billboardSingleRank: number | null;
-  billboardSingleYear: number | null;
-  billboardSingleDebutDate: string;
-  billboardSingleDebutYear: number;
-  billboardSingleDebutMonth: number;
-  billboardSingleDebutWeek: number;
-  billboardSingleDebutWeekKey: string;
-  coverPath: string | null;
-  coverMimeType: string | null;
-};
-
-export type TrackDebutTimelineYear = {
-  year: number;
-  trackCount: number;
-  representativeTrack: TrackDebutTimelineTrack | null;
-};
-
-export type TrackDebutTimelineResponse = {
-  years: TrackDebutTimelineYear[];
-  selectedYear: number | null;
-  tracks: TrackDebutTimelineTrack[];
-  datedTrackCount: number;
-  undatedTrackCount: number;
-};
-
 export type TimelineChartSource =
   | "billboard"
   | "vgLista"
   | "officialUk"
   | "tiISkuddet"
   | "norsktoppen";
-
-export type SavedSearch = {
-  id: number;
-  name: string;
-  view: BrowseView;
-  request: BrowseRequest;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ChartConfig = {
-  request: BrowseRequest;
-  rankingMetric: string;
-  sortField?: string | null;
-  ratingCompletenessMin: number;
-  ratingCompletenessMax: number;
-  ratingCompletenessThreshold?: number | null;
-  sortDirection: "asc" | "desc";
-  resultLimit: number;
-  visibleColumns: string[];
-  exportColumns: string[];
-  viewMode: ChartViewMode;
-  gridCoverSize: number;
-};
-
-export type AiCompiledQuery = {
-  target: AiQueryTarget;
-  queryIntent?: "filter" | "answer";
-  summary: string;
-  request: BrowseRequest;
-  chartConfig: ChartConfig | null;
-  model: string;
-  usage: AiUsage;
-};
-
-export type SavedChart = {
-  id: number;
-  name: string;
-  config: ChartConfig;
-  createdAt: string;
-  updatedAt: string;
-};
 
 export type ExportResult = {
   path: string;
@@ -3192,297 +848,3 @@ export type ExportResult = {
   pathCopied: boolean;
 };
 
-export type AiMarkdownExportRequest = {
-  title: string;
-  markdown: string;
-};
-
-export type StatisticsResponse = {
-  overview: LibraryOverviewStats;
-  countryCatalog: CountryCatalogStats[];
-  healthScore: LibraryHealthScore;
-  libraryShape: LibraryShapeStats;
-  ratingProgress: RatingProgressStats;
-  decadeProgress: DecadeProgressStats[];
-  yearProgress: YearProgressStats[];
-  genreProgress: GenreProgressStats[];
-  lovedDensity: LovedDensityStat[];
-  catalogConcentration: CatalogConcentrationStats;
-  durationAnalytics: DurationAnalyticsStats;
-  outlierStats: OutlierStat[];
-  trackRatingDistribution: RatingBucket[];
-  albumRatingDistribution: RatingBucket[];
-  metadataCoverage: MetadataCoverageMetric[];
-  lovedTracks: LovedTrackStats;
-  importHistory: ImportRun[];
-  ratingHistory: RatingHistoryPoint[];
-  recentRatingEvents: RatingEvent[];
-  lastUpdated: string | null;
-};
-
-export type CountryCatalogStats = {
-  countryCode: string;
-  countryName: string;
-  artistCount: number;
-  albumCount: number;
-};
-
-export type LibraryShapeStats = {
-  medianYear: number | null;
-  mostRepresentedDecade: number | null;
-  mostRepresentedDecadeAlbums: number;
-  peakYear: number | null;
-  peakYearAlbums: number;
-};
-
-export type LibraryHealthScore = {
-  score: number;
-  ratingCoverage: number;
-  albumCompletion: number;
-  metadataCoverage: number;
-  coverCoverage: number;
-  scoreCoverage: number;
-};
-
-export type LibraryOverviewStats = {
-  trackCount: number;
-  albumCount: number;
-  albumArtistCount: number;
-  genreCount: number;
-  yearCount: number;
-  totalSeconds: number;
-  averageAlbumScore: number | null;
-};
-
-export type RatingProgressStats = {
-  fullyRatedAlbums: number;
-  partiallyRatedAlbums: number;
-  unratedAlbums: number;
-  albumsWithEffectiveRating: number;
-  ratedTracks: number;
-  unratedTracks: number;
-  averageRatingCompleteness: number | null;
-  averageAlbumRating: number | null;
-};
-
-export type DecadeProgressStats = {
-  decade: number;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  totalSeconds: number;
-  lovedTracks: number;
-  averageAlbumScore: number | null;
-};
-
-export type YearProgressStats = {
-  year: number;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  totalSeconds: number;
-  lovedTracks: number;
-  averageAlbumScore: number | null;
-};
-
-export type YearProgressRequest = {
-  genres: string[];
-  excludedGenres: string[];
-};
-
-export type GenreProgressRequest = {
-  yearFrom: number | null;
-  yearTo: number | null;
-  genres: string[];
-  excludedGenres: string[];
-};
-
-export type GenreProgressStats = {
-  genre: string;
-  albumCount: number;
-  ratedAlbumCount: number;
-  partialAlbumCount: number;
-  unratedAlbumCount: number;
-  trackCount: number;
-  totalSeconds: number;
-  lovedTracks: number;
-  averageAlbumScore: number | null;
-};
-
-export type LovedDensityStat = {
-  scope: string;
-  label: string;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  lovedPer100Tracks: number;
-};
-
-export type CatalogConcentrationStats = {
-  artistPoints: ConcentrationPoint[];
-  genrePoints: ConcentrationPoint[];
-  topArtist: string | null;
-  topArtistAlbumCount: number;
-  topGenre: string | null;
-  topGenreAlbumCount: number;
-};
-
-export type ConcentrationPoint = {
-  topN: number;
-  albumCount: number;
-  share: number;
-};
-
-export type DurationAnalyticsStats = {
-  averageAlbumSeconds: number | null;
-  averageTrackSeconds: number | null;
-  longestAlbums: DurationAlbumStat[];
-  shortestAlbums: DurationAlbumStat[];
-  trackCountBuckets: RatingBucket[];
-};
-
-export type DurationAlbumStat = {
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  year: number | null;
-  totalTracks: number;
-  totalSeconds: number;
-  ratingCompleteness: number;
-  albumScore: number | null;
-};
-
-export type OutlierStat = {
-  id: string;
-  label: string;
-  value: string;
-  detail: string;
-};
-
-export type MetadataCoverageMetric = {
-  id: string;
-  label: string;
-  scope: string;
-  coveredCount: number;
-  totalCount: number;
-};
-
-export type RatingBucket = {
-  label: string;
-  count: number;
-};
-
-export type LovedTrackStats = {
-  lovedTracks: number;
-  albumsWithLovedTracks: number;
-  averageLovedTracksPerAlbum: number | null;
-  topLovedGenre: string | null;
-  topLovedYear: number | null;
-};
-
-export type RatingHistoryPoint = {
-  importRunId: number;
-  createdAt: string;
-  trackCount: number;
-  albumCount: number;
-  ratedTracks: number;
-  unratedTracks: number;
-  fullyRatedAlbums: number;
-  partiallyRatedAlbums: number;
-  unratedAlbums: number;
-  albumsWithEffectiveRating: number;
-  averageAlbumRating: number | null;
-  averageAlbumScore: number | null;
-  ratingEventsCount: number;
-};
-
-export type RatingEvent = {
-  id: number;
-  importRunId: number;
-  createdAt: string;
-  eventType: string;
-  albumId: string;
-  album: string | null;
-  albumArtistDisplay: string | null;
-  year: number | null;
-  previousRatedTracks: number | null;
-  currentRatedTracks: number | null;
-  previousRatingCompleteness: number | null;
-  currentRatingCompleteness: number | null;
-  previousEffectiveAlbumRating: number | null;
-  currentEffectiveAlbumRating: number | null;
-};
-
-export type MusicMapSummary = {
-  totalArtists: number;
-  mappedArtists: number;
-  preciseArtistCount: number;
-  countryFallbackArtistCount: number;
-  areaCount: number;
-  countryCount: number;
-  unresolvedArtistCount: number;
-  candidateAreaCount: number;
-  lastRefreshedAt: string | null;
-  needsRefresh: boolean;
-};
-
-export type MusicMapPoint = {
-  id: string;
-  name: string;
-  countryCode: string | null;
-  countryName: string | null;
-  precision: "area" | "country";
-  latitude: number;
-  longitude: number;
-  artistCount: number;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  topGenre: string;
-};
-
-export type MusicMapResponse = {
-  summary: MusicMapSummary;
-  countries: MusicMapPoint[];
-  areas: MusicMapPoint[];
-  generatedAt: string;
-};
-
-export type MusicMapGenreStat = {
-  genre: string;
-  albumCount: number;
-  artistCount: number;
-  percentage: number;
-};
-
-export type MusicMapArtist = {
-  artistKey: string;
-  name: string;
-  albumCount: number;
-  trackCount: number;
-  lovedTracks: number;
-  topGenre: string;
-  representativeAlbumId: string | null;
-  representativeAlbumTitle: string | null;
-  coverPath: string | null;
-};
-
-export type MusicMapLocationDetails = {
-  point: MusicMapPoint;
-  genres: MusicMapGenreStat[];
-  artists: MusicMapArtist[];
-  artistKeys: string[];
-};
-
-export type MusicMapRefreshSummary = {
-  candidateAreas: number;
-  resolvedAreas: number;
-  candidateCountries: number;
-  resolvedCountries: number;
-  unresolvedLocations: number;
-  fetchedAt: string;
-};

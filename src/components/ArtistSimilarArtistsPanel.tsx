@@ -20,8 +20,8 @@ import {
 import type { LastFmArtistSimilarity, LastFmSimilarArtist } from "../types";
 import { ArtistPortrait } from "./ArtistPortrait";
 
-function matchLabel(score: number) {
-  return `${Math.round(Math.max(0, Math.min(score, 1)) * 100)}% match`;
+function matchLabel(score: number | null) {
+  return `${Math.round(Math.max(0, Math.min(score ?? 0, 1)) * 100)}% match`;
 }
 
 const CONSTELLATION_FIRST_HOP_LIMIT = 8;

@@ -2595,6 +2595,8 @@ export type MixtapeDraft = {
 	sides: [Slot[], Slot[]],
 };
 
+export type MixtapeRole = "opener" | "builder" | "breather" | "closer";
+
 export type MusicBrainzArtistCandidateRow = {
 	name: string,
 	mbid: string,
@@ -3695,7 +3697,7 @@ export type SharedRootSnapshot = {
 
 export type Slot = {
 	trackId: number,
-	role: string,
+	role: MixtapeRole,
 	locked: boolean,
 	transitionToNext: boolean,
 };

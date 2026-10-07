@@ -796,7 +796,7 @@ export async function getLibraryStatus() {
     return mockStatus;
   }
 
-  return commands.getLibraryStatus() as Promise<LibraryStatus>;
+  return commands.getLibraryStatus();
 }
 
 export async function runPerformanceProbe() {
@@ -896,7 +896,7 @@ export async function runPerformanceProbe() {
     } satisfies PerformanceProbeResponse;
   }
 
-  return commands.runPerformanceProbe() as Promise<PerformanceProbeResponse>;
+  return commands.runPerformanceProbe();
 }
 
 export async function listImportRuns(limit: number) {
@@ -904,7 +904,7 @@ export async function listImportRuns(limit: number) {
     return mockImportRuns.slice(0, limit) satisfies ImportRun[];
   }
 
-  return commands.listImportRuns(limit) as Promise<ImportRun[]>;
+  return commands.listImportRuns(limit);
 }
 
 const mockLibraryUpdates: LibraryUpdate[] = [
@@ -1136,7 +1136,7 @@ export async function listLibraryUpdates(request: LibraryUpdateRequest) {
     } satisfies LibraryUpdateResponse;
   }
 
-  return commands.listLibraryUpdates(request) as Promise<LibraryUpdateResponse>;
+  return commands.listLibraryUpdates(request);
 }
 
 const mockNewArtistKeys = new Set([normalizeArtistKey("Thorleifs")]);
@@ -1274,7 +1274,7 @@ export async function listLibraryUpdateArtists(
     } satisfies LibraryUpdateArtistResponse;
   }
 
-  return commands.listLibraryUpdateArtists(request) as Promise<LibraryUpdateArtistResponse>;
+  return commands.listLibraryUpdateArtists(request);
 }
 
 export async function listDatabaseBackups() {
@@ -1282,7 +1282,7 @@ export async function listDatabaseBackups() {
     return mockDatabaseBackups satisfies DatabaseBackup[];
   }
 
-  return commands.listDatabaseBackups() as Promise<DatabaseBackup[]>;
+  return commands.listDatabaseBackups();
 }
 
 export async function restoreDatabaseBackup(backupPath: string) {
@@ -1292,7 +1292,7 @@ export async function restoreDatabaseBackup(backupPath: string) {
     );
   }
 
-  return commands.restoreDatabaseBackup(backupPath) as Promise<DatabaseRestoreSummary>;
+  return commands.restoreDatabaseBackup(backupPath);
 }
 
 export async function getStatistics() {
@@ -1300,7 +1300,7 @@ export async function getStatistics() {
     return mockStatistics;
   }
 
-  return commands.getStatistics() as Promise<StatisticsResponse>;
+  return commands.getStatistics();
 }
 
 function mockAlbumDebutTimeline(
@@ -1417,7 +1417,7 @@ export async function getAlbumDebutTimeline(
     return mockAlbumDebutTimeline(selectedYear);
   }
 
-  return commands.getAlbumDebutTimeline(selectedYear, chartSource) as Promise<AlbumDebutTimelineResponse>;
+  return commands.getAlbumDebutTimeline(selectedYear, chartSource);
 }
 
 function mockIsoWeekStartDate(year: number, week: number) {
@@ -1611,7 +1611,7 @@ export async function getTrackDebutTimeline(
     return mockTrackDebutTimeline(selectedYear, chartSource);
   }
 
-  return commands.getTrackDebutTimeline(selectedYear, chartSource) as Promise<TrackDebutTimelineResponse>;
+  return commands.getTrackDebutTimeline(selectedYear, chartSource);
 }
 
 export async function getMusicMap() {
@@ -1619,7 +1619,7 @@ export async function getMusicMap() {
     return mockMusicMap;
   }
 
-  return commands.getMusicMap() as Promise<MusicMapResponse>;
+  return commands.getMusicMap();
 }
 
 export async function getMusicMapLocationDetails(locationKey: string) {
@@ -1627,7 +1627,7 @@ export async function getMusicMapLocationDetails(locationKey: string) {
     return mockMusicMapDetails(locationKey);
   }
 
-  return commands.getMusicMapLocationDetails(locationKey) as Promise<MusicMapLocationDetails>;
+  return commands.getMusicMapLocationDetails(locationKey);
 }
 
 export async function refreshMusicMapLocations() {
@@ -1635,7 +1635,7 @@ export async function refreshMusicMapLocations() {
     return mockMusicMapRefresh;
   }
 
-  return commands.refreshMusicMapLocations() as Promise<MusicMapRefreshSummary>;
+  return commands.refreshMusicMapLocations();
 }
 
 export async function getYearProgress(request: YearProgressRequest) {
@@ -1695,7 +1695,7 @@ export async function getYearProgress(request: YearProgressRequest) {
       );
   }
 
-  return commands.getYearProgress(request) as Promise<YearProgressStats[]>;
+  return commands.getYearProgress(request);
 }
 
 export async function getGenreProgress(request: GenreProgressRequest) {
@@ -1771,7 +1771,7 @@ export async function getGenreProgress(request: GenreProgressRequest) {
       );
   }
 
-  return commands.getGenreProgress(request) as Promise<GenreProgressStats[]>;
+  return commands.getGenreProgress(request);
 }
 
 export async function getDiscovery(options: { refreshDailyEdition?: boolean } = {}) {
@@ -1806,7 +1806,7 @@ export async function getDiscovery(options: { refreshDailyEdition?: boolean } = 
     } satisfies DiscoveryResponse;
   }
 
-  return commands.getDiscovery(options.refreshDailyEdition ?? false) as Promise<DiscoveryResponse>;
+  return commands.getDiscovery(options.refreshDailyEdition ?? false);
 }
 
 export async function getCatalogRevision() {
@@ -1828,7 +1828,7 @@ export async function getCatalogRevision() {
     return `${completedRuns.length}:${latestId}:${latestCompletion}`;
   }
 
-  return commands.getCatalogRevision() as Promise<string>;
+  return commands.getCatalogRevision();
 }
 
 export async function getDiscoveryDailyEdition(date: string) {
@@ -1849,7 +1849,7 @@ export async function getDiscoveryDailyEdition(date: string) {
     } satisfies DiscoveryDailyEditionSnapshotResponse;
   }
 
-  return commands.getDiscoveryDailyEdition(date) as Promise<DiscoveryDailyEditionSnapshotResponse>;
+  return commands.getDiscoveryDailyEdition(date);
 }
 
 let mockDiscoveryChartMatchesRebuilt = false;
@@ -1935,7 +1935,7 @@ export async function getDiscoverySourceHealth(date: string) {
       sources,
     } satisfies DiscoverySourceHealthResponse;
   }
-  return commands.getDiscoverySourceHealth(date) as Promise<DiscoverySourceHealthResponse>;
+  return commands.getDiscoverySourceHealth(date);
 }
 
 export async function rebuildDiscoveryChartMatches(date: string) {
@@ -1943,7 +1943,7 @@ export async function rebuildDiscoveryChartMatches(date: string) {
     mockDiscoveryChartMatchesRebuilt = true;
     return getDiscoverySourceHealth(date);
   }
-  return commands.rebuildDiscoveryChartMatches(date) as Promise<DiscoverySourceHealthResponse>;
+  return commands.rebuildDiscoveryChartMatches(date);
 }
 
 export async function getDiscoveryAnniversaries(anniversaryYears: number) {
@@ -1963,7 +1963,7 @@ export async function getDiscoveryAnniversaries(anniversaryYears: number) {
     }));
   }
 
-  return commands.getDiscoveryAnniversaries(anniversaryYears) as Promise<DiscoveryAnniversaryStory[]>;
+  return commands.getDiscoveryAnniversaries(anniversaryYears);
 }
 
 export async function getDiscoveryChartSnapshot(
@@ -2014,7 +2014,7 @@ export async function getDiscoveryChartSnapshot(
     } satisfies DiscoveryChartSnapshot;
   }
 
-  return commands.getDiscoveryChartSnapshot(request) as Promise<DiscoveryChartSnapshot>;
+  return commands.getDiscoveryChartSnapshot(request);
 }
 
 export async function getDiscoveryDeepCutSnapshot(
@@ -2043,7 +2043,7 @@ export async function getDiscoveryDeepCutSnapshot(
     } satisfies DiscoveryDeepCutSnapshot;
   }
 
-  return commands.getDiscoveryDeepCutSnapshot(request) as Promise<DiscoveryDeepCutSnapshot>;
+  return commands.getDiscoveryDeepCutSnapshot(request);
 }
 
 export async function getDiscoveryCompletionSnapshot(
@@ -2089,7 +2089,7 @@ export async function getDiscoveryCompletionSnapshot(
     } satisfies DiscoveryCompletionSnapshot;
   }
 
-  return commands.getDiscoveryCompletionSnapshot(request) as Promise<DiscoveryCompletionSnapshot>;
+  return commands.getDiscoveryCompletionSnapshot(request);
 }
 
 export async function getDiscoveryRecommendationSnapshot(
@@ -2117,7 +2117,7 @@ export async function getDiscoveryRecommendationSnapshot(
     } satisfies DiscoveryRecommendationSnapshot;
   }
 
-  return commands.getDiscoveryRecommendationSnapshot(request) as Promise<DiscoveryRecommendationSnapshot>;
+  return commands.getDiscoveryRecommendationSnapshot(request);
 }
 
 function mockDiscoveryMixerSeedOptions(): DiscoveryMixerSeedOption[] {
@@ -2150,7 +2150,7 @@ export async function getDiscoveryMixerSeedOptions(
   request: DiscoveryMixerSeedSearchRequest,
 ): Promise<DiscoveryMixerSeedOption[]> {
   if (isTauriRuntime()) {
-    return commands.getDiscoveryMixerSeedOptions(request) as Promise<DiscoveryMixerSeedOption[]>;
+    return commands.getDiscoveryMixerSeedOptions(request);
   }
 
   const query = request.query?.trim().toLocaleLowerCase() ?? "";
@@ -2176,7 +2176,7 @@ export async function getDiscoveryMixer(
   request: DiscoveryMixerRequest,
 ): Promise<DiscoveryMixerResponse> {
   if (isTauriRuntime()) {
-    return commands.getDiscoveryMixer(request) as Promise<DiscoveryMixerResponse>;
+    return commands.getDiscoveryMixer(request);
   }
 
   const allOptions = mockDiscoveryMixerSeedOptions();
@@ -2302,7 +2302,7 @@ export async function getDiscoveryShelfExplorer(
   request: DiscoveryShelfExplorerRequest,
 ): Promise<DiscoveryShelfExplorerResponse> {
   if (isTauriRuntime()) {
-    return commands.getDiscoveryShelfExplorer(request) as Promise<DiscoveryShelfExplorerResponse>;
+    return commands.getDiscoveryShelfExplorer(request);
   }
 
   const limit = Math.min(50, Math.max(1, request.limit ?? 24));
@@ -2503,7 +2503,7 @@ export async function getDiscoveryShelfExplorer(
       (connection === "genre" && story.reason === "Shared genre");
     return connectionMatches && matches(story.album, story.artist, story.anchorAlbum, story.anchorArtist, story.evidence);
   });
-  if (request.sort === "least-rated") items.sort((a, b) => a.ratingCompleteness - b.ratingCompleteness);
+  if (request.sort === "least-rated") items.sort((a, b) => (a.ratingCompleteness ?? 0) - (b.ratingCompleteness ?? 0));
   if (request.sort === "artist") items.sort((a, b) => a.artist.localeCompare(b.artist));
   if (request.sort === "album") items.sort((a, b) => a.album.localeCompare(b.album));
   return {
@@ -2595,7 +2595,7 @@ export async function getMusicDoctorStatus(): Promise<MusicDoctorStatus> {
     };
   }
 
-  return commands.getMusicDoctorStatus() as Promise<MusicDoctorStatus>;
+  return commands.getMusicDoctorStatus();
 }
 
 export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
@@ -2618,7 +2618,7 @@ export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
     };
   }
 
-  return commands.syncMusicDoctor() as Promise<MusicDoctorSyncResult>;
+  return commands.syncMusicDoctor();
 }
 
 export async function getAiKeyStatus() {
@@ -2630,7 +2630,7 @@ export async function getAiKeyStatus() {
     } satisfies AiKeyStatus;
   }
 
-  return commands.getAiKeyStatus() as Promise<AiKeyStatus>;
+  return commands.getAiKeyStatus();
 }
 
 export async function saveOpenAiApiKey(apiKey: string) {
@@ -2640,7 +2640,7 @@ export async function saveOpenAiApiKey(apiKey: string) {
     );
   }
 
-  return commands.saveOpenaiApiKey(apiKey) as Promise<AiKeyStatus>;
+  return commands.saveOpenaiApiKey(apiKey);
 }
 
 export async function deleteOpenAiApiKey() {
@@ -2650,7 +2650,7 @@ export async function deleteOpenAiApiKey() {
     );
   }
 
-  return commands.deleteOpenaiApiKey() as Promise<AiKeyStatus>;
+  return commands.deleteOpenaiApiKey();
 }
 
 export async function testOpenAiConnection() {
@@ -2658,7 +2658,7 @@ export async function testOpenAiConnection() {
     throw new Error("OpenAI connection tests require the Tauri desktop app.");
   }
 
-  return commands.testOpenaiConnection() as Promise<AiConnectionTest>;
+  return commands.testOpenaiConnection();
 }
 
 export async function getDeemixCredentialStatus() {
@@ -2668,7 +2668,7 @@ export async function getDeemixCredentialStatus() {
       source: "none",
     } satisfies DeemixCredentialStatus;
   }
-  return commands.getDeemixCredentialStatus() as Promise<DeemixCredentialStatus>;
+  return commands.getDeemixCredentialStatus();
 }
 
 export async function saveDeemixArl(arl: string) {
@@ -2677,7 +2677,7 @@ export async function saveDeemixArl(arl: string) {
       "Deemix credentials can only be stored by the Tauri desktop app.",
     );
   }
-  return commands.saveDeemixArl(arl) as Promise<DeemixConnectionTest>;
+  return commands.saveDeemixArl(arl);
 }
 
 export async function deleteDeemixArl() {
@@ -2686,14 +2686,14 @@ export async function deleteDeemixArl() {
       "Deemix credentials can only be removed by the Tauri desktop app.",
     );
   }
-  return commands.deleteDeemixArl() as Promise<DeemixCredentialStatus>;
+  return commands.deleteDeemixArl();
 }
 
 export async function testDeemixConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Deemix connection tests require the Tauri desktop app.");
   }
-  return commands.testDeemixConnection() as Promise<DeemixConnectionTest>;
+  return commands.testDeemixConnection();
 }
 
 export async function getDiscogsCredentialStatus() {
@@ -2703,7 +2703,7 @@ export async function getDiscogsCredentialStatus() {
       source: "windowsCredentialManager",
     } satisfies DiscogsCredentialStatus;
   }
-  return commands.getDiscogsCredentialStatus() as Promise<DiscogsCredentialStatus>;
+  return commands.getDiscogsCredentialStatus();
 }
 
 export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsRequest) {
@@ -2712,7 +2712,7 @@ export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsReques
       "Discogs credentials can only be stored by the Tauri desktop app.",
     );
   }
-  return commands.saveDiscogsCredentials(input) as Promise<DiscogsConnectionTest>;
+  return commands.saveDiscogsCredentials(input);
 }
 
 export async function deleteDiscogsCredentials() {
@@ -2721,42 +2721,42 @@ export async function deleteDiscogsCredentials() {
       "Discogs credentials can only be removed by the Tauri desktop app.",
     );
   }
-  return commands.deleteDiscogsCredentials() as Promise<DiscogsCredentialStatus>;
+  return commands.deleteDiscogsCredentials();
 }
 
 export async function testDiscogsConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Discogs connection tests require the Tauri desktop app.");
   }
-  return commands.testDiscogsConnection() as Promise<DiscogsConnectionTest>;
+  return commands.testDiscogsConnection();
 }
 
 export async function getLastFmCredentialStatus() {
   if (!isTauriRuntime()) {
     return { configured: false, source: "none" } satisfies LastFmCredentialStatus;
   }
-  return commands.getLastfmCredentialStatus() as Promise<LastFmCredentialStatus>;
+  return commands.getLastfmCredentialStatus();
 }
 
 export async function saveLastFmApiKey(input: SaveLastFmApiKeyRequest) {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be stored by the Tauri desktop app.");
   }
-  return commands.saveLastfmApiKey(input) as Promise<LastFmConnectionTest>;
+  return commands.saveLastfmApiKey(input);
 }
 
 export async function deleteLastFmApiKey() {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be removed by the Tauri desktop app.");
   }
-  return commands.deleteLastfmApiKey() as Promise<LastFmCredentialStatus>;
+  return commands.deleteLastfmApiKey();
 }
 
 export async function testLastFmConnection() {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm connection tests require the Tauri desktop app.");
   }
-  return commands.testLastfmConnection() as Promise<LastFmConnectionTest>;
+  return commands.testLastfmConnection();
 }
 
 export async function refreshLastFmArtistImages(limit = 50) {
@@ -2770,7 +2770,7 @@ export async function refreshLastFmArtistImages(limit = 50) {
       message: "Portrait sync is available in the desktop app.",
     } satisfies LastFmArtistImageRefreshSummary;
   }
-  return (commands.refreshLastfmArtistImages(limit) as Promise<LastFmArtistImageRefreshSummary>).then((summary) => { invalidateArtwork(); return summary; });
+  return (commands.refreshLastfmArtistImages(limit)).then((summary) => { invalidateArtwork(); return summary; });
 }
 
 export async function getLastFmArtistPopularity(
@@ -2981,7 +2981,7 @@ export async function getArtistBiography(
       message: "Biography loaded from Wikipedia.",
     } satisfies ArtistBiography;
   }
-  return commands.getArtistBiography(artistId, forceRefresh) as Promise<ArtistBiography>;
+  return commands.getArtistBiography(artistId, forceRefresh);
 }
 
 export async function getAlbumReview(albumId: string, forceRefresh = false) {
@@ -3012,7 +3012,7 @@ export async function getAlbumReview(albumId: string, forceRefresh = false) {
       message: "Album review loaded from CritiqueBrainz.",
     } satisfies AlbumReview;
   }
-  return commands.getAlbumReview(albumId, forceRefresh) as Promise<AlbumReview>;
+  return commands.getAlbumReview(albumId, forceRefresh);
 }
 
 export async function getLastFmAlbumPopularity(
@@ -3174,9 +3174,20 @@ export async function getSoulseekConnection() {
         updatedAtMs: Date.now(),
       },
       diagnosticsPath: "Preview runtime",
+      diagnostics: [],
+      searchNetwork: {
+        state: "offline",
+        message: "Preview runtime",
+        branchLevel: null,
+        searchesReceived: 0,
+        searchesMatched: 0,
+        searchesAnswered: 0,
+        searchesIgnored: 0,
+        updatedAtMs: Date.now(),
+      },
     } satisfies SoulseekConnectionBootstrap;
   }
-  return commands.connectionBootstrap() as Promise<SoulseekConnectionBootstrap>;
+  return commands.connectionBootstrap();
 }
 
 export async function saveSoulseekConnection(
@@ -3199,9 +3210,20 @@ export async function saveSoulseekConnection(
         updatedAtMs: Date.now(),
       },
       diagnosticsPath: "Preview runtime",
+      diagnostics: [],
+      searchNetwork: {
+        state: "offline",
+        message: "Preview runtime",
+        branchLevel: null,
+        searchesReceived: 0,
+        searchesMatched: 0,
+        searchesAnswered: 0,
+        searchesIgnored: 0,
+        updatedAtMs: Date.now(),
+      },
     } satisfies SoulseekConnectionBootstrap;
   }
-  return commands.connectionSaveProfile({ profile, password }) as Promise<SoulseekConnectionBootstrap>;
+  return commands.connectionSaveProfile({ profile, password });
 }
 
 export async function connectSoulseek() {
@@ -3217,7 +3239,7 @@ export async function connectSoulseek() {
       updatedAtMs: Date.now(),
     } satisfies SoulseekConnectionSnapshot;
   }
-  return commands.connectionConnect() as Promise<SoulseekConnectionSnapshot>;
+  return commands.connectionConnect();
 }
 
 export async function disconnectSoulseek() {
@@ -3233,12 +3255,12 @@ export async function disconnectSoulseek() {
       updatedAtMs: Date.now(),
     } satisfies SoulseekConnectionSnapshot;
   }
-  return commands.connectionDisconnect() as Promise<SoulseekConnectionSnapshot>;
+  return commands.connectionDisconnect();
 }
 
 export async function resetSoulseekConnection() {
   if (!isTauriRuntime()) return getSoulseekConnection();
-  return commands.connectionReset() as Promise<SoulseekConnectionBootstrap>;
+  return commands.connectionReset();
 }
 
 export async function selectSoulseekDownloadDirectory(defaultPath?: string) {
@@ -3263,32 +3285,32 @@ const emptySoulseekShares = (): SoulseekLocalShares => ({
 
 export async function getSoulseekLocalShares() {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesSnapshot() as Promise<SoulseekLocalShares>;
+  return commands.localSharesSnapshot();
 }
 
 export async function addSoulseekLocalShare(path: string) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesAdd(path) as Promise<SoulseekLocalShares>;
+  return commands.localSharesAdd(path);
 }
 
 export async function removeSoulseekLocalShare(id: string) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesRemove(id) as Promise<SoulseekLocalShares>;
+  return commands.localSharesRemove(id);
 }
 
 export async function setSoulseekLocalShareEnabled(id: string, enabled: boolean) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesSetEnabled(id, enabled) as Promise<SoulseekLocalShares>;
+  return commands.localSharesSetEnabled(id, enabled);
 }
 
 export async function rescanSoulseekLocalShares() {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesRescan() as Promise<SoulseekLocalShares>;
+  return commands.localSharesRescan();
 }
 
 export async function setSoulseekUploadSlots(uploadSlots: number) {
   if (!isTauriRuntime()) return emptySoulseekShares();
-  return commands.localSharesSetUploadSlots(uploadSlots) as Promise<SoulseekLocalShares>;
+  return commands.localSharesSetUploadSlots(uploadSlots);
 }
 
 export async function searchSoulseekAlbum(
@@ -3345,7 +3367,7 @@ export async function searchSoulseekAlbum(
       settled = true;
       window.clearTimeout(timeout);
       unlisten?.();
-      void (commands.searchClose(clientId) as Promise<boolean>).catch(() => undefined);
+      void (commands.searchClose(clientId)).catch(() => undefined);
       if (failure) {
         reject(new Error(failure));
       } else {
@@ -3438,7 +3460,7 @@ function publishMockSoulseekTransfers() {
 
 export async function getSoulseekTransfers() {
   if (!isTauriRuntime()) return mockSoulseekTransferSnapshot();
-  return commands.transfersSnapshot() as Promise<SoulseekTransferQueue>;
+  return commands.transfersSnapshot();
 }
 
 export async function clearCompletedSoulseekTransfers() {
@@ -3460,7 +3482,7 @@ export async function clearCompletedSoulseekTransfers() {
     );
     return publishMockSoulseekTransfers();
   }
-  return commands.transferClearCompleted() as Promise<SoulseekTransferQueue>;
+  return commands.transferClearCompleted();
 }
 
 export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
@@ -3525,7 +3547,7 @@ export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadReque
     }, 700);
     return queuedSnapshot;
   }
-  return commands.transferEnqueueRelease(input) as Promise<SoulseekTransferQueue>;
+  return commands.transferEnqueueRelease(input);
 }
 
 export async function getSoulseekUploads() {
@@ -3537,7 +3559,7 @@ export async function getSoulseekUploads() {
       sessionUploadedBytes: 0,
     } satisfies SoulseekUploadQueue;
   }
-  return commands.uploadsSnapshot() as Promise<SoulseekUploadQueue>;
+  return commands.uploadsSnapshot();
 }
 
 const mockUsenetProfile = {
@@ -3565,7 +3587,7 @@ export async function getUsenetBootstrap() {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return commands.usenetBootstrap() as Promise<UsenetBootstrap>;
+  return commands.usenetBootstrap();
 }
 
 export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
@@ -3579,7 +3601,7 @@ export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return commands.usenetSaveProfile(input) as Promise<UsenetBootstrap>;
+  return commands.usenetSaveProfile(input);
 }
 
 export async function resetUsenet() {
@@ -3592,7 +3614,7 @@ export async function resetUsenet() {
       par2Path: null,
     } satisfies UsenetBootstrap;
   }
-  return commands.usenetReset() as Promise<UsenetBootstrap>;
+  return commands.usenetReset();
 }
 
 export async function testUsenetConnections() {
@@ -3605,7 +3627,7 @@ export async function testUsenetConnections() {
       message: "Desktop runtime required for a live connection test.",
     } satisfies UsenetConnectionTest;
   }
-  return commands.usenetTestConnections() as Promise<UsenetConnectionTest>;
+  return commands.usenetTestConnections();
 }
 
 export async function selectUsenetDownloadDirectory(defaultPath?: string) {
@@ -3620,12 +3642,12 @@ export async function searchUsenet(input: UsenetSearchRequest) {
       searchedAt: new Date().toISOString(),
     } satisfies UsenetSearchResponse;
   }
-  return commands.usenetSearch(input) as Promise<UsenetSearchResponse>;
+  return commands.usenetSearch(input);
 }
 
 export async function getUsenetTransfers() {
   if (!isTauriRuntime()) return mockUsenetQueue;
-  return commands.usenetTransfersSnapshot() as Promise<UsenetTransferQueue>;
+  return commands.usenetTransfersSnapshot();
 }
 
 export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
@@ -3656,7 +3678,7 @@ export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
     mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
     return mockUsenetQueue;
   }
-  return commands.usenetEnqueueDownload(input) as Promise<UsenetTransferQueue>;
+  return commands.usenetEnqueueDownload(input);
 }
 
 export async function clearCompletedUsenetTransfers() {
@@ -3665,7 +3687,7 @@ export async function clearCompletedUsenetTransfers() {
     mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
     return mockUsenetQueue;
   }
-  return commands.usenetClearCompleted() as Promise<UsenetTransferQueue>;
+  return commands.usenetClearCompleted();
 }
 
 export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
@@ -3713,7 +3735,7 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
     } satisfies AiCurrentViewAnswer;
   }
 
-  return commands.askCurrentView(input) as Promise<AiCurrentViewAnswer>;
+  return commands.askCurrentView(input);
 }
 
 export async function researchMusic(input: AiMusicResearchRequest) {
@@ -3750,21 +3772,21 @@ export async function researchMusic(input: AiMusicResearchRequest) {
     } satisfies AiMusicResearchAnswer;
   }
 
-  return commands.researchMusic(input) as Promise<AiMusicResearchAnswer>;
+  return commands.researchMusic(input);
 }
 
 export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
   if (!isTauriRuntime()) {
     const albumTotal = mockStatistics.overview.albumCount;
     const unrated = mockStatistics.ratingProgress.unratedAlbums;
-    const ratingCoverage = mockStatistics.healthScore.ratingCoverage * 100;
+    const ratingCoverage = (mockStatistics.healthScore.ratingCoverage ?? 0) * 100;
     const genre = mockStatistics.genreProgress[0];
     const lensSummary = {
       overview: `The preview library contains ${albumTotal.toLocaleString()} albums and ${mockStatistics.overview.trackCount.toLocaleString()} tracks.`,
       ratingBacklog: `${unrated.toLocaleString()} albums remain unrated, while track rating coverage is ${ratingCoverage.toFixed(1)}%.`,
       tasteProfile: `${mockStatistics.lovedTracks.lovedTracks.toLocaleString()} tracks are marked loved${genre ? `, with ${genre.genre} the largest preview genre` : ""}.`,
       catalogBalance: `${mockStatistics.libraryShape.mostRepresentedDecade ?? "The leading decade"}s is the most represented decade in the preview profile.`,
-      metadataHealth: `The preview library health score is ${mockStatistics.healthScore.score.toFixed(1)}%.`,
+      metadataHealth: `The preview library health score is ${(mockStatistics.healthScore.score ?? 0).toFixed(1)}%.`,
     }[input.lens];
     return {
       lens: input.lens,
@@ -3799,7 +3821,7 @@ export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
     } satisfies AiLibraryAnalysis;
   }
 
-  return commands.analyzeLibrary(input) as Promise<AiLibraryAnalysis>;
+  return commands.analyzeLibrary(input);
 }
 
 export async function listAiSnapshots(kind?: AiSnapshotKind) {
@@ -3861,7 +3883,7 @@ export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
   }
 
   return finalizeExport(
-    (await commands.exportAiMarkdown(input)) as RawExportResult,
+    await commands.exportAiMarkdown(input),
   );
 }
 
@@ -3909,6 +3931,7 @@ export async function buildPlaylist(input: AiPlaylistBuildRequest) {
       description:
         "A varied local-library sequence shaped from the request, with repeat caps applied.",
       request,
+      mixtape: null,
       strategy,
       targetTrackCount: 12,
       targetMinutes: 45,
@@ -3981,22 +4004,22 @@ export async function deleteSavedPlaylist(id: number) {
 
 export async function getJevKeyStatus(): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) return { configured: false, source: "none", model: "typesafe/jev-1.13" };
-  return commands.getJevKeyStatus() as Promise<AiKeyStatus>;
+  return commands.getJevKeyStatus();
 }
 
 export async function saveOpenRouterApiKey(apiKey: string) {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
-  return commands.saveOpenrouterApiKey(apiKey) as Promise<AiKeyStatus>;
+  return commands.saveOpenrouterApiKey(apiKey);
 }
 
 export async function deleteOpenRouterApiKey() {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
-  return commands.deleteOpenrouterApiKey() as Promise<AiKeyStatus>;
+  return commands.deleteOpenrouterApiKey();
 }
 
 export async function testJevConnection() {
   if (!isTauriRuntime()) throw new Error("Jev connection testing requires the desktop app.");
-  return commands.testJevConnection() as Promise<AiConnectionTest>;
+  return commands.testJevConnection();
 }
 
 export async function scoreMixtapeCandidates(input: {
@@ -4005,7 +4028,7 @@ export async function scoreMixtapeCandidates(input: {
   notes: Record<string, string>;
 }) {
   if (!isTauriRuntime()) throw new Error("Jev scoring requires the desktop app and an OpenRouter key in Settings → AI. Build locally to preview this workflow.");
-  return commands.scoreMixtapeCandidates(input) as Promise<import("./mixtape").JevResult>;
+  return commands.scoreMixtapeCandidates(input);
 }
 
 export async function setPlaylistAutomation(
@@ -4249,7 +4272,7 @@ export async function listWishList() {
       autoRemovedCount: 0,
     } satisfies WishListResponse;
   }
-  return commands.listWishList() as Promise<WishListResponse>;
+  return commands.listWishList();
 }
 
 export async function getLibraryCompletion(input: LibraryCompletionRequest | null = null) {
@@ -4306,7 +4329,7 @@ export async function getLibraryCompletion(input: LibraryCompletionRequest | nul
       atlas: mockLibraryCompletionAtlas,
     } satisfies LibraryCompletionResponse;
   }
-  return commands.getLibraryCompletion(input) as Promise<LibraryCompletionResponse>;
+  return commands.getLibraryCompletion(input);
 }
 
 function advanceMockLibraryCompletionVerification() {
@@ -4380,7 +4403,7 @@ export async function getLibraryCompletionVerificationStatus() {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return commands.getLibraryCompletionVerificationStatus() as Promise<LibraryCompletionVerificationStatus>;
+  return commands.getLibraryCompletionVerificationStatus();
 }
 
 export async function getLibraryCompletionCoverUrl(candidateId: string, size: ThumbnailSize = 300) {
@@ -4411,7 +4434,7 @@ export async function enrichLibraryCompletionCover(candidateId: string) {
     mockLibraryCompletionCovers.set(candidateId, result);
     return result;
   }
-  return (commands.enrichLibraryCompletionCover(candidateId) as Promise<LibraryCompletionCoverEnrichment>).then((result) => { invalidateArtwork(); return result; });
+  return (commands.enrichLibraryCompletionCover(candidateId)).then((result) => { invalidateArtwork(); return result; });
 }
 
 export async function startLibraryCompletionVerification(
@@ -4495,7 +4518,7 @@ export async function startLibraryCompletionVerification(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return commands.startLibraryCompletionVerification(input) as Promise<LibraryCompletionVerificationStatus>;
+  return commands.startLibraryCompletionVerification(input);
 }
 
 export async function setLibraryCompletionVerificationState(
@@ -4513,7 +4536,7 @@ export async function setLibraryCompletionVerificationState(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return commands.setLibraryCompletionVerificationState(input) as Promise<LibraryCompletionVerificationStatus>;
+  return commands.setLibraryCompletionVerificationState(input);
 }
 
 export async function retryLibraryCompletionVerificationFailures(batchId: number) {
@@ -4555,7 +4578,7 @@ export async function retryLibraryCompletionVerificationFailures(batchId: number
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
   }
-  return commands.retryLibraryCompletionVerificationFailures(batchId) as Promise<LibraryCompletionVerificationStatus>;
+  return commands.retryLibraryCompletionVerificationFailures(batchId);
 }
 
 export async function setLibraryCompletionDecision(
@@ -4619,7 +4642,7 @@ export async function setLibraryCompletionDecision(
     }
     return decision;
   }
-  return commands.setLibraryCompletionDecision(input) as Promise<LibraryCompletionDecision>;
+  return commands.setLibraryCompletionDecision(input);
 }
 
 export async function getLibraryCompletionArtists(
@@ -4654,7 +4677,7 @@ export async function getLibraryCompletionArtists(
       candidates,
     } satisfies LibraryCompletionArtistResponse;
   }
-  return commands.getLibraryCompletionArtists(input) as Promise<LibraryCompletionArtistResponse>;
+  return commands.getLibraryCompletionArtists(input);
 }
 
 function verifiedMockArtist(candidate: LibraryCompletionArtistCandidate) {
@@ -4732,7 +4755,7 @@ export async function getLibraryCompletionArtistVerificationStatus() {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return commands.getLibraryCompletionArtistVerificationStatus() as Promise<LibraryCompletionArtistVerificationStatus>;
+  return commands.getLibraryCompletionArtistVerificationStatus();
 }
 
 export async function startLibraryCompletionArtistVerification(
@@ -4786,7 +4809,7 @@ export async function startLibraryCompletionArtistVerification(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return commands.startLibraryCompletionArtistVerification(input) as Promise<LibraryCompletionArtistVerificationStatus>;
+  return commands.startLibraryCompletionArtistVerification(input);
 }
 
 export async function setLibraryCompletionArtistVerificationState(
@@ -4804,7 +4827,7 @@ export async function setLibraryCompletionArtistVerificationState(
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return commands.setLibraryCompletionArtistVerificationState(input) as Promise<LibraryCompletionArtistVerificationStatus>;
+  return commands.setLibraryCompletionArtistVerificationState(input);
 }
 
 export async function retryLibraryCompletionArtistVerificationFailures(batchId: number) {
@@ -4816,7 +4839,7 @@ export async function retryLibraryCompletionArtistVerificationFailures(batchId: 
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
   }
-  return commands.retryLibraryCompletionArtistVerificationFailures(batchId) as Promise<LibraryCompletionArtistVerificationStatus>;
+  return commands.retryLibraryCompletionArtistVerificationFailures(batchId);
 }
 
 export async function confirmLibraryCompletionArtistMatch(
@@ -4835,7 +4858,7 @@ export async function confirmLibraryCompletionArtistMatch(
     mockLibraryCompletionArtistVerifications.set(candidate.id, verified);
     return verified;
   }
-  return commands.confirmLibraryCompletionArtistMatch(input) as Promise<LibraryCompletionArtistCandidate>;
+  return commands.confirmLibraryCompletionArtistMatch(input);
 }
 
 export async function setLibraryCompletionArtistDecision(
@@ -4911,7 +4934,7 @@ export async function setLibraryCompletionArtistDecision(
     mockLibraryCompletionArtistDecisions.set(input.artistId, decision);
     return decision;
   }
-  return commands.setLibraryCompletionArtistDecision(input) as Promise<LibraryCompletionArtistDecision>;
+  return commands.setLibraryCompletionArtistDecision(input);
 }
 
 export async function searchWishListMusicBrainz(
@@ -4964,7 +4987,7 @@ export async function searchWishListMusicBrainz(
       searchedAt: new Date().toISOString(),
     } satisfies WishListMusicBrainzSearchResponse;
   }
-  return commands.searchWishListMusicbrainz(input) as Promise<WishListMusicBrainzSearchResponse>;
+  return commands.searchWishListMusicbrainz(input);
 }
 
 export async function addWishListMusicBrainzCandidate(
@@ -5038,7 +5061,7 @@ export async function addWishListMusicBrainzCandidate(
       artistAlbumSummary: null,
     } satisfies AddWishListMusicBrainzCandidateResponse;
   }
-  return commands.addWishListMusicbrainzCandidate({ candidate }) as Promise<AddWishListMusicBrainzCandidateResponse>;
+  return commands.addWishListMusicbrainzCandidate({ candidate });
 }
 
 export async function addWishListItem(input: AddWishListItemRequest) {
@@ -5063,7 +5086,7 @@ export async function addWishListItem(input: AddWishListItemRequest) {
     mockWishListItems = [item, ...mockWishListItems];
     return item;
   }
-  return commands.addWishListItem(input) as Promise<WishListItem>;
+  return commands.addWishListItem(input);
 }
 
 export async function removeWishListItem(id: number) {
@@ -5099,7 +5122,7 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
       searchedAt: new Date().toISOString(),
     } satisfies DeemixAlbumSearchResponse;
   }
-  return commands.searchDeemixAlbums(input) as Promise<DeemixAlbumSearchResponse>;
+  return commands.searchDeemixAlbums(input);
 }
 
 export async function refreshWishListArtistAlbumSummary(wishListItemId: number) {
@@ -5119,7 +5142,7 @@ export async function refreshWishListArtistAlbumSummary(wishListItemId: number) 
       updatedAt: new Date().toISOString(),
     } satisfies WishListArtistAlbumSummary;
   }
-  return commands.refreshWishListArtistAlbumSummary({ wishListItemId }) as Promise<WishListArtistAlbumSummary>;
+  return commands.refreshWishListArtistAlbumSummary({ wishListItemId });
 }
 
 export async function discoverWishListArtistAlbums(wishListItemId: number) {
@@ -5192,7 +5215,7 @@ export async function discoverWishListArtistAlbums(wishListItemId: number) {
       searchedAt: new Date().toISOString(),
     } satisfies WishListArtistAlbumDiscoveryResponse;
   }
-  return commands.discoverWishListArtistAlbums({ wishListItemId }) as Promise<WishListArtistAlbumDiscoveryResponse>;
+  return commands.discoverWishListArtistAlbums({ wishListItemId });
 }
 
 export async function preflightDeemixAlbumDownload(
@@ -5209,7 +5232,7 @@ export async function preflightDeemixAlbumDownload(
         : "This album is not currently in the configured download folder.",
     } satisfies DeemixAlbumDownloadPreflight;
   }
-  return commands.preflightDeemixAlbumDownload(input) as Promise<DeemixAlbumDownloadPreflight>;
+  return commands.preflightDeemixAlbumDownload(input);
 }
 
 function emitMockDeemixDownloadProgress(
@@ -5298,7 +5321,7 @@ export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
     });
     return summary;
   }
-  return commands.downloadDeemixAlbum(input) as Promise<DeemixAlbumDownloadSummary>;
+  return commands.downloadDeemixAlbum(input);
 }
 
 export async function exportPlaylist(input: ExportPlaylistRequest) {
@@ -5312,7 +5335,7 @@ export async function exportPlaylist(input: ExportPlaylistRequest) {
     } satisfies RawExportResult);
   }
   return finalizeExport(
-    (await commands.exportPlaylist(input)) as RawExportResult,
+    await commands.exportPlaylist(input),
   );
 }
 
@@ -5328,7 +5351,7 @@ export async function getMusicBrainzCacheStatus(cachePath?: string) {
     } satisfies MusicBrainzCacheStatus;
   }
 
-  return commands.getMusicbrainzCacheStatus(cachePath ?? null) as Promise<MusicBrainzCacheStatus>;
+  return commands.getMusicbrainzCacheStatus(cachePath ?? null);
 }
 
 function mockOriginPreview(
@@ -5370,7 +5393,7 @@ export async function getMusicBrainzOriginCountryStatus() {
     return mockMusicBrainzOriginCountryStatus;
   }
 
-  return commands.getMusicbrainzOriginCountryStatus() as Promise<MusicBrainzOriginCountryStatus>;
+  return commands.getMusicbrainzOriginCountryStatus();
 }
 
 export async function previewMusicBrainzOriginCountryImport(
@@ -5380,7 +5403,7 @@ export async function previewMusicBrainzOriginCountryImport(
     return mockOriginPreview(request);
   }
 
-  return commands.previewMusicbrainzOriginCountryImport(request) as Promise<MusicBrainzOriginCountryPreview>;
+  return commands.previewMusicbrainzOriginCountryImport(request);
 }
 
 export async function importMusicBrainzOriginCountries(
@@ -5492,7 +5515,7 @@ export async function importMusicBrainzOriginCountries(
     } satisfies MusicBrainzOriginCountryImportSummary;
   }
 
-  return commands.importMusicbrainzOriginCountries(request) as Promise<MusicBrainzOriginCountryImportSummary>;
+  return commands.importMusicbrainzOriginCountries(request);
 }
 
 export async function cancelMusicBrainzOriginCountryImport() {
@@ -5538,7 +5561,7 @@ export async function getMusicBrainzArtistInfoStatus() {
     return mockMusicBrainzArtistInfoStatus;
   }
 
-  return commands.getMusicbrainzArtistInfoStatus() as Promise<MusicBrainzArtistInfoStatus>;
+  return commands.getMusicbrainzArtistInfoStatus();
 }
 
 export async function previewMusicBrainzArtistInfoImport(
@@ -5548,7 +5571,7 @@ export async function previewMusicBrainzArtistInfoImport(
     return mockArtistInfoPreview(request);
   }
 
-  return commands.previewMusicbrainzArtistInfoImport(request) as Promise<MusicBrainzArtistInfoPreview>;
+  return commands.previewMusicbrainzArtistInfoImport(request);
 }
 
 export async function importMusicBrainzArtistInfos(
@@ -5661,7 +5684,7 @@ export async function importMusicBrainzArtistInfos(
     } satisfies MusicBrainzArtistInfoImportSummary;
   }
 
-  return commands.importMusicbrainzArtistInfos(request) as Promise<MusicBrainzArtistInfoImportSummary>;
+  return commands.importMusicbrainzArtistInfos(request);
 }
 
 export async function cancelMusicBrainzArtistInfoImport() {
@@ -5710,7 +5733,7 @@ export async function getMusicBrainzArtistDiscography(
     } satisfies MusicBrainzArtistDiscographyResponse;
   }
 
-  return commands.getMusicbrainzArtistDiscography({ artistKey, artistName }) as Promise<MusicBrainzArtistDiscographyResponse>;
+  return commands.getMusicbrainzArtistDiscography({ artistKey, artistName });
 }
 
 export async function refreshMusicBrainzArtistInfo(input: {
@@ -5772,7 +5795,7 @@ export async function refreshMusicBrainzArtistInfo(input: {
     } satisfies MusicBrainzArtistRefreshResult;
   }
 
-  return commands.refreshMusicbrainzArtistReleases(input) as Promise<MusicBrainzArtistRefreshResult>;
+  return commands.refreshMusicbrainzArtistReleases(input);
 }
 
 export async function setMusicBrainzArtistOriginCountry(input: {
@@ -5799,7 +5822,7 @@ export async function setMusicBrainzArtistOriginCountry(input: {
     );
   }
 
-  return commands.setMusicbrainzArtistOriginCountry(input) as Promise<MusicBrainzArtistOriginCountryUpdate>;
+  return commands.setMusicbrainzArtistOriginCountry(input);
 }
 
 export async function setMusicBrainzArtistLink(input: {
@@ -5915,7 +5938,7 @@ export async function syncMusicBrainzOverlay(
     return result;
   }
 
-  return commands.syncMusicbrainzOverlay(options.recordNoop ?? true) as Promise<MusicBrainzOverlaySyncResult>;
+  return commands.syncMusicbrainzOverlay(options.recordNoop ?? true);
 }
 
 export async function listMusicBrainzOverlaySyncLog(limit = 12) {
@@ -5926,7 +5949,7 @@ export async function listMusicBrainzOverlaySyncLog(limit = 12) {
     ) satisfies MusicBrainzOverlaySyncLogEntry[];
   }
 
-  return commands.listMusicbrainzOverlaySyncLog(limit) as Promise<MusicBrainzOverlaySyncLogEntry[]>;
+  return commands.listMusicbrainzOverlaySyncLog(limit);
 }
 
 function createMockMusicBrainzOverlaySyncResult(): MusicBrainzOverlaySyncLogEntry {
@@ -6026,7 +6049,7 @@ export async function getImportPreview(sourcePath: string) {
       : null;
   }
 
-  return commands.getImportPreview(sourcePath) as Promise<ImportPreview | null>;
+  return commands.getImportPreview(sourcePath);
 }
 
 export async function selectTaggedAlbumFolder(defaultPath?: string) {
@@ -6118,7 +6141,7 @@ export async function prepareImportPreview(sourcePath: string) {
     return mockPreparedImport;
   }
 
-  return commands.prepareImportPreview(sourcePath) as Promise<ImportPreview>;
+  return commands.prepareImportPreview(sourcePath);
 }
 
 export async function cancelImportPreview() {
@@ -6183,7 +6206,7 @@ export async function applyImportPreview(sessionId: number) {
     } satisfies ImportSummary;
   }
 
-  return commands.applyImportPreview(sessionId) as Promise<ImportSummary>;
+  return commands.applyImportPreview(sessionId);
 }
 
 export async function rollbackImportRun(importRunId: number) {
@@ -6214,7 +6237,7 @@ export async function rollbackImportRun(importRunId: number) {
     } satisfies DatabaseRestoreSummary;
   }
 
-  return commands.rollbackImportRun(importRunId) as Promise<DatabaseRestoreSummary>;
+  return commands.rollbackImportRun(importRunId);
 }
 
 export async function importAlbumCovers(request: CoverImportRequest) {
@@ -6224,7 +6247,7 @@ export async function importAlbumCovers(request: CoverImportRequest) {
     );
   }
 
-  return commands.importAlbumCovers(request) as Promise<CoverImportSummary>;
+  return commands.importAlbumCovers(request);
 }
 
 export async function importBillboardCharts(sourcePath: string) {
@@ -6242,7 +6265,7 @@ export async function importBillboardCharts(sourcePath: string) {
     } satisfies BillboardImportSummary;
   }
 
-  return commands.importBillboardCharts(sourcePath) as Promise<BillboardImportSummary>;
+  return commands.importBillboardCharts(sourcePath);
 }
 
 export async function importBillboardSingles(sourcePath: string) {
@@ -6264,7 +6287,7 @@ export async function importBillboardSingles(sourcePath: string) {
     } satisfies BillboardSinglesImportSummary;
   }
 
-  return commands.importBillboardSingles(sourcePath) as Promise<BillboardSinglesImportSummary>;
+  return commands.importBillboardSingles(sourcePath);
 }
 
 export async function importVgListaAlbums(sourcePath: string) {
@@ -6282,7 +6305,7 @@ export async function importVgListaAlbums(sourcePath: string) {
     } satisfies VgListaImportSummary;
   }
 
-  return commands.importVgListaAlbums(sourcePath) as Promise<VgListaImportSummary>;
+  return commands.importVgListaAlbums(sourcePath);
 }
 
 export async function importVgListaSingles(sourcePath: string) {
@@ -6300,7 +6323,7 @@ export async function importVgListaSingles(sourcePath: string) {
     } satisfies VgListaImportSummary;
   }
 
-  return commands.importVgListaSingles(sourcePath) as Promise<VgListaImportSummary>;
+  return commands.importVgListaSingles(sourcePath);
 }
 
 export async function importOfficialUkAlbums(sourcePath: string) {
@@ -6318,7 +6341,7 @@ export async function importOfficialUkAlbums(sourcePath: string) {
     } satisfies OfficialUkImportSummary;
   }
 
-  return commands.importOfficialUkAlbums(sourcePath) as Promise<OfficialUkImportSummary>;
+  return commands.importOfficialUkAlbums(sourcePath);
 }
 
 export async function importOfficialUkSingles(sourcePath: string) {
@@ -6336,7 +6359,7 @@ export async function importOfficialUkSingles(sourcePath: string) {
     } satisfies OfficialUkImportSummary;
   }
 
-  return commands.importOfficialUkSingles(sourcePath) as Promise<OfficialUkImportSummary>;
+  return commands.importOfficialUkSingles(sourcePath);
 }
 
 export async function importTiISkuddetSingles(sourcePath: string) {
@@ -6355,7 +6378,7 @@ export async function importTiISkuddetSingles(sourcePath: string) {
     } satisfies TiISkuddetImportSummary;
   }
 
-  return commands.importTiISkuddetSingles(sourcePath) as Promise<TiISkuddetImportSummary>;
+  return commands.importTiISkuddetSingles(sourcePath);
 }
 
 export async function importNorsktoppenSingles(sourcePath: string) {
@@ -6374,7 +6397,7 @@ export async function importNorsktoppenSingles(sourcePath: string) {
     } satisfies NorsktoppenImportSummary;
   }
 
-  return commands.importNorsktoppenSingles(sourcePath) as Promise<NorsktoppenImportSummary>;
+  return commands.importNorsktoppenSingles(sourcePath);
 }
 
 export async function getAlbumCoverUrl(albumId: string, size: ThumbnailSize = 300) {
@@ -6618,7 +6641,7 @@ export async function searchLibrary(request: BrowseRequest) {
     } satisfies BrowseResponse;
   }
 
-  return commands.searchLibrary(request) as Promise<BrowseResponse>;
+  return commands.searchLibrary(request);
 }
 
 export async function listArtists(request: ArtistListRequest) {
@@ -6641,7 +6664,7 @@ export async function listArtists(request: ArtistListRequest) {
     } satisfies ArtistListResponse;
   }
 
-  return commands.listArtists(request) as Promise<ArtistListResponse>;
+  return commands.listArtists(request);
 }
 
 export async function getArtistTrackHighlights(artistId: string) {
@@ -6720,7 +6743,7 @@ export async function getArtistTrackHighlights(artistId: string) {
     } satisfies ArtistTrackHighlights;
   }
 
-  return commands.getArtistTrackHighlights(artistId) as Promise<ArtistTrackHighlights>;
+  return commands.getArtistTrackHighlights(artistId);
 }
 
 export async function listGenres(request: GenreListRequest) {
@@ -6743,7 +6766,7 @@ export async function listGenres(request: GenreListRequest) {
     } satisfies GenreListResponse;
   }
 
-  return commands.listGenres(request) as Promise<GenreListResponse>;
+  return commands.listGenres(request);
 }
 
 function normalizedTimelineGenre(value: string) {
@@ -6953,7 +6976,7 @@ export async function getGenreTimeline(request: GenreTimelineRequest) {
     return mockGenreTimeline(request);
   }
 
-  return commands.getGenreTimeline(request) as Promise<GenreTimelineResponse>;
+  return commands.getGenreTimeline(request);
 }
 
 const mockArtistCareerProfiles = [
@@ -7048,7 +7071,7 @@ function mockArtistTimeline(request: ArtistTimelineRequest): ArtistTimelineRespo
 
 export async function getArtistTimeline(request: ArtistTimelineRequest) {
   if (!isTauriRuntime()) return mockArtistTimeline(request);
-  return commands.getArtistTimeline(request) as Promise<ArtistTimelineResponse>;
+  return commands.getArtistTimeline(request);
 }
 
 export async function listGenreSuggestions() {
@@ -7056,7 +7079,7 @@ export async function listGenreSuggestions() {
     return mockGenres.map((genre) => genre.name);
   }
 
-  return commands.listGenreSuggestions() as Promise<string[]>;
+  return commands.listGenreSuggestions();
 }
 
 export async function listMusicTools() {
@@ -7064,7 +7087,7 @@ export async function listMusicTools() {
     return mockMusicTools;
   }
 
-  return commands.listMusicTools() as Promise<MusicToolSummary[]>;
+  return commands.listMusicTools();
 }
 
 export async function listMusicToolIssues(request: MusicToolIssueRequest) {
@@ -7138,7 +7161,7 @@ export async function listMusicToolIssues(request: MusicToolIssueRequest) {
     } satisfies MusicToolIssueResponse;
   }
 
-  return commands.listMusicToolIssues(request) as Promise<MusicToolIssueResponse>;
+  return commands.listMusicToolIssues(request);
 }
 
 export async function fixMusicToolIssues(input: MusicToolFixRequest) {
@@ -7322,7 +7345,7 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
     } satisfies MusicToolFixSummary;
   }
 
-  return commands.fixMusicToolIssues(input) as Promise<MusicToolFixSummary>;
+  return commands.fixMusicToolIssues(input);
 }
 
 function matchesIsoDateRange(
@@ -7346,7 +7369,7 @@ export async function listMusicToolFixHistory(toolId?: string) {
     );
   }
 
-  return commands.listMusicToolFixHistory(toolId ?? null) as Promise<MusicToolFixHistoryEntry[]>;
+  return commands.listMusicToolFixHistory(toolId ?? null);
 }
 
 export async function undoMusicToolFix(runId: number) {
@@ -7408,7 +7431,7 @@ export async function undoMusicToolFix(runId: number) {
     } satisfies MusicToolUndoSummary;
   }
 
-  return commands.undoMusicToolFix(runId) as Promise<MusicToolUndoSummary>;
+  return commands.undoMusicToolFix(runId);
 }
 
 export async function listSavedSearches() {
@@ -7507,7 +7530,7 @@ export async function exportSearch(
   }
 
   return finalizeExport(
-    (await commands.exportSearch({ request, format, includeCalculated, exportColumns })) as RawExportResult,
+    await commands.exportSearch({ request, format, includeCalculated, exportColumns }),
   );
 }
 
@@ -7547,7 +7570,7 @@ export async function exportMusicToolIssues(
   }
 
   return finalizeExport(
-    (await commands.exportMusicToolIssues({ request, format })) as RawExportResult,
+    await commands.exportMusicToolIssues({ request, format }),
   );
 }
 
@@ -7566,7 +7589,7 @@ export async function exportMusicBrainzArtistReleases(
   }
 
   return finalizeExport(
-    (await commands.exportMusicbrainzArtistReleases({ ...request, rows: visibleRows, format })) as RawExportResult,
+    await commands.exportMusicbrainzArtistReleases({ ...request, rows: visibleRows, format }),
   );
 }
 

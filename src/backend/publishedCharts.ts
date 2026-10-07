@@ -89,7 +89,7 @@ export function getPublishedChartCatalog(): Promise<PublishedChartCatalog> {
   if (!isTauriRuntime()) {
     return Promise.resolve({ importedYears: 0, inventoryYears: 0, needsImport: false, totalRows: 0, series: [] });
   }
-  return commands.getPublishedChartCatalog() as Promise<PublishedChartCatalog>;
+  return commands.getPublishedChartCatalog();
 }
 
 export function getPublishedArtistRankings(
@@ -101,12 +101,12 @@ export function getPublishedArtistRankings(
   offset: number,
 ): Promise<PublishedArtistRanking> {
   if (!isTauriRuntime()) return Promise.resolve({ totalArtists: 0, chartWeeks: 0, totalEntries: 0, artists: [] });
-  return commands.getPublishedArtistRankings(chart, fromYear, toYear, fromWeek, toWeek, offset) as Promise<PublishedArtistRanking>;
+  return commands.getPublishedArtistRankings(chart, fromYear, toYear, fromWeek, toWeek, offset);
 }
 
 export function listPublishedChartWeeks(chart: string, year: number): Promise<PublishedChartWeek[]> {
   if (!isTauriRuntime()) return Promise.resolve([]);
-  return commands.listPublishedChartWeeks(chart, year) as Promise<PublishedChartWeek[]>;
+  return commands.listPublishedChartWeeks(chart, year);
 }
 
 export function getPublishedChartEntries(
@@ -115,7 +115,7 @@ export function getPublishedChartEntries(
   offset: number,
 ): Promise<PublishedChartEntries> {
   if (!isTauriRuntime()) return Promise.resolve({ totalRows: 0, entries: [] });
-  return commands.getPublishedChartEntries(chart, week, offset) as Promise<PublishedChartEntries>;
+  return commands.getPublishedChartEntries(chart, week, offset);
 }
 
 export function importPublishedCharts(): Promise<PublishedChartsImportSummary> {
@@ -123,7 +123,7 @@ export function importPublishedCharts(): Promise<PublishedChartsImportSummary> {
     return Promise.reject(new Error("Published Charts import is available in the desktop app."));
   }
   if (!ongoingImport) {
-    ongoingImport = (commands.importPublishedCharts() as Promise<PublishedChartsImportSummary>)
+    ongoingImport = (commands.importPublishedCharts())
       .finally(() => { ongoingImport = null; });
   }
   return ongoingImport;
@@ -144,9 +144,9 @@ export type PublishedSongRanking = { totalSongs: number; chartWeeks: number; tot
 export type PublishedSongWeek = { weekEnding: string; position: number; entryStatus: string; entryDate: string };
 export function getPublishedSongRankings(chart: string, fromYear: number, toYear: number, fromWeek: string | null, toWeek: string | null, offset: number): Promise<PublishedSongRanking> {
   if (!isTauriRuntime()) return Promise.resolve({ totalSongs: 0, chartWeeks: 0, totalEntries: 0, songs: [] });
-  return commands.getPublishedSongRankings(chart, fromYear, toYear, fromWeek, toWeek, offset) as Promise<PublishedSongRanking>;
+  return commands.getPublishedSongRankings(chart, fromYear, toYear, fromWeek, toWeek, offset);
 }
 export function getPublishedSongHistory(chart: string, artist: string, title: string): Promise<PublishedSongWeek[]> {
   if (!isTauriRuntime()) return Promise.resolve([]);
-  return commands.getPublishedSongHistory(chart, artist, title) as Promise<PublishedSongWeek[]>;
+  return commands.getPublishedSongHistory(chart, artist, title);
 }

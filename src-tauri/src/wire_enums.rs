@@ -763,3 +763,15 @@ pub enum LibraryCompletionCoverEnrichmentState {
     #[serde(rename = "failed")]
     Failed,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum MixtapeRole {
+    #[serde(rename = "opener")]
+    Opener,
+    #[serde(rename = "builder")]
+    Builder,
+    #[serde(rename = "breather")]
+    Breather,
+    #[serde(rename = "closer")]
+    Closer,
+}

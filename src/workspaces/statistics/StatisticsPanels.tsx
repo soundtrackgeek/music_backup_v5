@@ -141,9 +141,9 @@ export function LibraryHealthScorePanel({
   }
 
   const health = statistics.healthScore;
-  const score = Math.round(health.score);
+  const score = Math.round(health.score ?? 0);
   const ringStyle = {
-    "--score": `${Math.max(0, Math.min(100, health.score))}%`,
+    "--score": `${Math.max(0, Math.min(100, health.score ?? 0))}%`,
   } as CSSProperties & Record<"--score", string>;
   const components = [
     { label: "Ratings", value: health.ratingCoverage },
@@ -173,7 +173,7 @@ export function LibraryHealthScorePanel({
             <div className="meter-track" aria-hidden="true">
               <div
                 className="meter-fill"
-                style={{ width: `${component.value * 100}%` }}
+                style={{ width: `${(component.value ?? 0) * 100}%` }}
               />
             </div>
           </div>
@@ -708,7 +708,7 @@ export function LovedDensityPanel({
     );
   }
 
-  const maxDensity = Math.max(1, ...rows.map((row) => row.lovedPer100Tracks));
+  const maxDensity = Math.max(1, ...rows.map((row) => row.lovedPer100Tracks ?? 0));
   return (
     <div className="loved-density-list">
       {rows.slice(0, 12).map((row) => {
@@ -734,12 +734,12 @@ export function LovedDensityPanel({
               <div
                 className="meter-fill"
                 style={{
-                  width: `${percentOf(row.lovedPer100Tracks, maxDensity)}%`,
+                  width: `${percentOf(row.lovedPer100Tracks ?? 0, maxDensity)}%`,
                 }}
               />
             </div>
             <small>
-              {row.lovedPer100Tracks.toFixed(2)} / 100 /{" "}
+              {(row.lovedPer100Tracks ?? 0).toFixed(2)} / 100 /{" "}
               {formatNumber(row.lovedTracks)} loved
             </small>
           </div>
@@ -771,7 +771,7 @@ export function ConcentrationBars({
           <div className="meter-track" aria-hidden="true">
             <div
               className="meter-fill"
-              style={{ width: `${point.share * 100}%` }}
+              style={{ width: `${(point.share ?? 0) * 100}%` }}
             />
           </div>
           <small>{formatPercent(point.share, 1)}</small>

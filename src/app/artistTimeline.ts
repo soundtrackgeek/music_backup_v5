@@ -123,7 +123,7 @@ export function artistPeakStrength(
       ? 0.06
       : clamp01(album.albumScore / Math.max(1, scoreMaximum));
   }
-  return clamp01(album.chartPeak);
+  return clamp01(album.chartPeak ?? 0);
 }
 
 export function buildArtistCareerPeaksLayout(

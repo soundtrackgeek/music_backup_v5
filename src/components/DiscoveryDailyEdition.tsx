@@ -1187,7 +1187,7 @@ export function DiscoveryDailyEdition({
                         <span className="daily-edition-progress-line">
                           <span
                             style={{
-                              width: `${Math.round(story.completionPercent * 100)}%`,
+                              width: `${Math.round((story.completionPercent ?? 0) * 100)}%`,
                             }}
                           />
                         </span>
@@ -1198,7 +1198,7 @@ export function DiscoveryDailyEdition({
                         </small>
                       </span>
                       <span className="daily-edition-percent">
-                        {Math.round(story.completionPercent * 100)}%
+                        {Math.round((story.completionPercent ?? 0) * 100)}%
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </button>
@@ -1227,14 +1227,14 @@ export function DiscoveryDailyEdition({
                           <small>{story.artist} · {story.releaseYear ?? "Year unknown"} · {story.genre}</small>
                         </span>
                         <span className="daily-edition-progress-line">
-                          <span style={{ width: `${Math.round(story.completionPercent * 100)}%` }} />
+                          <span style={{ width: `${Math.round((story.completionPercent ?? 0) * 100)}%` }} />
                         </span>
                         <small className="daily-edition-next-gap">
                           {story.unratedTracks} {story.unratedTracks === 1 ? "track" : "tracks"} left to rate
                         </small>
                       </span>
                       <span className="daily-edition-percent">
-                        {Math.round(story.completionPercent * 100)}%
+                        {Math.round((story.completionPercent ?? 0) * 100)}%
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </button>

@@ -24,7 +24,7 @@ export type AppUpdateSnapshot = {
 };
 
 export function getAppUpdateStatus() {
-  return commands.getAppUpdateStatus() as Promise<AppUpdateSnapshot>;
+  return commands.getAppUpdateStatus();
 }
 
 export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) => void) {
@@ -32,7 +32,7 @@ export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) =
 }
 
 export async function checkForAppUpdate() {
-  const snapshot = (await commands.checkAppUpdate()) as AppUpdateSnapshot;
+  const snapshot = await commands.checkAppUpdate();
   if (snapshot.error) throw new Error(snapshot.error);
   return snapshot.info ? { update: snapshot.info.version, info: snapshot.info } : null;
 }

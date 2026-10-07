@@ -71,6 +71,7 @@ export function localSearchPlaylistFromResponse(
     name: searchPlaylistName(sourceTitle),
     description,
     request,
+    mixtape: null,
     strategy: "ranked",
     targetTrackCount: tracks.length,
     targetMinutes: 0,

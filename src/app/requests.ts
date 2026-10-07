@@ -300,6 +300,7 @@ export function createChartConfig(view: BrowseView = "albums"): ChartConfig {
     request,
     rankingMetric,
     sortField: rankingMetric,
+    ratingCompletenessThreshold: null,
     ratingCompletenessMin: 100,
     ratingCompletenessMax: 100,
     sortDirection: "desc",

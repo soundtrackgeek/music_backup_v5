@@ -50,7 +50,7 @@ function SourceHealthRow({
 }) {
   const status = statusDetails[source.state];
   const StatusIcon = status.icon;
-  const percent = Math.round(source.coveragePercent * 100);
+  const percent = Math.round((source.coveragePercent ?? 0) * 100);
 
   return (
     <article className={`daily-edition-source-row source-state-${source.state}`}>

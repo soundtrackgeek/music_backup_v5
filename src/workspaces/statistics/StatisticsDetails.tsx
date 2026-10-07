@@ -47,7 +47,7 @@ export function StatisticsDetails({
             <dt>Health score</dt>
             <dd>
               {statistics
-                ? `${Math.round(statistics.healthScore.score)}/100`
+                ? `${Math.round(statistics.healthScore.score ?? 0)}/100`
                 : ""}
             </dd>
           </div>

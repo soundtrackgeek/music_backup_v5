@@ -688,6 +688,16 @@ type MusicBrainzArtistInfoFields = Pick<
 type BrowseRowWithoutOrigin = Omit<
   BrowseRow,
   | keyof OriginCountryFields
+  | "fileFormat"
+  | "bitrateKbps"
+  | "qualityFileSizeBytes"
+  | "doctorDurationMs"
+  | "qualityTrackCount"
+  | "minBitrateKbps"
+  | "avgBitrateKbps"
+  | "maxBitrateKbps"
+  | "below320Tracks"
+  | "mixedAudioQuality"
   | "billboardDebutYear"
   | "billboardDebutMonth"
   | "billboardDebutWeek"
@@ -726,7 +736,12 @@ type BrowseRowWithoutOrigin = Omit<
 >;
 type ArtistSummaryWithoutMusicBrainz = Omit<
   ArtistSummary,
-  keyof OriginCountryFields | keyof MusicBrainzArtistInfoFields
+  | keyof OriginCountryFields
+  | keyof MusicBrainzArtistInfoFields
+  | "portraitAvailable"
+  | "representativeAlbumId"
+  | "representativeAlbum"
+  | "representativeCoverPath"
 >;
 
 function mockOriginForArtist(
@@ -1348,6 +1363,10 @@ const mockArtists: ArtistSummary[] = (
     },
   ] satisfies ArtistSummaryWithoutMusicBrainz[]
 ).map((artist) => ({
+  portraitAvailable: false,
+  representativeAlbumId: null,
+  representativeAlbum: null,
+  representativeCoverPath: null,
   ...artist,
   ...mockArtistInfoForArtist(artist.name),
   ...mockOriginForArtist(artist.name),
@@ -1680,7 +1699,16 @@ let mockMusicTools: MusicToolSummary[] = [
   },
 ];
 
-let mockMusicToolIssues: MusicToolIssueRow[] = [
+type MockChartMemberships =
+  | "billboard"
+  | "officialUk"
+  | "vgLista"
+  | "tiISkuddet"
+  | "norsktoppen";
+type MockMusicToolIssue = Omit<MusicToolIssueRow, MockChartMemberships> &
+  Partial<Pick<MusicToolIssueRow, MockChartMemberships>>;
+
+let mockMusicToolIssues: MusicToolIssueRow[] = ([
   {
     id: "duplicate-albums:mb:mock-1",
     toolId: "duplicate-albums",
@@ -1895,7 +1923,14 @@ let mockMusicToolIssues: MusicToolIssueRow[] = [
     filename: "02 What  Have I Done to Deserve This.mp3",
     filePath: "D:\\Music\\Pet  Shop Boys\\Actually",
   },
-];
+] satisfies MockMusicToolIssue[]).map((issue) => ({
+  billboard: null,
+  officialUk: null,
+  vgLista: null,
+  tiISkuddet: null,
+  norsktoppen: null,
+  ...issue,
+}));
 
 let mockSavedSearches: SavedSearch[] = [];
 let mockSavedCharts: SavedChart[] = [];
