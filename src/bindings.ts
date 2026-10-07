@@ -4,6 +4,23 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse>("search_library", { request }),
+	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse>("list_artists", { request }),
+	getArtistTrackHighlights: (artistId: string) => __TAURI_INVOKE<ArtistTrackHighlights>("get_artist_track_highlights", { artistId }),
+	listGenres: (request: GenreListRequest) => __TAURI_INVOKE<GenreListResponse>("list_genres", { request }),
+	listSavedSearches: () => __TAURI_INVOKE<SavedSearch[]>("list_saved_searches"),
+	saveSearch: (input: SaveSearchRequest) => __TAURI_INVOKE<SavedSearch>("save_search", { input }),
+	deleteSavedSearch: (id: number) => __TAURI_INVOKE<null>("delete_saved_search", { id }),
+	listSavedCharts: () => __TAURI_INVOKE<SavedChart_Serialize[]>("list_saved_charts"),
+	saveChart: (input: SaveChartRequest_Deserialize) => __TAURI_INVOKE<SavedChart_Serialize>("save_chart", { input }),
+	deleteSavedChart: (id: number) => __TAURI_INVOKE<null>("delete_saved_chart", { id }),
+	exportSearch: (input: ExportSearchRequest) => __TAURI_INVOKE<ExportResult>("export_search", { input }),
+	exportMusicToolIssues: (input: ExportMusicToolRequest) => __TAURI_INVOKE<ExportResult>("export_music_tool_issues", { input }),
+	listMusicTools: () => __TAURI_INVOKE<MusicToolSummary[]>("list_music_tools"),
+	listMusicToolIssues: (request: MusicToolIssueRequest) => __TAURI_INVOKE<MusicToolIssueResponse>("list_music_tool_issues", { request }),
+	fixMusicToolIssues: (input: MusicToolFixRequest) => __TAURI_INVOKE<MusicToolFixSummary>("fix_music_tool_issues", { input }),
+	listMusicToolFixHistory: (toolId: string | null) => __TAURI_INVOKE<MusicToolFixHistoryEntry[]>("list_music_tool_fix_history", { toolId }),
+	undoMusicToolFix: (runId: number) => __TAURI_INVOKE<MusicToolUndoSummary>("undo_music_tool_fix", { runId }),
 	getStatistics: () => __TAURI_INVOKE<StatisticsResponse>("get_statistics"),
 	listLibraryUpdates: (request: LibraryUpdateRequest) => __TAURI_INVOKE<LibraryUpdateResponse>("list_library_updates", { request }),
 	listLibraryUpdateArtists: (request: LibraryUpdateRequest) => __TAURI_INVOKE<LibraryUpdateArtistResponse>("list_library_update_artists", { request }),
@@ -504,6 +521,79 @@ export type ArtistBiography = {
 	message: string,
 };
 
+export type ArtistChartTrack = {
+	trackId: number,
+	title: string,
+	displayArtist: string,
+	album: string | null,
+	year: number | null,
+	charts: ArtistTrackChartHistory[],
+};
+
+export type ArtistListRequest = {
+	searchText?: string,
+	sort?: BrowseSort,
+	limit?: number,
+	offset?: number,
+};
+
+export type ArtistListResponse = {
+	rows: ArtistSummary[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type ArtistLovedTrack = {
+	trackId: number,
+	title: string,
+	displayArtist: string,
+	album: string | null,
+	year: number | null,
+	seconds: number | null,
+	rating: number | null,
+};
+
+export type ArtistSummary = {
+	id: string,
+	name: string,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	tmoeSeconds: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumRating: number | null,
+	averageAlbumScore: number | null,
+	firstYear: number | null,
+	lastYear: number | null,
+	topGenre: string | null,
+	musicBrainzMbid: string | null,
+	musicBrainzSortName: string | null,
+	musicBrainzArtistType: string | null,
+	musicBrainzGender: string | null,
+	musicBrainzBeginDate: string | null,
+	musicBrainzBeginYear: number | null,
+	musicBrainzEndDate: string | null,
+	musicBrainzEndYear: number | null,
+	musicBrainzEnded: boolean | null,
+	musicBrainzBeginAreaName: string | null,
+	musicBrainzEndAreaName: string | null,
+	musicBrainzInfoReviewState: string | null,
+	musicBrainzInfoFetchedAt: string | null,
+	originCountryCode: string | null,
+	originCountryName: string | null,
+	originCountryRawArea: string | null,
+	originCountryReviewState: string | null,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
+};
+
 export type ArtistTimelineAlbum = {
 	albumId: string,
 	album: string | null,
@@ -552,6 +642,21 @@ export type ArtistTimelineResponse = {
 	datedAlbumCount: number,
 	availableYearFrom: number | null,
 	availableYearTo: number | null,
+};
+
+export type ArtistTrackChartHistory = {
+	chart: string,
+	entryDate: string | null,
+	endDate: string | null,
+	weeksOnChart: number | null,
+	peak: number,
+};
+
+export type ArtistTrackHighlights = {
+	artistId: string,
+	artistName: string,
+	lovedTracks: ArtistLovedTrack[],
+	chartTracks: ArtistChartTrack[],
 };
 
 export type Assessment = {
@@ -649,6 +754,99 @@ export type BrowseRequest = {
 	sort?: BrowseSort,
 	limit?: number,
 	offset?: number,
+};
+
+export type BrowseResponse = {
+	view: string,
+	rows: BrowseRow[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type BrowseRow = {
+	id: string,
+	trackId: number | null,
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	displayArtist: string | null,
+	title: string | null,
+	canonicalGenre: string | null,
+	publisher: string | null,
+	year: number | null,
+	releaseYear: number | null,
+	totalTracks: number | null,
+	ratedTracks: number | null,
+	ratingCompleteness: number | null,
+	totalSeconds: number | null,
+	lovedTracks: number | null,
+	tmoeSeconds: number | null,
+	aeRatio: number | null,
+	effectiveAlbumRating: number | null,
+	albumScore: number | null,
+	billboardRank: number | null,
+	billboardYear: number | null,
+	billboardDebutYear: number | null,
+	billboardDebutMonth: number | null,
+	billboardDebutWeek: number | null,
+	billboardDebutWeekKey: string | null,
+	billboardSingleRank: number | null,
+	billboardSingleYear: number | null,
+	billboardSingleDebutDate: string | null,
+	billboardSingleDebutYear: number | null,
+	billboardSingleDebutMonth: number | null,
+	billboardSingleDebutWeek: number | null,
+	billboardSingleDebutWeekKey: string | null,
+	vgListaRank: number | null,
+	vgListaYear: number | null,
+	vgListaDebutYear: number | null,
+	vgListaDebutMonth: number | null,
+	vgListaDebutWeek: number | null,
+	vgListaDebutWeekKey: string | null,
+	officialUkRank: number | null,
+	officialUkYear: number | null,
+	officialUkDebutYear: number | null,
+	officialUkDebutMonth: number | null,
+	officialUkDebutWeek: number | null,
+	officialUkDebutWeekKey: string | null,
+	tiISkuddetRank: number | null,
+	tiISkuddetYear: number | null,
+	tiISkuddetDebutDate: string | null,
+	tiISkuddetDebutYear: number | null,
+	tiISkuddetDebutMonth: number | null,
+	tiISkuddetDebutWeek: number | null,
+	tiISkuddetDebutWeekKey: string | null,
+	norsktoppenRank: number | null,
+	norsktoppenYear: number | null,
+	norsktoppenDebutDate: string | null,
+	norsktoppenDebutYear: number | null,
+	norsktoppenDebutMonth: number | null,
+	norsktoppenDebutWeek: number | null,
+	norsktoppenDebutWeekKey: string | null,
+	trackSeconds: number | null,
+	normalizedRating: number | null,
+	discNumber: number | null,
+	trackNumber: number | null,
+	love: string | null,
+	filePath: string | null,
+	filename: string | null,
+	coverPath: string | null,
+	coverMimeType: string | null,
+	originCountryCode: string | null,
+	originCountryName: string | null,
+	originCountryRawArea: string | null,
+	originCountryReviewState: string | null,
+	fileFormat: string | null,
+	bitrateKbps: number | null,
+	qualityFileSizeBytes: number | null,
+	doctorDurationMs: number | null,
+	qualityTrackCount: number | null,
+	minBitrateKbps: number | null,
+	avgBitrateKbps: number | null,
+	maxBitrateKbps: number | null,
+	below320Tracks: number | null,
+	mixedAudioQuality: boolean | null,
 };
 
 export type BrowseSort = {
@@ -1342,6 +1540,11 @@ export type EnqueueReleaseRequest = {
 	alternatives?: ReleaseAlternativeSource[],
 };
 
+export type ExportMusicToolRequest = {
+	request: MusicToolIssueRequest,
+	format: string,
+};
+
 export type ExportPlaylistRequest = ExportPlaylistRequest_Serialize | ExportPlaylistRequest_Deserialize;
 
 export type ExportPlaylistRequest_Deserialize = {
@@ -1358,6 +1561,13 @@ export type ExportResult = {
 	path: string,
 	format: string,
 	rowCount: number,
+};
+
+export type ExportSearchRequest = {
+	request: BrowseRequest,
+	format: string,
+	includeCalculated?: boolean,
+	exportColumns?: string[],
 };
 
 export type ExternalDiscoveryItem = {
@@ -1388,6 +1598,20 @@ export type ExternalDiscoveryResponse = {
 	limitations: string[],
 };
 
+export type GenreListRequest = {
+	searchText?: string,
+	sort?: BrowseSort,
+	limit?: number,
+	offset?: number,
+};
+
+export type GenreListResponse = {
+	rows: GenreSummary[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
 export type GenreProgressRequest = {
 	yearFrom?: number | null,
 	yearTo?: number | null,
@@ -1405,6 +1629,25 @@ export type GenreProgressStats = {
 	totalSeconds: number,
 	lovedTracks: number,
 	averageAlbumScore: number | null,
+};
+
+export type GenreSummary = {
+	id: string,
+	name: string,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	tmoeSeconds: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumRating: number | null,
+	averageAlbumScore: number | null,
+	firstYear: number | null,
+	lastYear: number | null,
+	topArtist: string | null,
 };
 
 export type GenreTimelineAlbumPoint = {
@@ -2072,6 +2315,133 @@ export type MusicMapSummary = {
 	needsRefresh: boolean,
 };
 
+export type MusicToolFieldDiff = {
+	field: string,
+	label: string,
+	before: string | null,
+	after: string | null,
+};
+
+export type MusicToolFixDiff = {
+	id: string,
+	entityType: string,
+	entityId: string,
+	albumId: string,
+	trackId: number | null,
+	label: string,
+	context: string | null,
+	confidence: string,
+	sourceWarning: string,
+	changes: MusicToolFieldDiff[],
+};
+
+export type MusicToolFixHistoryEntry = {
+	id: number,
+	toolId: string,
+	toolLabel: string,
+	action: string,
+	status: string,
+	confidence: string,
+	requestedCount: number,
+	fixableCount: number,
+	affectedAlbumCount: number,
+	affectedTrackCount: number,
+	changedAlbumCount: number,
+	changedTrackCount: number,
+	diffCount: number,
+	backupPath: string | null,
+	undoBackupPath: string | null,
+	sourceWarning: string,
+	message: string,
+	createdAt: string,
+	undoneAt: string | null,
+	canUndo: boolean,
+};
+
+export type MusicToolFixRequest = {
+	toolId: string,
+	issueIds?: string[],
+	apply?: boolean,
+};
+
+export type MusicToolFixSummary = {
+	repairId: number | null,
+	toolId: string,
+	action: string,
+	applied: boolean,
+	confidence: string,
+	sourceWarning: string,
+	requestedCount: number,
+	fixableCount: number,
+	affectedAlbumCount: number,
+	affectedTrackCount: number,
+	changedAlbumCount: number,
+	changedTrackCount: number,
+	skippedCount: number,
+	backupPath: string | null,
+	message: string,
+	diffs: MusicToolFixDiff[],
+};
+
+export type MusicToolIssueRequest = {
+	toolId?: string,
+	requestId?: string,
+	searchText?: string,
+	sort?: BrowseSort,
+	limit?: number,
+	offset?: number,
+};
+
+export type MusicToolIssueResponse = {
+	tool: MusicToolSummary,
+	rows: MusicToolIssueRow[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type MusicToolIssueRow = {
+	id: string,
+	toolId: string,
+	severity: string,
+	entityType: string,
+	albumId: string,
+	trackId: number | null,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	title: string | null,
+	canonicalGenre: string | null,
+	year: number | null,
+	detail: string,
+	value: string | null,
+	filename: string | null,
+	filePath: string | null,
+	billboard: string | null,
+	officialUk: string | null,
+	vgLista: string | null,
+	tiISkuddet: string | null,
+	norsktoppen: string | null,
+};
+
+export type MusicToolSummary = {
+	id: string,
+	label: string,
+	description: string,
+	severity: string,
+	scope: string,
+	issueCount: number,
+	albumCount: number,
+	trackCount: number,
+};
+
+export type MusicToolUndoSummary = {
+	run: MusicToolFixHistoryEntry,
+	restoredAlbumCount: number,
+	restoredTrackCount: number,
+	backupPath: string | null,
+	message: string,
+};
+
 export type NewLibraryArtist = {
 	artistKey: string,
 	artistName: string,
@@ -2277,6 +2647,18 @@ export type SaveAiSnapshotRequest_Serialize = {
 	content: AiSnapshotContent_Serialize,
 };
 
+export type SaveChartRequest = SaveChartRequest_Serialize | SaveChartRequest_Deserialize;
+
+export type SaveChartRequest_Deserialize = {
+	name: string,
+	config: ChartConfig_Deserialize,
+};
+
+export type SaveChartRequest_Serialize = {
+	name: string,
+	config: ChartConfig_Serialize,
+};
+
 export type SaveConnectionRequest = {
 	profile: ConnectionProfile,
 	password: string | null,
@@ -2311,10 +2693,33 @@ export type SavePlaylistRequest_Serialize = {
 	playlist: AiPlaylist_Serialize,
 };
 
+export type SaveSearchRequest = {
+	name: string,
+	request: BrowseRequest,
+};
+
 export type SaveUsenetProfileRequest = {
 	profile: UsenetProfile,
 	prowlarrApiKey: string | null,
 	newsPassword: string | null,
+};
+
+export type SavedChart = SavedChart_Serialize | SavedChart_Deserialize;
+
+export type SavedChart_Deserialize = {
+	id: number,
+	name: string,
+	config: ChartConfig_Deserialize,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type SavedChart_Serialize = {
+	id: number,
+	name: string,
+	config: ChartConfig_Serialize,
+	createdAt: string,
+	updatedAt: string,
 };
 
 export type SavedExternalDiscovery = {
@@ -2355,6 +2760,15 @@ export type SavedPlaylist_Serialize = {
 	createdAt: string,
 	updatedAt: string,
 	automation: PlaylistAutomationStatus,
+};
+
+export type SavedSearch = {
+	id: number,
+	name: string,
+	view: string,
+	request: BrowseRequest,
+	createdAt: string,
+	updatedAt: string,
 };
 
 export type Score = {

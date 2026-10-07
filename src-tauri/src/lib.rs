@@ -1946,6 +1946,7 @@ async fn import_norsktoppen_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<BrowseResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::search_library_for_app(&app, request))
         .await
@@ -1955,6 +1956,7 @@ async fn search_library(app: AppHandle, request: BrowseRequest) -> Result<Browse
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_artists(
     app: AppHandle,
     request: ArtistListRequest,
@@ -1967,6 +1969,7 @@ async fn list_artists(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_artist_track_highlights(
     app: AppHandle,
     artist_id: String,
@@ -1981,6 +1984,7 @@ async fn get_artist_track_highlights(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_genres(
     app: AppHandle,
     request: GenreListRequest,
@@ -2029,6 +2033,7 @@ async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_music_tools_for_app(&app))
         .await
@@ -2038,6 +2043,7 @@ async fn list_music_tools(app: AppHandle) -> Result<Vec<MusicToolSummary>, Strin
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_music_tool_issues(
     app: AppHandle,
     request: MusicToolIssueRequest,
@@ -2050,6 +2056,7 @@ async fn list_music_tool_issues(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn fix_music_tool_issues(
     app: AppHandle,
     input: MusicToolFixRequest,
@@ -2062,6 +2069,7 @@ async fn fix_music_tool_issues(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_music_tool_fix_history(
     app: AppHandle,
     tool_id: Option<String>,
@@ -2076,6 +2084,7 @@ async fn list_music_tool_fix_history(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn undo_music_tool_fix(app: AppHandle, run_id: i64) -> Result<MusicToolUndoSummary, String> {
     tauri::async_runtime::spawn_blocking(move || db::undo_music_tool_fix_for_app(&app, run_id))
         .await
@@ -2085,6 +2094,7 @@ async fn undo_music_tool_fix(app: AppHandle, run_id: i64) -> Result<MusicToolUnd
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_searches_for_app(&app))
         .await
@@ -2094,6 +2104,7 @@ async fn list_saved_searches(app: AppHandle) -> Result<Vec<SavedSearch>, String>
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_search(app: AppHandle, input: SaveSearchRequest) -> Result<SavedSearch, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_search_for_app(&app, input))
         .await
@@ -2103,6 +2114,7 @@ async fn save_search(app: AppHandle, input: SaveSearchRequest) -> Result<SavedSe
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_saved_search(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_search_for_app(&app, id))
         .await
@@ -2112,6 +2124,7 @@ async fn delete_saved_search(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_saved_charts(app: AppHandle) -> Result<Vec<SavedChart>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_saved_charts_for_app(&app))
         .await
@@ -2121,6 +2134,7 @@ async fn list_saved_charts(app: AppHandle) -> Result<Vec<SavedChart>, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_chart(app: AppHandle, input: SaveChartRequest) -> Result<SavedChart, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_chart_for_app(&app, input))
         .await
@@ -2130,6 +2144,7 @@ async fn save_chart(app: AppHandle, input: SaveChartRequest) -> Result<SavedChar
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || db::delete_saved_chart_for_app(&app, id))
         .await
@@ -2139,6 +2154,7 @@ async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<ExportResult, String> {
     tauri::async_runtime::spawn_blocking(move || db::export_search_for_app(&app, input))
         .await
@@ -2148,6 +2164,7 @@ async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<Exp
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn export_music_tool_issues(
     app: AppHandle,
     input: ExportMusicToolRequest,
@@ -2262,23 +2279,6 @@ pub fn run() {
             import_official_uk_singles,
             import_ti_i_skuddet_singles,
             import_norsktoppen_singles,
-            search_library,
-            list_artists,
-            get_artist_track_highlights,
-            list_genres,
-            list_music_tools,
-            list_music_tool_issues,
-            fix_music_tool_issues,
-            list_music_tool_fix_history,
-            undo_music_tool_fix,
-            list_saved_searches,
-            save_search,
-            delete_saved_search,
-            list_saved_charts,
-            save_chart,
-            delete_saved_chart,
-            export_search,
-            export_music_tool_issues
         ]))
         .build(tauri::generate_context!())
         .expect("failed to build Music Library app")

@@ -6693,7 +6693,7 @@ export async function searchLibrary(request: BrowseRequest) {
     } satisfies BrowseResponse;
   }
 
-  return invoke<BrowseResponse>("search_library", { request });
+  return commands.searchLibrary(request) as Promise<BrowseResponse>;
 }
 
 export async function listArtists(request: ArtistListRequest) {
@@ -6716,7 +6716,7 @@ export async function listArtists(request: ArtistListRequest) {
     } satisfies ArtistListResponse;
   }
 
-  return invoke<ArtistListResponse>("list_artists", { request });
+  return commands.listArtists(request) as Promise<ArtistListResponse>;
 }
 
 export async function getArtistTrackHighlights(artistId: string) {
@@ -6795,9 +6795,7 @@ export async function getArtistTrackHighlights(artistId: string) {
     } satisfies ArtistTrackHighlights;
   }
 
-  return invoke<ArtistTrackHighlights>("get_artist_track_highlights", {
-    artistId,
-  });
+  return commands.getArtistTrackHighlights(artistId) as Promise<ArtistTrackHighlights>;
 }
 
 export async function listGenres(request: GenreListRequest) {
@@ -6820,7 +6818,7 @@ export async function listGenres(request: GenreListRequest) {
     } satisfies GenreListResponse;
   }
 
-  return invoke<GenreListResponse>("list_genres", { request });
+  return commands.listGenres(request) as Promise<GenreListResponse>;
 }
 
 function normalizedTimelineGenre(value: string) {
@@ -7141,7 +7139,7 @@ export async function listMusicTools() {
     return mockMusicTools;
   }
 
-  return invoke<MusicToolSummary[]>("list_music_tools");
+  return commands.listMusicTools() as Promise<MusicToolSummary[]>;
 }
 
 export async function listMusicToolIssues(request: MusicToolIssueRequest) {
@@ -7215,7 +7213,7 @@ export async function listMusicToolIssues(request: MusicToolIssueRequest) {
     } satisfies MusicToolIssueResponse;
   }
 
-  return invoke<MusicToolIssueResponse>("list_music_tool_issues", { request });
+  return commands.listMusicToolIssues(request) as Promise<MusicToolIssueResponse>;
 }
 
 export async function fixMusicToolIssues(input: MusicToolFixRequest) {
@@ -7399,7 +7397,7 @@ export async function fixMusicToolIssues(input: MusicToolFixRequest) {
     } satisfies MusicToolFixSummary;
   }
 
-  return invoke<MusicToolFixSummary>("fix_music_tool_issues", { input });
+  return commands.fixMusicToolIssues(input) as Promise<MusicToolFixSummary>;
 }
 
 function matchesIsoDateRange(
@@ -7423,9 +7421,7 @@ export async function listMusicToolFixHistory(toolId?: string) {
     );
   }
 
-  return invoke<MusicToolFixHistoryEntry[]>("list_music_tool_fix_history", {
-    toolId: toolId ?? null,
-  });
+  return commands.listMusicToolFixHistory(toolId ?? null) as Promise<MusicToolFixHistoryEntry[]>;
 }
 
 export async function undoMusicToolFix(runId: number) {
@@ -7487,7 +7483,7 @@ export async function undoMusicToolFix(runId: number) {
     } satisfies MusicToolUndoSummary;
   }
 
-  return invoke<MusicToolUndoSummary>("undo_music_tool_fix", { runId });
+  return commands.undoMusicToolFix(runId) as Promise<MusicToolUndoSummary>;
 }
 
 export async function listSavedSearches() {
@@ -7496,7 +7492,7 @@ export async function listSavedSearches() {
   }
 
   return normalizeSavedSearchesForClient(
-    await invoke<SavedSearch[]>("list_saved_searches"),
+    (await commands.listSavedSearches()) as SavedSearch[],
   );
 }
 
@@ -7516,7 +7512,7 @@ export async function saveSearch(name: string, request: BrowseRequest) {
   }
 
   return normalizeSavedSearchForClient(
-    await invoke<SavedSearch>("save_search", { input: { name, request } }),
+    (await commands.saveSearch({ name, request })) as SavedSearch,
   );
 }
 
@@ -7528,7 +7524,7 @@ export async function deleteSavedSearch(id: number) {
     return;
   }
 
-  return invoke<void>("delete_saved_search", { id });
+  await commands.deleteSavedSearch(id);
 }
 
 export async function listSavedCharts() {
@@ -7537,7 +7533,7 @@ export async function listSavedCharts() {
   }
 
   return normalizeSavedChartsForClient(
-    await invoke<SavedChart[]>("list_saved_charts"),
+    (await commands.listSavedCharts()) as SavedChart[],
   );
 }
 
@@ -7556,7 +7552,7 @@ export async function saveChart(name: string, config: ChartConfig) {
   }
 
   return normalizeSavedChartForClient(
-    await invoke<SavedChart>("save_chart", { input: { name, config } }),
+    (await commands.saveChart({ name, config })) as SavedChart,
   );
 }
 
@@ -7566,7 +7562,7 @@ export async function deleteSavedChart(id: number) {
     return;
   }
 
-  return invoke<void>("delete_saved_chart", { id });
+  await commands.deleteSavedChart(id);
 }
 
 export async function exportSearch(
@@ -7586,9 +7582,7 @@ export async function exportSearch(
   }
 
   return finalizeExport(
-    await invoke<RawExportResult>("export_search", {
-      input: { request, format, includeCalculated, exportColumns },
-    }),
+    (await commands.exportSearch({ request, format, includeCalculated, exportColumns })) as RawExportResult,
   );
 }
 
@@ -7628,9 +7622,7 @@ export async function exportMusicToolIssues(
   }
 
   return finalizeExport(
-    await invoke<RawExportResult>("export_music_tool_issues", {
-      input: { request, format },
-    }),
+    (await commands.exportMusicToolIssues({ request, format })) as RawExportResult,
   );
 }
 

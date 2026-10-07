@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.170.0] - 2026-10-07
+
+### Changed
+- Migrate 17 browse, saved-view, and Music Tools commands to generated TypeScript bindings: library search, artist and genre lists, artist track highlights, saved searches and saved charts (list, save, delete), search and Music Tool issue exports, and Music Tools (summary, issue list, fix, fix history, undo). `backend.ts` calls `commands.*` for them.
+
 ## [0.169.0] - 2026-10-07
 
 ### Changed
