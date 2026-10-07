@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.172.0] - 2026-10-07
+
+### Changed
+- Finish the tauri-specta migration: all 202 Tauri commands are now defined once in `src-tauri/src/bindings.rs`, dispatched by tauri-specta, and exported to `src/bindings.ts`. The legacy `generate_handler!` list and the name-based router are gone, and the untyped `invoke` wrapper is removed from the frontend, so every backend call is typed from the Rust signature.
+- Type the eight job-backed commands (portrait sync, Wish List MusicBrainz search and verification, origin-country and artist-info imports, overlay sync, Music Doctor sync, and cover import). A new `JobOutput<T>` wrapper serializes the job's stored JSON exactly as before but exports as the real result type, which avoids exporting `serde_json::Value` (specta rc.25 overflows its stack on it).
+- Migrate `acknowledge_catalog_revision`, the last hand-written command.
+- Mark `year` on the Wish List MusicBrainz search request `#[serde(default)]`, so the generated type treats it as optional like the callers already do.
+
 ## [0.171.0] - 2026-10-07
 
 ### Changed

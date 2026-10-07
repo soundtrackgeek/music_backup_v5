@@ -176,6 +176,7 @@ async fn get_catalog_revision(app: AppHandle) -> Result<String, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 fn acknowledge_catalog_revision(app: AppHandle, revision: String) {
     app.state::<background::CatalogNotifications>()
         .acknowledge(&revision);
@@ -495,11 +496,12 @@ async fn get_lastfm_related_albums(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn refresh_lastfm_artist_images(
     app: AppHandle,
     limit: u32,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"portraits",serde_json::json!({"limit":limit})).await
+) -> Result<jobs::JobOutput<lastfm::LastFmArtistImageRefreshSummary>, String> {
+    jobs::execute_typed(app,"portraits",serde_json::json!({"limit":limit})).await
 }
 
 #[cfg(not(test))]
@@ -1029,20 +1031,22 @@ async fn add_wish_list_item(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn search_wish_list_musicbrainz(
     app: AppHandle,
     input: wishlist::WishListMusicBrainzSearchRequest,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"wishListSearch",serde_json::to_value(input).map_err(|e|e.to_string())?).await
+) -> Result<jobs::JobOutput<wishlist::WishListMusicBrainzSearchResponse>, String> {
+    jobs::execute_typed(app,"wishListSearch",serde_json::to_value(input).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn add_wish_list_musicbrainz_candidate(
     app: AppHandle,
     input: wishlist::AddWishListMusicBrainzCandidateRequest,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"wishListVerification",serde_json::to_value(input).map_err(|e|e.to_string())?).await
+) -> Result<jobs::JobOutput<wishlist::AddWishListMusicBrainzCandidateResponse>, String> {
+    jobs::execute_typed(app,"wishListVerification",serde_json::to_value(input).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -1142,11 +1146,12 @@ async fn preview_musicbrainz_origin_country_import(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_musicbrainz_origin_countries(
     app: AppHandle,
     request: MusicBrainzOriginCountryImportRequest,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"originCountries",serde_json::to_value(request).map_err(|e|e.to_string())?).await
+) -> Result<jobs::JobOutput<models::MusicBrainzOriginCountryImportSummary>, String> {
+    jobs::execute_typed(app,"originCountries",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -1185,11 +1190,12 @@ async fn preview_musicbrainz_artist_info_import(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_musicbrainz_artist_infos(
     app: AppHandle,
     request: MusicBrainzArtistInfoImportRequest,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"artistInfo",serde_json::to_value(request).map_err(|e|e.to_string())?).await
+) -> Result<jobs::JobOutput<models::MusicBrainzArtistInfoImportSummary>, String> {
+    jobs::execute_typed(app,"artistInfo",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -1276,11 +1282,12 @@ async fn set_musicbrainz_artist_origin_country(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn sync_musicbrainz_overlay(
     app: AppHandle,
     record_noop: Option<bool>,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"overlay",serde_json::json!({"recordNoop":record_noop.unwrap_or(true)})).await
+) -> Result<jobs::JobOutput<models::MusicBrainzOverlaySyncResult>, String> {
+    jobs::execute_typed(app,"overlay",serde_json::json!({"recordNoop":record_noop.unwrap_or(true)})).await
 }
 
 #[cfg(not(test))]
@@ -1347,8 +1354,9 @@ async fn get_music_doctor_status(
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn sync_music_doctor(app: AppHandle) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"musicDoctor",serde_json::json!({})).await
+#[specta::specta]
+async fn sync_music_doctor(app: AppHandle) -> Result<jobs::JobOutput<music_doctor::MusicDoctorSyncResult>, String> {
+    jobs::execute_typed(app,"musicDoctor",serde_json::json!({})).await
 }
 
 #[cfg(not(test))]
@@ -1734,11 +1742,12 @@ async fn rollback_import_run(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_album_covers(
     app: AppHandle,
     request: CoverImportRequest,
-) -> Result<serde_json::Value, String> {
-    jobs::execute(app,"covers",serde_json::to_value(request).map_err(|e|e.to_string())?).await
+) -> Result<jobs::JobOutput<models::CoverImportSummary>, String> {
+    jobs::execute_typed(app,"covers",serde_json::to_value(request).map_err(|e|e.to_string())?).await
 }
 
 #[cfg(not(test))]
@@ -2267,17 +2276,7 @@ pub fn run() {
             background::start(app.handle())?;
             Ok(())
         })
-        .invoke_handler(bindings::compose_invoke_handler(tauri::generate_handler![
-            add_wish_list_musicbrainz_candidate,
-            search_wish_list_musicbrainz,
-            refresh_lastfm_artist_images,
-            acknowledge_catalog_revision,
-            import_musicbrainz_origin_countries,
-            import_musicbrainz_artist_infos,
-            sync_musicbrainz_overlay,
-            sync_music_doctor,
-            import_album_covers,
-        ]))
+        .invoke_handler(bindings::invoke_handler())
         .build(tauri::generate_context!())
         .expect("failed to build Music Library app")
         .run(|app_handle, event| {

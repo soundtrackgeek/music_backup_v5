@@ -1,9 +1,8 @@
 //! Generated TypeScript bindings (tauri-specta).
 //!
-//! Commands listed in `specta_commands!` are dispatched by tauri-specta and
-//! exported to `src/bindings.ts`. All other commands still go through
-//! `tauri::generate_handler!` in `lib.rs`; `compose_invoke_handler` routes each
-//! call by command name, so domains can migrate one at a time.
+//! Every Tauri command is listed once in `specta_commands!`. tauri-specta both
+//! dispatches the calls and exports their types to `src/bindings.ts`, so a
+//! command cannot exist without a generated TypeScript signature.
 
 use std::path::Path;
 
@@ -12,6 +11,15 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    acknowledge_catalog_revision,
+    refresh_lastfm_artist_images,
+    search_wish_list_musicbrainz,
+    add_wish_list_musicbrainz_candidate,
+    import_musicbrainz_origin_countries,
+    import_musicbrainz_artist_infos,
+    sync_musicbrainz_overlay,
+    sync_music_doctor,
+    import_album_covers,
     get_library_status,
     run_performance_probe,
     list_import_runs,
@@ -176,20 +184,21 @@ use super::{
 
 macro_rules! specta_commands {
     ($($b:ident $(:: $p:ident)*),* $(,)?) => {
-        (
-            tauri_specta::collect_commands![$($b $(:: $p)*),*],
-            // Command names are the last path segment, as Tauri invokes them.
-            vec![$(last_segment(stringify!($b $(:: $p)*))),*],
-        )
+        tauri_specta::collect_commands![$($b $(:: $p)*),*]
     };
 }
 
-fn last_segment(path: &'static str) -> &'static str {
-    path.rsplit("::").next().unwrap_or(path).trim()
-}
-
-fn builder() -> (Builder<Wry>, Vec<&'static str>) {
-    let (commands, names) = specta_commands![
+fn builder() -> Builder<Wry> {
+    let commands = specta_commands![
+        acknowledge_catalog_revision,
+        refresh_lastfm_artist_images,
+        search_wish_list_musicbrainz,
+        add_wish_list_musicbrainz_candidate,
+        import_musicbrainz_origin_countries,
+        import_musicbrainz_artist_infos,
+        sync_musicbrainz_overlay,
+        sync_music_doctor,
+        import_album_covers,
         get_library_status,
         run_performance_probe,
         list_import_runs,
@@ -384,37 +393,23 @@ fn builder() -> (Builder<Wry>, Vec<&'static str>) {
         discover_outside_library,
         export_playlist
     ];
-    (
-        Builder::<Wry>::new()
-            .commands(commands)
-            // Keep the existing contract: command errors reject the promise.
-            .error_handling(ErrorHandlingMode::Throw)
-            // Row ids and counts stay far below 2^53, as with the hand-written types.
-            .dangerously_cast_bigints_to_number(),
-        names,
-    )
+    Builder::<Wry>::new()
+        .commands(commands)
+        // Keep the existing contract: command errors reject the promise.
+        .error_handling(ErrorHandlingMode::Throw)
+        // Row ids and counts stay far below 2^53, as with the hand-written types.
+        .dangerously_cast_bigints_to_number()
 }
 
 pub fn export(path: &Path) -> Result<(), String> {
-    let (builder, _) = builder();
-    builder
+    builder()
         .export(specta_typescript::Typescript::default(), path)
         .map_err(|error| error.to_string())
 }
 
-/// Routes migrated commands to tauri-specta and everything else to `legacy`.
-pub fn compose_invoke_handler(
-    legacy: impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static,
-) -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
-    let (builder, names) = builder();
+/// The Tauri invoke handler for every command.
+pub fn invoke_handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
     // The handler borrows the builder; it lives for the whole process anyway.
-    let builder: &'static Builder<Wry> = Box::leak(Box::new(builder));
-    let migrated = builder.invoke_handler();
-    move |invoke| {
-        if names.contains(&invoke.message.command()) {
-            migrated(invoke)
-        } else {
-            legacy(invoke)
-        }
-    }
+    let builder: &'static Builder<Wry> = Box::leak(Box::new(builder()));
+    builder.invoke_handler()
 }

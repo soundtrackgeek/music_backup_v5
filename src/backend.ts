@@ -4,7 +4,6 @@ import { commands } from "./bindings";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import {
-  invoke,
   isTauriRuntime,
   listen,
   openUrl,
@@ -2619,7 +2618,7 @@ export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
     };
   }
 
-  return invoke<MusicDoctorSyncResult>("sync_music_doctor");
+  return commands.syncMusicDoctor() as Promise<MusicDoctorSyncResult>;
 }
 
 export async function getAiKeyStatus() {
@@ -2771,7 +2770,7 @@ export async function refreshLastFmArtistImages(limit = 50) {
       message: "Portrait sync is available in the desktop app.",
     } satisfies LastFmArtistImageRefreshSummary;
   }
-  return invoke<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }).then((summary) => { invalidateArtwork(); return summary; });
+  return (commands.refreshLastfmArtistImages(limit) as Promise<LastFmArtistImageRefreshSummary>).then((summary) => { invalidateArtwork(); return summary; });
 }
 
 export async function getLastFmArtistPopularity(
@@ -4965,7 +4964,7 @@ export async function searchWishListMusicBrainz(
       searchedAt: new Date().toISOString(),
     } satisfies WishListMusicBrainzSearchResponse;
   }
-  return invoke<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input });
+  return commands.searchWishListMusicbrainz(input) as Promise<WishListMusicBrainzSearchResponse>;
 }
 
 export async function addWishListMusicBrainzCandidate(
@@ -5039,9 +5038,7 @@ export async function addWishListMusicBrainzCandidate(
       artistAlbumSummary: null,
     } satisfies AddWishListMusicBrainzCandidateResponse;
   }
-  return invoke<AddWishListMusicBrainzCandidateResponse>("add_wish_list_musicbrainz_candidate", {
-    input: { candidate },
-  });
+  return commands.addWishListMusicbrainzCandidate({ candidate }) as Promise<AddWishListMusicBrainzCandidateResponse>;
 }
 
 export async function addWishListItem(input: AddWishListItemRequest) {
@@ -5495,12 +5492,7 @@ export async function importMusicBrainzOriginCountries(
     } satisfies MusicBrainzOriginCountryImportSummary;
   }
 
-  return invoke<MusicBrainzOriginCountryImportSummary>(
-    "import_musicbrainz_origin_countries",
-    {
-      request,
-    },
-  );
+  return commands.importMusicbrainzOriginCountries(request) as Promise<MusicBrainzOriginCountryImportSummary>;
 }
 
 export async function cancelMusicBrainzOriginCountryImport() {
@@ -5669,12 +5661,7 @@ export async function importMusicBrainzArtistInfos(
     } satisfies MusicBrainzArtistInfoImportSummary;
   }
 
-  return invoke<MusicBrainzArtistInfoImportSummary>(
-    "import_musicbrainz_artist_infos",
-    {
-      request,
-    },
-  );
+  return commands.importMusicbrainzArtistInfos(request) as Promise<MusicBrainzArtistInfoImportSummary>;
 }
 
 export async function cancelMusicBrainzArtistInfoImport() {
@@ -5928,9 +5915,7 @@ export async function syncMusicBrainzOverlay(
     return result;
   }
 
-  return invoke<MusicBrainzOverlaySyncResult>("sync_musicbrainz_overlay", {
-    recordNoop: options.recordNoop ?? true,
-  });
+  return commands.syncMusicbrainzOverlay(options.recordNoop ?? true) as Promise<MusicBrainzOverlaySyncResult>;
 }
 
 export async function listMusicBrainzOverlaySyncLog(limit = 12) {
@@ -6239,7 +6224,7 @@ export async function importAlbumCovers(request: CoverImportRequest) {
     );
   }
 
-  return invoke<CoverImportSummary>("import_album_covers", { request });
+  return commands.importAlbumCovers(request) as Promise<CoverImportSummary>;
 }
 
 export async function importBillboardCharts(sourcePath: string) {
@@ -8181,7 +8166,7 @@ export async function listenToCatalogRevision(handler: (revision: string) => voi
 
 export async function acknowledgeCatalogRevision(revision: string) {
   if (!isTauriRuntime()) return;
-  await invoke("acknowledge_catalog_revision", { revision });
+  await commands.acknowledgeCatalogRevision(revision);
 }
 
 export async function listenToMusicDoctorSync(handler: (result: MusicDoctorSyncResult) => void) {

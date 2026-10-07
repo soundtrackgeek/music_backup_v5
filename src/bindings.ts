@@ -4,6 +4,15 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
+	refreshLastfmArtistImages: (limit: number) => __TAURI_INVOKE<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }),
+	searchWishListMusicbrainz: (input: WishListMusicBrainzSearchRequest) => __TAURI_INVOKE<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input }),
+	addWishListMusicbrainzCandidate: (input: AddWishListMusicBrainzCandidateRequest) => __TAURI_INVOKE<AddWishListMusicBrainzCandidateResponse>("add_wish_list_musicbrainz_candidate", { input }),
+	importMusicbrainzOriginCountries: (request: MusicBrainzOriginCountryImportRequest) => __TAURI_INVOKE<MusicBrainzOriginCountryImportSummary>("import_musicbrainz_origin_countries", { request }),
+	importMusicbrainzArtistInfos: (request: MusicBrainzArtistInfoImportRequest) => __TAURI_INVOKE<MusicBrainzArtistInfoImportSummary>("import_musicbrainz_artist_infos", { request }),
+	syncMusicbrainzOverlay: (recordNoop: boolean | null) => __TAURI_INVOKE<MusicBrainzOverlaySyncResult>("sync_musicbrainz_overlay", { recordNoop }),
+	syncMusicDoctor: () => __TAURI_INVOKE<MusicDoctorSyncResult>("sync_music_doctor"),
+	importAlbumCovers: (request: CoverImportRequest) => __TAURI_INVOKE<CoverImportSummary>("import_album_covers", { request }),
 	getLibraryStatus: () => __TAURI_INVOKE<LibraryStatus>("get_library_status"),
 	runPerformanceProbe: () => __TAURI_INVOKE<PerformanceProbeResponse>("run_performance_probe"),
 	listImportRuns: (limit: number | null) => __TAURI_INVOKE<ImportRun[]>("list_import_runs", { limit }),
@@ -253,6 +262,17 @@ export type AddWishListItemRequest = {
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
 	source?: string,
+};
+
+export type AddWishListMusicBrainzCandidateRequest = {
+	candidate: WishListMusicBrainzCandidate,
+};
+
+export type AddWishListMusicBrainzCandidateResponse = {
+	added: boolean,
+	item: WishListItem | null,
+	message: string,
+	artistAlbumSummary: WishListArtistAlbumSummary | null,
 };
 
 export type AiCompileRequest = {
@@ -1092,6 +1112,23 @@ export type CountryCatalogStats = {
 	countryName: string,
 	artistCount: number,
 	albumCount: number,
+};
+
+export type CoverImportRequest = {
+	sourcePath: string,
+	extractEmbeddedFallback?: boolean,
+	replaceExisting?: boolean,
+};
+
+export type CoverImportSummary = {
+	totalAlbums: number,
+	scannedAlbums: number,
+	newCoversFound: number,
+	importedCovers: number,
+	relinkedCovers: number,
+	skippedExisting: number,
+	missingCovers: number,
+	durationMs: number,
 };
 
 export type DatabaseBackup = {
@@ -1973,6 +2010,15 @@ export type LastFmAlbumTrackPopularity = {
 	sourceUrl: string | null,
 };
 
+export type LastFmArtistImageRefreshSummary = {
+	requested: number,
+	downloaded: number,
+	unavailable: number,
+	failed: number,
+	remaining: number,
+	message: string,
+};
+
 export type LastFmArtistPopularity = {
 	artistId: string,
 	artistName: string,
@@ -2528,6 +2574,19 @@ export type MusicBrainzArtistInfoImportRun = {
 	errorSummary: string | null,
 };
 
+export type MusicBrainzArtistInfoImportSummary = {
+	run: MusicBrainzArtistInfoImportRun,
+	totalAlbumArtists: number,
+	eligibleCount: number,
+	fetchedCount: number,
+	storedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	failedCount: number,
+	cancelled: boolean,
+	rows: MusicBrainzArtistInfoPreviewRow[],
+};
+
 export type MusicBrainzArtistInfoPreview = {
 	totalAlbumArtists: number,
 	eligibleCount: number,
@@ -2683,6 +2742,19 @@ export type MusicBrainzOriginCountryImportRequest = {
 	limit?: number | null,
 };
 
+export type MusicBrainzOriginCountryImportSummary = {
+	run: MusicBrainzArtistOriginImportRun,
+	totalAlbumArtists: number,
+	eligibleCount: number,
+	fetchedCount: number,
+	storedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	failedCount: number,
+	cancelled: boolean,
+	rows: MusicBrainzOriginCountryPreviewRow[],
+};
+
 export type MusicBrainzOriginCountryOption = {
 	code: string,
 	name: string,
@@ -2730,6 +2802,27 @@ export type MusicBrainzOverlaySyncLogEntry = {
 	id: number,
 	syncedAt: string,
 	syncPath: string,
+	importedCount: number,
+	exportedCount: number,
+	changedCount: number,
+	summary: string,
+	artistLinksImported: number,
+	artistLinksExported: number,
+	artistUnlinksImported: number,
+	artistUnlinksExported: number,
+	releaseDecisionsImported: number,
+	releaseDecisionsExported: number,
+	releaseDecisionClearsImported: number,
+	releaseDecisionClearsExported: number,
+	releaseStatusesImported: number,
+	releaseStatusesExported: number,
+	releaseGroupsImported: number,
+	releaseGroupsExported: number,
+};
+
+export type MusicBrainzOverlaySyncResult = {
+	syncPath: string,
+	syncedAt: string,
 	importedCount: number,
 	exportedCount: number,
 	changedCount: number,
@@ -2804,6 +2897,22 @@ export type MusicDoctorStatus = {
 	sources: MusicDoctorSource[],
 	formatStats: MusicDoctorFormatStat[],
 	bitrateStats: MusicDoctorBitrateStat[],
+};
+
+export type MusicDoctorSyncResult = {
+	syncRunId: number,
+	databasePath: string,
+	scanId: number,
+	scanCompletedAt: string | null,
+	totalFiles: number,
+	audioFiles: number,
+	audioAlbums: number,
+	matchedTracks: number,
+	unmatchedLibraryTracks: number,
+	unmatchedDoctorAudio: number,
+	fileIssueCount: number,
+	durationMs: number,
+	completedAt: string,
 };
 
 export type MusicMapArtist = {
@@ -3840,6 +3949,20 @@ export type WishListMusicBrainzCandidate = {
 	disambiguation: string | null,
 	country: string | null,
 	score: number,
+};
+
+export type WishListMusicBrainzSearchRequest = {
+	entity: string,
+	query: string,
+	artist?: string,
+	year?: number | null,
+};
+
+export type WishListMusicBrainzSearchResponse = {
+	entity: string,
+	query: string,
+	candidates: WishListMusicBrainzCandidate[],
+	searchedAt: string,
 };
 
 export type WishListResponse = {

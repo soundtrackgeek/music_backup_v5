@@ -316,6 +316,33 @@ pub async fn execute(
         .await
         .map_err(|_| "The job worker stopped".to_string())?
 }
+/// A finished job's stored result, typed for the generated bindings.
+///
+/// It serializes exactly like the raw JSON `Value` the job produced, but tells
+/// specta the TypeScript type is `T`. (`Value` itself cannot be exported:
+/// specta rc.25 recurses forever on it.)
+pub struct JobOutput<T>(Value, std::marker::PhantomData<fn() -> T>);
+impl<T> serde::Serialize for JobOutput<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+impl<T: specta::Type> specta::Type for JobOutput<T> {
+    fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+        T::definition(types)
+    }
+}
+/// Runs a job and returns its result typed as `T`; the job handler must
+/// produce JSON that serializes from `T`.
+pub async fn execute_typed<T>(
+    app: AppHandle,
+    kind: &str,
+    payload: Value,
+) -> std::result::Result<JobOutput<T>, String> {
+    execute(app, kind, payload)
+        .await
+        .map(|value| JobOutput(value, std::marker::PhantomData))
+}
 fn stored_result(job: Job) -> std::result::Result<Value, String> {
     if let Some(result) = job.result_json {
         serde_json::from_str(&result).map_err(|e| e.to_string())

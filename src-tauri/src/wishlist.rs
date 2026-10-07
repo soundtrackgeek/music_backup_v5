@@ -84,6 +84,7 @@ pub struct WishListMusicBrainzSearchRequest {
     pub query: String,
     #[serde(default)]
     pub artist: String,
+    #[serde(default)]
     pub year: Option<i32>,
 }
 
