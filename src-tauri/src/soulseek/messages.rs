@@ -96,14 +96,6 @@ impl MessagesHub {
         })
     }
 
-    pub fn snapshot(&self) -> MessagesSnapshot {
-        let store = self
-            .store
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        snapshot_from(&store)
-    }
-
     pub fn record_incoming(
         &self,
         server_id: u32,
@@ -149,82 +141,6 @@ impl MessagesHub {
         Ok(snapshot)
     }
 
-    pub fn queue_outgoing(
-        &self,
-        username: &str,
-        body: &str,
-    ) -> Result<(String, MessagesSnapshot), MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let body = valid_message(body)?;
-        let sent_at_ms = timestamp_ms();
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let sequence = store
-            .conversations
-            .iter()
-            .map(|conversation| conversation.messages.len())
-            .sum::<usize>();
-        let conversation = conversation_mut(&mut store, &username);
-        let id = format!("local-{sent_at_ms}-{sequence}");
-        conversation.messages.push(PrivateMessage {
-            id: id.clone(),
-            server_id: None,
-            username,
-            body,
-            direction: MessageDirection::Outgoing,
-            sent_at_ms,
-            unread: false,
-            delivery: MessageDelivery::Queued,
-            error: None,
-        });
-        conversation.updated_at_ms = sent_at_ms;
-        trim_conversation(conversation);
-        sort_and_trim(&mut store);
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok((id, snapshot))
-    }
-
-    pub fn mark_sent(&self, id: &str) -> Result<MessagesSnapshot, MessagesError> {
-        self.set_delivery(id, MessageDelivery::Sent, None)
-    }
-
-    pub fn mark_failed(&self, id: &str, error: &str) -> Result<MessagesSnapshot, MessagesError> {
-        self.set_delivery(id, MessageDelivery::Failed, Some(clean_error(error)))
-    }
-
-    pub fn retry(&self, id: &str) -> Result<(String, String, MessagesSnapshot), MessagesError> {
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let (username, body) = {
-            let message = store
-                .conversations
-                .iter_mut()
-                .flat_map(|conversation| conversation.messages.iter_mut())
-                .find(|message| {
-                    message.id == id
-                        && message.direction == MessageDirection::Outgoing
-                        && message.delivery == MessageDelivery::Failed
-                })
-                .ok_or(MessagesError::MessageNotFound)?;
-            message.delivery = MessageDelivery::Queued;
-            message.error = None;
-            (message.username.clone(), message.body.clone())
-        };
-        touch_conversation(&mut store, &username);
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok((username, body, snapshot))
-    }
-
     pub fn fail_queued(&self, error: &str) -> Result<MessagesSnapshot, MessagesError> {
         let mut store = self
             .store
@@ -251,152 +167,6 @@ impl MessagesHub {
         if changed {
             self.publish(&snapshot);
         }
-        Ok(snapshot)
-    }
-
-    pub fn open_conversation(&self, username: &str) -> Result<MessagesSnapshot, MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let exists = store
-            .conversations
-            .iter()
-            .any(|conversation| conversation.username.eq_ignore_ascii_case(&username));
-        if !exists {
-            conversation_mut(&mut store, &username);
-            sort_and_trim(&mut store);
-            persist(&self.path, &store)?;
-        }
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        if !exists {
-            self.publish(&snapshot);
-        }
-        Ok(snapshot)
-    }
-
-    pub fn mark_read(&self, username: &str) -> Result<MessagesSnapshot, MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(conversation) = store
-            .conversations
-            .iter_mut()
-            .find(|conversation| conversation.username.eq_ignore_ascii_case(&username))
-        {
-            conversation.unread_count = 0;
-            for message in &mut conversation.messages {
-                message.unread = false;
-            }
-            persist(&self.path, &store)?;
-        }
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok(snapshot)
-    }
-
-    pub fn mark_unread(&self, username: &str) -> Result<MessagesSnapshot, MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let conversation = store
-            .conversations
-            .iter_mut()
-            .find(|conversation| conversation.username.eq_ignore_ascii_case(&username))
-            .ok_or(MessagesError::ConversationNotFound)?;
-        let message = conversation
-            .messages
-            .last_mut()
-            .ok_or(MessagesError::ConversationNotFound)?;
-        message.unread = true;
-        conversation.unread_count = conversation
-            .messages
-            .iter()
-            .filter(|message| message.unread)
-            .count()
-            .try_into()
-            .unwrap_or(u32::MAX);
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok(snapshot)
-    }
-
-    pub fn clear_conversation(&self, username: &str) -> Result<MessagesSnapshot, MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let conversation = store
-            .conversations
-            .iter_mut()
-            .find(|conversation| conversation.username.eq_ignore_ascii_case(&username))
-            .ok_or(MessagesError::ConversationNotFound)?;
-        conversation.messages.clear();
-        conversation.unread_count = 0;
-        conversation.updated_at_ms = timestamp_ms();
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok(snapshot)
-    }
-
-    pub fn remove_conversation(&self, username: &str) -> Result<MessagesSnapshot, MessagesError> {
-        let username = valid_username(username).ok_or(MessagesError::InvalidUsername)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let previous_len = store.conversations.len();
-        store
-            .conversations
-            .retain(|conversation| !conversation.username.eq_ignore_ascii_case(&username));
-        if store.conversations.len() == previous_len {
-            return Err(MessagesError::ConversationNotFound);
-        }
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
-        Ok(snapshot)
-    }
-
-    fn set_delivery(
-        &self,
-        id: &str,
-        delivery: MessageDelivery,
-        error: Option<String>,
-    ) -> Result<MessagesSnapshot, MessagesError> {
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let username = {
-            let message = store
-                .conversations
-                .iter_mut()
-                .flat_map(|conversation| conversation.messages.iter_mut())
-                .find(|message| message.id == id && message.direction == MessageDirection::Outgoing)
-                .ok_or(MessagesError::MessageNotFound)?;
-            message.delivery = delivery;
-            message.error = error;
-            message.username.clone()
-        };
-        touch_conversation(&mut store, &username);
-        persist(&self.path, &store)?;
-        let snapshot = snapshot_from(&store);
-        drop(store);
-        self.publish(&snapshot);
         Ok(snapshot)
     }
 
@@ -444,17 +214,6 @@ fn sort_and_trim(store: &mut MessagesStore) {
         .conversations
         .sort_by_key(|conversation| std::cmp::Reverse(conversation.updated_at_ms));
     store.conversations.truncate(MAX_CONVERSATIONS);
-}
-
-fn touch_conversation(store: &mut MessagesStore, username: &str) {
-    if let Some(conversation) = store
-        .conversations
-        .iter_mut()
-        .find(|conversation| conversation.username.eq_ignore_ascii_case(username))
-    {
-        conversation.updated_at_ms = timestamp_ms();
-    }
-    sort_and_trim(store);
 }
 
 fn snapshot_from(store: &MessagesStore) -> MessagesSnapshot {
@@ -531,10 +290,6 @@ pub enum MessagesError {
     InvalidUsername,
     #[error("Enter a private message between 1 and {MAX_PRIVATE_MESSAGE_BYTES} bytes.")]
     InvalidMessage,
-    #[error("That private message is no longer available to retry.")]
-    MessageNotFound,
-    #[error("That private conversation is no longer available.")]
-    ConversationNotFound,
     #[error("The private-message history was created by an unsupported Music Library version.")]
     UnsupportedStore,
     #[error("Could not read or save private messages: {0}")]

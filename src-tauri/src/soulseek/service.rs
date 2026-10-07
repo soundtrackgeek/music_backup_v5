@@ -3,23 +3,21 @@ use super::{
     diagnostics::{DiagnosticEntry, Diagnostics},
     distributed::{DistributedHub, DistributedSnapshot, RequestAdmission},
     downloads::{
-        DownloadPlan, EnqueueReleaseRequest, EnqueueTransferRequest, PatchReleaseFileRequest,
-        ReleaseAlternativeSource, TransferError, TransferHub, TransferPreparationMode,
-        TransferQueueSnapshot, TransferTicket,
+        DownloadPlan, EnqueueReleaseRequest, TransferError, TransferHub,         TransferQueueSnapshot, TransferTicket,
     },
-    folders::{FolderError, FolderHub, FolderInspection, FolderTicket},
+    folders::{FolderError, FolderHub, FolderTicket},
     local_shares::{
         LocalSharesError, LocalSharesHub, LocalSharesSnapshot, SearchResponseOrigin,
         SearchResponseTicket,
     },
-    messages::{MessagesError, MessagesHub, MessagesSnapshot},
-    people::{PeopleError, PeopleHub, PeopleSnapshot, PersonProfile, ProfileState, ProfileTicket},
+    messages::{MessagesError, MessagesHub, },
+    people::{PeopleError, PeopleHub, ProfileTicket},
     protocol::{
         accept_children_frame, branch_level_frame, branch_root_frame, cant_connect_to_peer_frame,
         connect_to_peer_frame, file_search_frame, file_search_response_frame,
         folder_contents_request_frame, folder_contents_response_frame, get_peer_address_frame,
-        have_no_parent_frame, join_room_frame, leave_room_frame, login_frame, message_acked_frame,
-        message_user_frame, parse_cant_connect_token, parse_connect_to_peer,
+        have_no_parent_frame, join_room_frame, login_frame, message_acked_frame,
+        parse_cant_connect_token, parse_connect_to_peer,
         parse_distributed_branch_level, parse_distributed_branch_root, parse_distributed_search,
         parse_embedded_distributed_search, parse_filename, parse_folder_contents_request,
         parse_folder_contents_response, parse_join_room, parse_leave_room, parse_login_response,
@@ -31,11 +29,11 @@ use super::{
         parse_user_status, parse_watch_user, peer_init_frame, pierce_firewall_frame,
         place_in_queue_request_frame, place_in_queue_response_frame, queue_upload_frame,
         read_distributed_frame, read_frame, read_peer_frame, read_peer_init, read_profile_frame,
-        room_list_frame, say_chatroom_frame, server_ping_frame, set_online_frame,
+        room_list_frame, server_ping_frame, set_online_frame,
         set_wait_port_frame, shared_counts_frame, shared_file_list_request_frame,
         shared_file_list_response_frame, transfer_request_frame, transfer_response_frame,
-        unwatch_user_frame, upload_denied_frame, user_info_request_frame, user_info_response_frame,
-        user_interests_frame, user_stats_frame, watch_user_frame, write_raw_frame, ConnectToPeer,
+        upload_denied_frame, user_info_request_frame, user_info_response_frame,
+        watch_user_frame, write_raw_frame, ConnectToPeer,
         DistributedFrame, DistributedSearch, Frame, LoginResponse, ParentCandidate, PeerAddress,
         PeerInit, ProtocolError, CANT_CONNECT_TO_PEER_CODE, CONNECT_TO_PEER_CODE,
         DISTRIBUTED_BRANCH_LEVEL_CODE, DISTRIBUTED_BRANCH_ROOT_CODE, DISTRIBUTED_SEARCH_CODE,
@@ -49,19 +47,17 @@ use super::{
         USER_JOINED_ROOM_CODE, USER_LEFT_ROOM_CODE, USER_STATS_CODE, USER_STATUS_CODE,
         WATCH_USER_CODE,
     },
-    radar::{RadarAlbumRequest, RadarError, RadarHub, RadarSnapshot},
-    rooms::{valid_room_message, valid_room_name, RoomsError, RoomsHub, RoomsSnapshot},
+    radar::RadarHub,
+    rooms::{RoomsError, RoomsHub, },
     search::{SearchHub, SearchSnapshot, SearchState},
     settings::{ConnectionProfile, SettingsStore},
     shares::{
-        ShareFolderSnapshot, ShareSearchSnapshot, SharesError, SharesHub, SharesTicket,
-        UserSharesOverview,
-    },
+        SharesError, SharesHub, SharesTicket,
+            },
     uploads::{UploadError, UploadHub, UploadQueueSnapshot, UploadTicket},
     wanted::{
-        WantedAlbumRequest, WantedDownloadFulfillmentRequest, WantedError,
-        WantedFulfillmentRequest, WantedHub, WantedPreferences, WantedSnapshot,
-    },
+        WantedError,
+        WantedHub, },
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -96,9 +92,6 @@ const SERVER_FRAME_QUEUE_SIZE: usize = 64;
 const MAX_SEARCH_QUERY_BYTES: usize = 250;
 const MAX_SEARCH_USERNAME_BYTES: usize = 100;
 const TRANSFER_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const FOLDER_REQUEST_TIMEOUT: Duration = Duration::from_secs(25);
-const SHARES_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
-const PROFILE_REQUEST_TIMEOUT: Duration = Duration::from_secs(25);
 const PEER_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const FILE_BUFFER_SIZE: usize = 128 * 1024;
 const DISTRIBUTED_EVENT_QUEUE_SIZE: usize = 256;
@@ -312,35 +305,11 @@ enum ConnectionCommand {
         token: u32,
         query: String,
     },
-    SendPrivateMessage {
-        id: String,
-        username: String,
-        message: String,
-    },
     RefreshRooms,
     JoinRoom {
         room: String,
     },
-    LeaveRoom {
-        room: String,
-    },
-    SendRoomMessage {
-        room: String,
-        message: String,
-    },
-    InspectFolder {
-        ticket: FolderTicket,
-    },
-    BrowseShares {
-        ticket: SharesTicket,
-    },
-    RequestProfile {
-        ticket: ProfileTicket,
-    },
     WatchPerson {
-        username: String,
-    },
-    UnwatchPerson {
         username: String,
     },
     PeerConnectionFailed {
@@ -392,7 +361,6 @@ pub struct ConnectionManager {
     command_sender: Arc<Mutex<Option<mpsc::UnboundedSender<ConnectionCommand>>>>,
     generation: Arc<AtomicU64>,
     next_search_token: Arc<AtomicU32>,
-    next_folder_token: Arc<AtomicU32>,
     next_connection_token: Arc<AtomicU32>,
     search: SearchHub,
     wanted: WantedHub,
@@ -454,9 +422,6 @@ impl ConnectionManager {
             command_sender: Arc::new(Mutex::new(None)),
             generation: Arc::new(AtomicU64::new(0)),
             next_search_token: Arc::new(AtomicU32::new((timestamp_ms() as u32).max(1))),
-            next_folder_token: Arc::new(AtomicU32::new(
-                (timestamp_ms() as u32).wrapping_add(0x2000).max(1),
-            )),
             next_connection_token: Arc::new(AtomicU32::new(
                 (timestamp_ms() as u32).wrapping_add(0x4000).max(1),
             )),
@@ -590,161 +555,12 @@ impl ConnectionManager {
         self.bootstrap()
     }
 
-    pub fn diagnostics(&self) -> Vec<DiagnosticEntry> {
-        self.diagnostics.recent()
-    }
-
     pub fn current_searches(&self) -> Vec<SearchSnapshot> {
         self.search.snapshots()
     }
 
-    pub fn current_wanted(&self) -> WantedSnapshot {
-        self.wanted.snapshot()
-    }
-
-    pub fn current_radar(&self) -> RadarSnapshot {
-        self.radar.snapshot()
-    }
-
-    pub fn start_radar(
-        &self,
-        albums: Vec<RadarAlbumRequest>,
-    ) -> Result<RadarSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::RadarUnavailable);
-        }
-        let snapshot = self.radar.start(albums)?;
-        self.diagnostics.record(
-            "info",
-            "radar_started",
-            "A bounded Shelf Radar scan was started.",
-        );
-        Ok(snapshot)
-    }
-
-    pub fn stop_radar(&self) -> RadarSnapshot {
-        let snapshot = self.radar.stop();
-        if snapshot.state == super::radar::RadarState::Stopped {
-            self.diagnostics
-                .record("info", "radar_stopped", "The Shelf Radar scan was stopped.");
-        }
-        snapshot
-    }
-
-    pub fn add_wanted(
-        &self,
-        request: WantedAlbumRequest,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.add(request)?)
-    }
-
-    pub fn add_many_wanted(
-        &self,
-        requests: Vec<WantedAlbumRequest>,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.add_many(requests, preferences)?)
-    }
-
-    pub fn remove_wanted(&self, album_id: &str) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.remove(album_id)?)
-    }
-
-    pub fn fulfill_downloaded_wanted(
-        &self,
-        fulfillments: Vec<WantedDownloadFulfillmentRequest>,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.fulfill_downloaded(fulfillments)?)
-    }
-
-    pub fn restore_wanted(&self, album_id: &str) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.restore(album_id)?)
-    }
-
-    pub fn set_wanted_paused(
-        &self,
-        album_id: &str,
-        paused: bool,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.set_paused(album_id, paused)?)
-    }
-
-    pub fn set_wanted_interval(
-        &self,
-        interval_minutes: u32,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.set_interval(interval_minutes)?)
-    }
-
-    pub fn set_wanted_preferences(
-        &self,
-        album_id: &str,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.set_preferences(album_id, preferences)?)
-    }
-
-    pub fn set_default_wanted_preferences(
-        &self,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.set_default_preferences(preferences)?)
-    }
-
-    pub fn sync_wanted_fulfilled(
-        &self,
-        fulfillments: Vec<WantedFulfillmentRequest>,
-    ) -> Result<WantedSnapshot, ConnectionServiceError> {
-        Ok(self.wanted.sync_fulfilled(fulfillments)?)
-    }
-
-    pub fn check_wanted(&self, album_id: &str) -> Result<WantedSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::WantedUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::WantedUnavailable)?;
-        let mut token = self.next_search_token.fetch_add(1, Ordering::SeqCst);
-        if token == 0 {
-            token = self.next_search_token.fetch_add(1, Ordering::SeqCst);
-        }
-        let query = self.wanted.start_manual(album_id, token)?;
-        if sender
-            .send(ConnectionCommand::StartSearch { token, query })
-            .is_err()
-        {
-            self.wanted
-                .fail_active("The Soulseek connection changed before this check could start.");
-            return Err(ConnectionServiceError::WantedUnavailable);
-        }
-        Ok(self.wanted.snapshot())
-    }
-
     pub fn current_transfers(&self) -> TransferQueueSnapshot {
         self.transfers.snapshot()
-    }
-
-    pub async fn prepare_transfers_for_restart(
-        &self,
-        mode: TransferPreparationMode,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        self.transfers.begin_restart_preparation(mode)?;
-        while self.transfers.active_task_count() > 0 {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        Ok(self.transfers.finish_restart_preparation()?)
-    }
-
-    pub fn cancel_restart_preparation(
-        &self,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self.transfers.cancel_restart_preparation()?;
-        self.schedule_downloads();
-        Ok(snapshot)
     }
 
     pub fn set_max_concurrent_downloads(
@@ -758,298 +574,8 @@ impl ConnectionManager {
         Ok(snapshot)
     }
 
-    pub fn set_soundcheck_enabled(
-        &self,
-        enabled: bool,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.set_soundcheck_enabled(enabled)?)
-    }
-
     pub fn current_local_shares(&self) -> LocalSharesSnapshot {
         self.local_shares.snapshot()
-    }
-
-    pub fn current_people(&self) -> PeopleSnapshot {
-        self.people.snapshot()
-    }
-
-    pub fn current_messages(&self) -> MessagesSnapshot {
-        self.messages.snapshot()
-    }
-
-    pub fn current_rooms(&self) -> RoomsSnapshot {
-        self.rooms.snapshot()
-    }
-
-    pub fn refresh_rooms(&self) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        self.send_room_command(ConnectionCommand::RefreshRooms)?;
-        Ok(self.rooms.snapshot())
-    }
-
-    pub fn join_room(&self, room: String) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::RoomsUnavailable);
-        }
-        let room = valid_room_name(&room)?;
-        let snapshot = self.rooms.request_join(&room)?;
-        self.send_room_command(ConnectionCommand::JoinRoom { room })?;
-        Ok(snapshot)
-    }
-
-    pub fn leave_room(&self, room: String) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::RoomsUnavailable);
-        }
-        let room = valid_room_name(&room)?;
-        let snapshot = self.rooms.request_leave(&room)?;
-        self.send_room_command(ConnectionCommand::LeaveRoom { room })?;
-        Ok(snapshot)
-    }
-
-    pub fn send_room_message(
-        &self,
-        room: String,
-        message: String,
-    ) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::RoomsUnavailable);
-        }
-        let room = valid_room_name(&room)?;
-        let message = valid_room_message(&message)?;
-        self.send_room_command(ConnectionCommand::SendRoomMessage { room, message })?;
-        Ok(self.rooms.snapshot())
-    }
-
-    pub fn mark_room_read(&self, room: &str) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        Ok(self.rooms.mark_read(room)?)
-    }
-
-    pub fn set_room_favorite(
-        &self,
-        room: &str,
-        favorite: bool,
-    ) -> Result<RoomsSnapshot, ConnectionServiceError> {
-        Ok(self.rooms.set_favorite(room, favorite)?)
-    }
-
-    fn send_room_command(&self, command: ConnectionCommand) -> Result<(), ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::RoomsUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::RoomsUnavailable)?;
-        sender
-            .send(command)
-            .map_err(|_| ConnectionServiceError::RoomsUnavailable)
-    }
-
-    pub fn send_private_message(
-        &self,
-        username: String,
-        message: String,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        let username = username.trim().to_owned();
-        let message = super::messages::valid_message(&message)?;
-        if username.is_empty() || username.len() > MAX_SEARCH_USERNAME_BYTES {
-            return Err(ConnectionServiceError::InvalidPerson);
-        }
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::MessagesUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::MessagesUnavailable)?;
-        self.people.remember(&username)?;
-        let (id, snapshot) = self.messages.queue_outgoing(&username, &message)?;
-        if sender
-            .send(ConnectionCommand::SendPrivateMessage {
-                id: id.clone(),
-                username,
-                message,
-            })
-            .is_err()
-        {
-            let _ = self.messages.mark_failed(
-                &id,
-                "The Soulseek connection closed before this message was sent.",
-            );
-            return Err(ConnectionServiceError::MessagesUnavailable);
-        }
-        Ok(snapshot)
-    }
-
-    pub fn retry_private_message(
-        &self,
-        id: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::MessagesUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::MessagesUnavailable)?;
-        let (username, message, snapshot) = self.messages.retry(id)?;
-        if sender
-            .send(ConnectionCommand::SendPrivateMessage {
-                id: id.to_owned(),
-                username,
-                message,
-            })
-            .is_err()
-        {
-            let _ = self.messages.mark_failed(
-                id,
-                "The Soulseek connection closed before this message was sent.",
-            );
-            return Err(ConnectionServiceError::MessagesUnavailable);
-        }
-        Ok(snapshot)
-    }
-
-    pub fn open_conversation(
-        &self,
-        username: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        self.people.remember(username)?;
-        Ok(self.messages.open_conversation(username)?)
-    }
-
-    pub fn mark_conversation_read(
-        &self,
-        username: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        Ok(self.messages.mark_read(username)?)
-    }
-
-    pub fn mark_conversation_unread(
-        &self,
-        username: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        Ok(self.messages.mark_unread(username)?)
-    }
-
-    pub fn clear_conversation(
-        &self,
-        username: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        Ok(self.messages.clear_conversation(username)?)
-    }
-
-    pub fn remove_conversation(
-        &self,
-        username: &str,
-    ) -> Result<MessagesSnapshot, ConnectionServiceError> {
-        Ok(self.messages.remove_conversation(username)?)
-    }
-
-    pub async fn open_person_profile(
-        &self,
-        username: String,
-        refresh: bool,
-    ) -> Result<PersonProfile, ConnectionServiceError> {
-        let username = username.trim().to_owned();
-        if username.is_empty() || username.len() > MAX_SEARCH_USERNAME_BYTES {
-            return Err(ConnectionServiceError::InvalidPerson);
-        }
-        if !refresh {
-            if let Some(profile) = self.people.profile(&username) {
-                if profile.profile_state == ProfileState::Ready {
-                    self.people.remember(&username)?;
-                    return Ok(profile);
-                }
-            }
-        }
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::PeopleUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::PeopleUnavailable)?;
-        let ticket = ProfileTicket {
-            connection_token: self.take_connection_token(),
-            username,
-        };
-        let connection_token = ticket.connection_token;
-        let receiver = self.people.start_profile(ticket.clone())?;
-        if sender
-            .send(ConnectionCommand::RequestProfile { ticket })
-            .is_err()
-        {
-            self.people.fail_profile(
-                connection_token,
-                "The Soulseek connection changed before the profile request could start."
-                    .to_owned(),
-            );
-            return Err(ConnectionServiceError::PeopleUnavailable);
-        }
-        match timeout(PROFILE_REQUEST_TIMEOUT, receiver).await {
-            Ok(Ok(result)) => result.map_err(Into::into),
-            Ok(Err(_)) => Err(ConnectionServiceError::PeopleUnavailable),
-            Err(_) => {
-                self.people.fail_profile(
-                    connection_token,
-                    "The user did not answer the profile request in time.".to_owned(),
-                );
-                Err(ConnectionServiceError::ProfileTimeout)
-            }
-        }
-    }
-
-    pub fn set_person_favorite(
-        &self,
-        username: &str,
-        favorite: bool,
-    ) -> Result<PeopleSnapshot, ConnectionServiceError> {
-        let snapshot = self.people.set_favorite(username, favorite)?;
-        if self.current_snapshot().state == ConnectionState::Online {
-            if let Some(sender) = self
-                .command_sender
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .clone()
-            {
-                let command = if favorite {
-                    ConnectionCommand::WatchPerson {
-                        username: username.to_owned(),
-                    }
-                } else {
-                    ConnectionCommand::UnwatchPerson {
-                        username: username.to_owned(),
-                    }
-                };
-                let _ = sender.send(command);
-            }
-        }
-        Ok(snapshot)
-    }
-
-    pub fn set_person_blocked(
-        &self,
-        username: &str,
-        blocked: bool,
-    ) -> Result<PeopleSnapshot, ConnectionServiceError> {
-        Ok(self.people.set_blocked(username, blocked)?)
-    }
-
-    pub fn set_person_ignored(
-        &self,
-        username: &str,
-        ignored: bool,
-    ) -> Result<PeopleSnapshot, ConnectionServiceError> {
-        Ok(self.people.set_ignored(username, ignored)?)
     }
 
     pub fn add_local_share(
@@ -1109,22 +635,6 @@ impl ConnectionManager {
         self.uploads.clear_finished()
     }
 
-    pub fn enqueue_transfer(
-        &self,
-        request: EnqueueTransferRequest,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let profile = self
-            .settings
-            .load()?
-            .ok_or(ConnectionServiceError::NotConfigured)?;
-        self.people.remember(&request.username)?;
-        let snapshot = self
-            .transfers
-            .enqueue(request, Path::new(&profile.download_directory))?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
     pub fn enqueue_release(
         &self,
         request: EnqueueReleaseRequest,
@@ -1139,37 +649,6 @@ impl ConnectionManager {
             .enqueue_release(request, Path::new(&profile.download_directory))?;
         self.schedule_downloads();
         Ok(snapshot)
-    }
-
-    pub fn pause_transfer(
-        &self,
-        id: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self.transfers.pause(id)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn resume_transfer(
-        &self,
-        id: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self.transfers.resume(id)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn cancel_transfer(
-        &self,
-        id: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self.transfers.cancel(id)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn reveal_transfer_path(&self, id: &str) -> Result<String, ConnectionServiceError> {
-        Ok(self.transfers.reveal_path(id)?)
     }
 
     pub fn pause_release(
@@ -1199,237 +678,14 @@ impl ConnectionManager {
         Ok(snapshot)
     }
 
-    pub fn reorder_release(
-        &self,
-        release_id: &str,
-        before_transfer_id: Option<&str>,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self
-            .transfers
-            .reorder_release(release_id, before_transfer_id)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
     pub fn clear_completed_transfers(
         &self,
     ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
         Ok(self.transfers.clear_completed()?)
     }
 
-    pub fn set_release_filed(
-        &self,
-        release_id: &str,
-        filed: bool,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.set_release_filed(release_id, filed)?)
-    }
-
-    pub fn clear_release_history(
-        &self,
-        release_ids: &[String],
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.clear_release_history(release_ids)?)
-    }
-
-    pub fn verify_release(
-        &self,
-        release_id: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.verify_release(release_id)?)
-    }
-
-    pub fn verify_completed(&self) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.verify_completed()?)
-    }
-
-    pub fn soundcheck_release(
-        &self,
-        release_id: &str,
-        deep: bool,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.soundcheck_release(release_id, deep)?)
-    }
-
-    pub fn retry_release_issues(
-        &self,
-        release_id: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        let snapshot = self.transfers.retry_release_issues(release_id)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn switch_release_source(
-        &self,
-        release_id: &str,
-        username: &str,
-        remote_folder: &str,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        self.people.remember(username)?;
-        let snapshot = self
-            .transfers
-            .switch_release_source(release_id, username, remote_folder)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn relay_release_source(
-        &self,
-        release_id: &str,
-        source: ReleaseAlternativeSource,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        self.people.remember(&source.username)?;
-        let snapshot = self.transfers.relay_release_source(release_id, source)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn patch_release_file(
-        &self,
-        request: PatchReleaseFileRequest,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        self.people.remember(&request.username)?;
-        let snapshot = self.transfers.patch_release_file(request)?;
-        self.schedule_downloads();
-        Ok(snapshot)
-    }
-
-    pub fn set_relay_suggestion_minutes(
-        &self,
-        minutes: u32,
-    ) -> Result<TransferQueueSnapshot, ConnectionServiceError> {
-        Ok(self.transfers.set_relay_suggestion_minutes(minutes)?)
-    }
-
     pub fn reveal_release_path(&self, release_id: &str) -> Result<String, ConnectionServiceError> {
         Ok(self.transfers.reveal_release_path(release_id)?)
-    }
-
-    pub async fn inspect_folder(
-        &self,
-        username: String,
-        folder: String,
-    ) -> Result<FolderInspection, ConnectionServiceError> {
-        let username = username.trim().to_owned();
-        let folder = folder.replace('/', "\\").trim_matches('\\').to_owned();
-        if username.is_empty() || folder.is_empty() || folder.len() > 4_096 {
-            return Err(ConnectionServiceError::InvalidFolderRequest);
-        }
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::FolderUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::FolderUnavailable)?;
-        let mut folder_token = self.next_folder_token.fetch_add(1, Ordering::SeqCst);
-        if folder_token == 0 {
-            folder_token = self.next_folder_token.fetch_add(1, Ordering::SeqCst);
-        }
-        let ticket = FolderTicket {
-            connection_token: self.take_connection_token(),
-            folder_token,
-            username,
-            folder,
-        };
-        let receiver = self.folders.start(ticket.clone());
-        if sender
-            .send(ConnectionCommand::InspectFolder { ticket })
-            .is_err()
-        {
-            self.folders.fail_folder_token(
-                folder_token,
-                "The Soulseek connection changed before the folder request could start.".to_owned(),
-            );
-            return Err(ConnectionServiceError::FolderUnavailable);
-        }
-        match timeout(FOLDER_REQUEST_TIMEOUT, receiver).await {
-            Ok(Ok(result)) => result.map_err(Into::into),
-            Ok(Err(_)) => Err(ConnectionServiceError::FolderUnavailable),
-            Err(_) => {
-                self.folders.fail_folder_token(
-                    folder_token,
-                    "The source did not answer the folder request in time.".to_owned(),
-                );
-                Err(ConnectionServiceError::FolderTimeout)
-            }
-        }
-    }
-
-    pub async fn browse_shares(
-        &self,
-        username: String,
-        refresh: bool,
-    ) -> Result<UserSharesOverview, ConnectionServiceError> {
-        let username = username.trim().to_owned();
-        if username.is_empty() || username.len() > 64 {
-            return Err(ConnectionServiceError::InvalidSharesRequest);
-        }
-        self.people.remember(&username)?;
-        if !refresh {
-            if let Some(cached) = self.shares.cached(&username) {
-                return Ok(cached);
-            }
-        }
-        if self.current_snapshot().state != ConnectionState::Online {
-            return Err(ConnectionServiceError::SharesUnavailable);
-        }
-        let sender = self
-            .command_sender
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .ok_or(ConnectionServiceError::SharesUnavailable)?;
-        let ticket = SharesTicket {
-            connection_token: self.take_connection_token(),
-            username,
-        };
-        let connection_token = ticket.connection_token;
-        let receiver = self.shares.start(ticket.clone());
-        if sender
-            .send(ConnectionCommand::BrowseShares { ticket })
-            .is_err()
-        {
-            self.shares.fail_connection(
-                connection_token,
-                "The Soulseek connection changed before share browsing could start.".to_owned(),
-            );
-            return Err(ConnectionServiceError::SharesUnavailable);
-        }
-        match timeout(SHARES_REQUEST_TIMEOUT, receiver).await {
-            Ok(Ok(result)) => result.map_err(Into::into),
-            Ok(Err(_)) => Err(ConnectionServiceError::SharesUnavailable),
-            Err(_) => {
-                self.shares.fail_connection(
-                    connection_token,
-                    "The user did not answer the share-list request in time.".to_owned(),
-                );
-                Err(ConnectionServiceError::SharesTimeout)
-            }
-        }
-    }
-
-    pub fn shared_folder(
-        &self,
-        username: &str,
-        directory: &str,
-    ) -> Result<ShareFolderSnapshot, ConnectionServiceError> {
-        Ok(self.shares.folder(username, directory)?)
-    }
-
-    pub fn search_shares(
-        &self,
-        username: &str,
-        query: &str,
-        extension: Option<&str>,
-    ) -> Result<ShareSearchSnapshot, ConnectionServiceError> {
-        if query.len() > MAX_SEARCH_QUERY_BYTES {
-            return Err(ConnectionServiceError::InvalidSharesRequest);
-        }
-        Ok(self.shares.search(username, query, extension)?)
     }
 
     fn schedule_downloads(&self) {
@@ -1575,18 +831,6 @@ impl ConnectionManager {
                 .record("info", "search_stopped", "The live search was stopped.");
         }
         snapshot
-    }
-
-    pub fn stop_all_searches(&self) -> Vec<SearchSnapshot> {
-        let snapshots = self.search.stop_all();
-        if !snapshots.is_empty() {
-            self.diagnostics.record(
-                "info",
-                "searches_stopped",
-                "All live searches were stopped.",
-            );
-        }
-        snapshots
     }
 
     pub fn close_search(&self, client_id: &str) -> bool {
@@ -2358,30 +1602,6 @@ impl ConnectionManager {
                                     )
                                 })?;
                         }
-                        Some(ConnectionCommand::SendPrivateMessage { id, username, message }) => {
-                            let frame = match message_user_frame(&username, &message) {
-                                Ok(frame) => frame,
-                                Err(error) => {
-                                    let detail = format!("The private message is invalid: {error}");
-                                    let _ = self.messages.mark_failed(&id, &detail);
-                                    return Err(ConnectionFailure::fatal(detail, "message_invalid"));
-                                }
-                            };
-                            if let Err(error) = write_raw_frame(&mut server_writer, &frame).await {
-                                let detail = format!("The private message could not be sent: {error}");
-                                let _ = self.messages.mark_failed(&id, &detail);
-                                return Err(ConnectionFailure::retryable(
-                                    detail,
-                                    "message_send_failed",
-                                ));
-                            }
-                            self.messages.mark_sent(&id).map_err(|error| {
-                                ConnectionFailure::retryable(
-                                    format!("The sent private message could not be saved: {error}"),
-                                    "message_store_failed",
-                                )
-                            })?;
-                        }
                         Some(ConnectionCommand::RefreshRooms) => {
                             write_raw_frame(&mut server_writer, &room_list_frame())
                                 .await
@@ -2398,112 +1618,6 @@ impl ConnectionManager {
                                     "room_join_failed",
                                 ))?;
                         }
-                        Some(ConnectionCommand::LeaveRoom { room }) => {
-                            write_raw_frame(&mut server_writer, &leave_room_frame(&room))
-                                .await
-                                .map_err(|error| ConnectionFailure::retryable(
-                                    format!("The public room could not be left: {error}"),
-                                    "room_leave_failed",
-                                ))?;
-                        }
-                        Some(ConnectionCommand::SendRoomMessage { room, message }) => {
-                            let frame = say_chatroom_frame(&room, &message).map_err(|error| {
-                                ConnectionFailure::fatal(
-                                    format!("The room message is invalid: {error}"),
-                                    "room_message_invalid",
-                                )
-                            })?;
-                            write_raw_frame(&mut server_writer, &frame)
-                                .await
-                                .map_err(|error| ConnectionFailure::retryable(
-                                    format!("The room message could not be sent: {error}"),
-                                    "room_message_failed",
-                                ))?;
-                        }
-                        Some(ConnectionCommand::InspectFolder { ticket }) => {
-                            write_raw_frame(
-                                &mut server_writer,
-                                &connect_to_peer_frame(
-                                    ticket.connection_token,
-                                    &ticket.username,
-                                    "P",
-                                ),
-                            )
-                            .await
-                            .map_err(|error| {
-                                ConnectionFailure::retryable(
-                                    format!("The folder peer request could not be sent: {error}"),
-                                    "folder_request_failed",
-                                )
-                            })?;
-                            write_raw_frame(
-                                &mut server_writer,
-                                &get_peer_address_frame(&ticket.username),
-                            )
-                            .await
-                            .map_err(|error| {
-                                ConnectionFailure::retryable(
-                                    format!("The folder source address request could not be sent: {error}"),
-                                    "folder_address_failed",
-                                )
-                            })?;
-                        }
-                        Some(ConnectionCommand::BrowseShares { ticket }) => {
-                            write_raw_frame(
-                                &mut server_writer,
-                                &connect_to_peer_frame(
-                                    ticket.connection_token,
-                                    &ticket.username,
-                                    "P",
-                                ),
-                            )
-                            .await
-                            .map_err(|error| {
-                                ConnectionFailure::retryable(
-                                    format!("The share-list peer request could not be sent: {error}"),
-                                    "shares_request_failed",
-                                )
-                            })?;
-                            write_raw_frame(
-                                &mut server_writer,
-                                &get_peer_address_frame(&ticket.username),
-                            )
-                            .await
-                            .map_err(|error| {
-                                ConnectionFailure::retryable(
-                                    format!("The share-list source address request could not be sent: {error}"),
-                                    "shares_address_failed",
-                                )
-                            })?;
-                        }
-                        Some(ConnectionCommand::RequestProfile { ticket }) => {
-                            if self.people.mark_watched(&ticket.username) {
-                                write_raw_frame(
-                                    &mut server_writer,
-                                    &watch_user_frame(&ticket.username),
-                                ).await.map_err(|error| ConnectionFailure::retryable(
-                                    format!("The user presence request could not be sent: {error}"),
-                                    "people_watch_failed",
-                                ))?;
-                            }
-                            for frame in [
-                                user_stats_frame(&ticket.username),
-                                user_interests_frame(&ticket.username),
-                                connect_to_peer_frame(
-                                    ticket.connection_token,
-                                    &ticket.username,
-                                    "P",
-                                ),
-                                get_peer_address_frame(&ticket.username),
-                            ] {
-                                write_raw_frame(&mut server_writer, &frame).await.map_err(|error| {
-                                    ConnectionFailure::retryable(
-                                        format!("The user profile request could not be sent: {error}"),
-                                        "people_request_failed",
-                                    )
-                                })?;
-                            }
-                        }
                         Some(ConnectionCommand::WatchPerson { username }) => {
                             if self.people.mark_watched(&username) {
                                 write_raw_frame(&mut server_writer, &watch_user_frame(&username))
@@ -2513,15 +1627,6 @@ impl ConnectionManager {
                                         "people_watch_failed",
                                     ))?;
                             }
-                        }
-                        Some(ConnectionCommand::UnwatchPerson { username }) => {
-                            self.people.mark_unwatched(&username);
-                            write_raw_frame(&mut server_writer, &unwatch_user_frame(&username))
-                                .await
-                                .map_err(|error| ConnectionFailure::retryable(
-                                    format!("The user presence update could not be sent: {error}"),
-                                    "people_watch_failed",
-                                ))?;
                         }
                         Some(ConnectionCommand::PeerConnectionFailed { token, username }) => {
                             write_raw_frame(
@@ -4120,40 +3225,12 @@ pub enum ConnectionServiceError {
     Rooms(#[from] RoomsError),
     #[error("{0}")]
     Wanted(#[from] WantedError),
-    #[error("{0}")]
-    Radar(#[from] RadarError),
     #[error("Add your Soulseek account before connecting.")]
     NotConfigured,
     #[error("Enter your Soulseek password.")]
     MissingPassword,
     #[error("Connect to Soulseek before starting a live search.")]
     SearchUnavailable,
-    #[error("Connect to Soulseek before checking a wanted album.")]
-    WantedUnavailable,
-    #[error("Connect to Soulseek before scanning the Missing Shelf.")]
-    RadarUnavailable,
-    #[error("Connect to Soulseek before browsing a source folder.")]
-    FolderUnavailable,
-    #[error("Choose a valid Soulseek source folder.")]
-    InvalidFolderRequest,
-    #[error("The source did not answer the folder request in time.")]
-    FolderTimeout,
-    #[error("Connect to Soulseek before browsing a user's shares.")]
-    SharesUnavailable,
-    #[error("Choose a valid Soulseek username and share search.")]
-    InvalidSharesRequest,
-    #[error("The user did not answer the share-list request in time.")]
-    SharesTimeout,
-    #[error("Connect to Soulseek before opening a live user profile.")]
-    PeopleUnavailable,
-    #[error("Choose a valid Soulseek username.")]
-    InvalidPerson,
-    #[error("The user did not answer the profile request in time.")]
-    ProfileTimeout,
-    #[error("Connect to Soulseek before sending private messages.")]
-    MessagesUnavailable,
-    #[error("Connect to Soulseek before using public rooms.")]
-    RoomsUnavailable,
     #[error("{0}")]
     InvalidSearch(String),
     #[error("Could not initialize connection diagnostics: {0}")]

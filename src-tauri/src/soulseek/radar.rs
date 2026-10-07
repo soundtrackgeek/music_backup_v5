@@ -1,29 +1,17 @@
 use super::{protocol::SearchResponse, search::SearchResult};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use std::{
     collections::{HashSet, VecDeque},
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter};
-use thiserror::Error;
 
 pub const RADAR_EVENT: &str = "music-library://soulseek-radar";
-const MAX_RADAR_ALBUMS: usize = 12;
 const RADAR_SEARCH_TIMEOUT: Duration = Duration::from_secs(12);
 const RADAR_SEARCH_COOLDOWN: Duration = Duration::from_secs(1);
 const RADAR_RESULT_LIMIT: usize = 2_000;
 const RADAR_EVENT_BATCH_SIZE: usize = 200;
-
-#[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct RadarAlbumRequest {
-    pub album_id: String,
-    pub artist: String,
-    pub title: String,
-    pub first_release_date: String,
-    pub cover_art_url: Option<String>,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -31,17 +19,14 @@ pub enum RadarState {
     Idle,
     Scanning,
     Completed,
-    Stopped,
     Error,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum RadarAlbumState {
-    Queued,
     Scanning,
     Completed,
-    Stopped,
     Error,
 }
 
@@ -62,22 +47,6 @@ pub struct RadarAlbumScan {
 }
 
 impl RadarAlbumScan {
-    fn queued(request: RadarAlbumRequest) -> Self {
-        Self {
-            album_id: request.album_id,
-            artist: request.artist,
-            title: request.title,
-            first_release_date: request.first_release_date,
-            cover_art_url: request.cover_art_url,
-            state: RadarAlbumState::Queued,
-            result_count: 0,
-            peer_count: 0,
-            started_at_ms: None,
-            finished_at_ms: None,
-            error: None,
-        }
-    }
-
     fn query(&self) -> String {
         format!("{} {}", self.artist, self.title)
     }
@@ -142,23 +111,6 @@ impl RadarRuntime {
             active: None,
             next_allowed_at: None,
         }
-    }
-
-    fn begin(&mut self, requests: Vec<RadarAlbumRequest>) -> Result<RadarSnapshot, RadarError> {
-        let requests = validate_requests(requests)?;
-        self.snapshot = RadarSnapshot {
-            state: RadarState::Scanning,
-            total_count: requests.len().try_into().unwrap_or(u32::MAX),
-            albums: requests.into_iter().map(RadarAlbumScan::queued).collect(),
-            active_album_id: None,
-            completed_count: 0,
-            message: "Preparing a bounded Shelf Radar scan…".to_owned(),
-            updated_at_ms: timestamp_ms(),
-        };
-        self.queue = (0..self.snapshot.albums.len()).collect();
-        self.active = None;
-        self.next_allowed_at = None;
-        Ok(self.snapshot.clone())
     }
 
     fn start_next(&mut self, token: u32) -> Option<(String, String)> {
@@ -303,25 +255,6 @@ impl RadarRuntime {
         Some(album_id)
     }
 
-    fn stop(&mut self) -> RadarSnapshot {
-        if self.snapshot.state != RadarState::Scanning {
-            return self.snapshot.clone();
-        }
-        if let Some(active) = self.active.take() {
-            let album = &mut self.snapshot.albums[active.album_index];
-            album.state = RadarAlbumState::Stopped;
-            album.finished_at_ms = Some(timestamp_ms());
-        }
-        for index in self.queue.drain(..) {
-            self.snapshot.albums[index].state = RadarAlbumState::Stopped;
-        }
-        self.snapshot.state = RadarState::Stopped;
-        self.snapshot.active_album_id = None;
-        self.snapshot.message = "Shelf Radar scan stopped.".to_owned();
-        self.snapshot.updated_at_ms = timestamp_ms();
-        self.snapshot.clone()
-    }
-
     fn connection_lost(&mut self) -> Option<RadarSnapshot> {
         if self.snapshot.state != RadarState::Scanning {
             return None;
@@ -357,24 +290,6 @@ impl RadarHub {
             app,
             runtime: Arc::new(Mutex::new(RadarRuntime::new())),
         }
-    }
-
-    pub fn snapshot(&self) -> RadarSnapshot {
-        self.runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .snapshot
-            .clone()
-    }
-
-    pub fn start(&self, requests: Vec<RadarAlbumRequest>) -> Result<RadarSnapshot, RadarError> {
-        let snapshot = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .begin(requests)?;
-        self.emit("started", snapshot.clone(), None, Vec::new());
-        Ok(snapshot)
     }
 
     pub fn start_next(&self, token: u32) -> Option<(u32, String)> {
@@ -442,16 +357,6 @@ impl RadarHub {
         }
     }
 
-    pub fn stop(&self) -> RadarSnapshot {
-        let snapshot = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .stop();
-        self.emit("stopped", snapshot.clone(), None, Vec::new());
-        snapshot
-    }
-
     pub fn connection_lost(&self) {
         let snapshot = self
             .runtime
@@ -482,38 +387,6 @@ impl RadarHub {
     }
 }
 
-fn validate_requests(
-    requests: Vec<RadarAlbumRequest>,
-) -> Result<Vec<RadarAlbumRequest>, RadarError> {
-    if requests.is_empty() || requests.len() > MAX_RADAR_ALBUMS {
-        return Err(RadarError::InvalidCount);
-    }
-    let mut seen = HashSet::new();
-    let mut valid = Vec::new();
-    for mut request in requests {
-        request.album_id = request.album_id.trim().to_owned();
-        request.artist = request.artist.trim().to_owned();
-        request.title = request.title.trim().to_owned();
-        request.first_release_date = request.first_release_date.trim().to_owned();
-        if request.album_id.is_empty()
-            || request.album_id.len() > 128
-            || request.artist.is_empty()
-            || request.artist.len() > 180
-            || request.title.is_empty()
-            || request.title.len() > 220
-        {
-            return Err(RadarError::InvalidAlbum);
-        }
-        if seen.insert(request.album_id.to_lowercase()) {
-            valid.push(request);
-        }
-    }
-    if valid.is_empty() {
-        return Err(RadarError::InvalidCount);
-    }
-    Ok(valid)
-}
-
 fn timestamp_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -523,102 +396,4 @@ fn timestamp_ms() -> u64 {
         .unwrap_or(u64::MAX)
 }
 
-#[derive(Debug, Error)]
-pub enum RadarError {
-    #[error("Choose between 1 and {MAX_RADAR_ALBUMS} albums for one Shelf Radar scan.")]
-    InvalidCount,
-    #[error("Shelf Radar received an invalid album identity.")]
-    InvalidAlbum,
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::soulseek::protocol::SearchFile;
-
-    fn request(id: &str, title: &str) -> RadarAlbumRequest {
-        RadarAlbumRequest {
-            album_id: id.to_owned(),
-            artist: "Def Leppard".to_owned(),
-            title: title.to_owned(),
-            first_release_date: "1992".to_owned(),
-            cover_art_url: None,
-        }
-    }
-
-    #[test]
-    fn bounded_scan_deduplicates_album_ids() {
-        let requests = validate_requests(vec![
-            request("one", "Adrenalize"),
-            request("ONE", "Adrenalize"),
-        ])
-        .unwrap();
-        assert_eq!(requests.len(), 1);
-        assert!(validate_requests(Vec::new()).is_err());
-        assert!(validate_requests(
-            (0..13)
-                .map(|index| request(&index.to_string(), "Album"))
-                .collect()
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn runtime_routes_results_by_token_and_advances_sequentially() {
-        let mut runtime = RadarRuntime::new();
-        runtime
-            .begin(vec![request("one", "Adrenalize"), request("two", "Slang")])
-            .unwrap();
-        let (album_id, _) = runtime.start_next(41).unwrap();
-        assert_eq!(album_id, "one");
-        let ignored = SearchResponse {
-            username: "wrong".to_owned(),
-            token: 99,
-            files: Vec::new(),
-            slot_free: true,
-            average_speed: 1,
-            queue_length: 0,
-        };
-        assert!(runtime.record(&ignored).is_none());
-        let response = SearchResponse {
-            username: "source".to_owned(),
-            token: 41,
-            files: vec![SearchFile {
-                filename: "Music\\Adrenalize\\01 Heaven Is.flac".to_owned(),
-                size_bytes: 42_000_000,
-                extension: "flac".to_owned(),
-                bitrate: Some(1_411),
-                duration_seconds: Some(240),
-                vbr: Some(false),
-                sample_rate: Some(44_100),
-                bit_depth: Some(16),
-                is_private: false,
-            }],
-            slot_free: true,
-            average_speed: 5_000_000,
-            queue_length: 0,
-        };
-        let (_, results) = runtime.record(&response).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(runtime.snapshot.albums[0].peer_count, 1);
-        runtime.finish_active(None);
-        runtime.next_allowed_at = None;
-        assert_eq!(runtime.start_next(42).unwrap().0, "two");
-    }
-
-    #[test]
-    fn stopping_marks_remaining_work_without_discarding_finished_results() {
-        let mut runtime = RadarRuntime::new();
-        runtime
-            .begin(vec![request("one", "Adrenalize"), request("two", "Slang")])
-            .unwrap();
-        runtime.start_next(41);
-        runtime.finish_active(None);
-        runtime.next_allowed_at = None;
-        runtime.start_next(42);
-        let stopped = runtime.stop();
-        assert_eq!(stopped.state, RadarState::Stopped);
-        assert_eq!(stopped.albums[0].state, RadarAlbumState::Completed);
-        assert_eq!(stopped.albums[1].state, RadarAlbumState::Stopped);
-    }
-}

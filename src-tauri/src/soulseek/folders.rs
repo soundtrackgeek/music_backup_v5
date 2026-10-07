@@ -53,25 +53,6 @@ pub struct FolderHub {
 }
 
 impl FolderHub {
-    pub fn start(
-        &self,
-        ticket: FolderTicket,
-    ) -> oneshot::Receiver<Result<FolderInspection, FolderError>> {
-        let (sender, receiver) = oneshot::channel();
-        self.pending
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(
-                ticket.folder_token,
-                PendingFolder {
-                    ticket,
-                    claimed: false,
-                    response: sender,
-                },
-            );
-        receiver
-    }
-
     pub fn requesting_for_username(&self, username: &str) -> Option<FolderTicket> {
         self.pending
             .lock()
@@ -244,46 +225,3 @@ pub enum FolderError {
     Request(String),
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::soulseek::protocol::{FolderFile, FolderListing};
-
-    #[tokio::test]
-    async fn folder_responses_are_flattened_deduplicated_and_sorted() {
-        let hub = FolderHub::default();
-        let receiver = hub.start(FolderTicket {
-            connection_token: 10,
-            folder_token: 20,
-            username: "source".to_owned(),
-            folder: "Music\\Album".to_owned(),
-        });
-        let file = FolderFile {
-            filename: "02 - Song.flac".to_owned(),
-            size_bytes: 100,
-            extension: "flac".to_owned(),
-            bitrate: Some(2_304),
-            duration_seconds: Some(180),
-            vbr: Some(false),
-            sample_rate: Some(96_000),
-            bit_depth: Some(24),
-        };
-        assert!(hub.resolve(
-            "source",
-            FolderContentsResponse {
-                token: 20,
-                requested_folder: "Music\\Album".to_owned(),
-                folders: vec![FolderListing {
-                    directory: "Music\\Album".to_owned(),
-                    files: vec![file.clone(), file],
-                }],
-            }
-        ));
-        let inspection = receiver.await.unwrap().unwrap();
-        assert_eq!(inspection.files.len(), 1);
-        assert_eq!(
-            inspection.files[0].remote_filename,
-            "Music\\Album\\02 - Song.flac"
-        );
-    }
-}

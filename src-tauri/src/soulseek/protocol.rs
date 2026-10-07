@@ -12,7 +12,6 @@ pub const LOGIN_CODE: u32 = 1;
 pub const SET_WAIT_PORT_CODE: u32 = 2;
 pub const GET_PEER_ADDRESS_CODE: u32 = 3;
 pub const WATCH_USER_CODE: u32 = 5;
-pub const UNWATCH_USER_CODE: u32 = 6;
 pub const USER_STATUS_CODE: u32 = 7;
 pub const SAY_CHATROOM_CODE: u32 = 13;
 pub const JOIN_ROOM_CODE: u32 = 14;
@@ -321,38 +320,6 @@ pub fn watch_user_frame(username: &str) -> Vec<u8> {
     encode_message(WATCH_USER_CODE, &payload)
 }
 
-pub fn unwatch_user_frame(username: &str) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(username.len() + 4);
-    push_string(&mut payload, username);
-    encode_message(UNWATCH_USER_CODE, &payload)
-}
-
-pub fn user_stats_frame(username: &str) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(username.len() + 4);
-    push_string(&mut payload, username);
-    encode_message(USER_STATS_CODE, &payload)
-}
-
-pub fn user_interests_frame(username: &str) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(username.len() + 4);
-    push_string(&mut payload, username);
-    encode_message(USER_INTERESTS_CODE, &payload)
-}
-
-pub fn message_user_frame(username: &str, message: &str) -> Result<Vec<u8>, ProtocolError> {
-    if username.is_empty()
-        || username.len() > MAX_NETWORK_USERNAME_BYTES
-        || message.is_empty()
-        || message.len() > MAX_PRIVATE_MESSAGE_BYTES
-    {
-        return Err(ProtocolError::InvalidPrivateMessage);
-    }
-    let mut payload = Vec::with_capacity(username.len() + message.len() + 8);
-    push_string(&mut payload, username);
-    push_string(&mut payload, message);
-    Ok(encode_message(MESSAGE_USER_CODE, &payload))
-}
-
 pub fn message_acked_frame(id: u32) -> Vec<u8> {
     encode_message(MESSAGE_ACKED_CODE, &id.to_le_bytes())
 }
@@ -366,27 +333,6 @@ pub fn join_room_frame(room: &str) -> Vec<u8> {
     push_string(&mut payload, room);
     push_u32(&mut payload, 0);
     encode_message(JOIN_ROOM_CODE, &payload)
-}
-
-pub fn leave_room_frame(room: &str) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(room.len() + 4);
-    push_string(&mut payload, room);
-    encode_message(LEAVE_ROOM_CODE, &payload)
-}
-
-pub fn say_chatroom_frame(room: &str, message: &str) -> Result<Vec<u8>, ProtocolError> {
-    if room.is_empty()
-        || room.len() > MAX_ROOM_NAME_BYTES
-        || !room.is_ascii()
-        || message.is_empty()
-        || message.len() > MAX_ROOM_MESSAGE_BYTES
-    {
-        return Err(ProtocolError::InvalidRoomMessage);
-    }
-    let mut payload = Vec::with_capacity(room.len() + message.len() + 8);
-    push_string(&mut payload, room);
-    push_string(&mut payload, message);
-    Ok(encode_message(SAY_CHATROOM_CODE, &payload))
 }
 
 pub fn have_no_parent_frame(has_no_parent: bool) -> Vec<u8> {
@@ -2001,79 +1947,6 @@ mod tests {
         assert_eq!(
             u32::from_le_bytes(frame[frame.len() - 4..].try_into().unwrap()),
             FOREVER_MINOR_VERSION
-        );
-    }
-
-    #[test]
-    fn private_messages_encode_acknowledge_and_parse() {
-        let outgoing = message_user_frame("listener", "hello from Music Library").unwrap();
-        assert_eq!(
-            u32::from_le_bytes(outgoing[4..8].try_into().unwrap()),
-            MESSAGE_USER_CODE
-        );
-
-        let mut payload = 42_u32.to_le_bytes().to_vec();
-        payload.extend(1_700_000_000_u32.to_le_bytes());
-        payload.extend(encoded_string("listener"));
-        payload.extend(encoded_string("hello back"));
-        payload.push(1);
-        assert_eq!(
-            parse_private_message(&Frame {
-                code: MESSAGE_USER_CODE,
-                payload,
-            })
-            .unwrap(),
-            PrivateMessage {
-                id: 42,
-                timestamp_seconds: 1_700_000_000,
-                username: "listener".to_owned(),
-                message: "hello back".to_owned(),
-                is_new: true,
-            }
-        );
-        assert_eq!(
-            u32::from_le_bytes(message_acked_frame(42)[8..12].try_into().unwrap()),
-            42
-        );
-        assert!(
-            message_user_frame("listener", &"x".repeat(MAX_PRIVATE_MESSAGE_BYTES + 1)).is_err()
-        );
-    }
-
-    #[test]
-    fn public_room_commands_and_messages_follow_the_server_protocol() {
-        assert_eq!(decoded_frame(&room_list_frame()).code, ROOM_LIST_CODE);
-
-        let join = decoded_frame(&join_room_frame("Lossless Listening"));
-        assert_eq!(join.code, JOIN_ROOM_CODE);
-        let mut join_reader = PayloadReader::new(&join.payload);
-        assert_eq!(
-            join_reader.read_string_lossy().unwrap(),
-            "Lossless Listening"
-        );
-        assert_eq!(join_reader.read_u32().unwrap(), 0);
-
-        let leave = decoded_frame(&leave_room_frame("Lossless Listening"));
-        assert_eq!(leave.code, LEAVE_ROOM_CODE);
-        assert_eq!(parse_leave_room(&leave).unwrap(), "Lossless Listening");
-
-        let outgoing =
-            decoded_frame(&say_chatroom_frame("Lossless Listening", "quiet pressing").unwrap());
-        assert_eq!(outgoing.code, SAY_CHATROOM_CODE);
-        let mut incoming_payload = encoded_string("Lossless Listening");
-        incoming_payload.extend(encoded_string("needle_drop"));
-        incoming_payload.extend(encoded_string("quiet pressing"));
-        assert_eq!(
-            parse_room_chat_message(&Frame {
-                code: SAY_CHATROOM_CODE,
-                payload: incoming_payload,
-            })
-            .unwrap(),
-            RoomChatMessage {
-                room: "Lossless Listening".to_owned(),
-                username: "needle_drop".to_owned(),
-                message: "quiet pressing".to_owned(),
-            }
         );
     }
 

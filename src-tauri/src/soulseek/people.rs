@@ -14,13 +14,8 @@ use tokio::sync::oneshot;
 
 pub const PEOPLE_EVENT: &str = "music-library://soulseek-people";
 const STORE_VERSION: u32 = 1;
-const MAX_FAVORITES: usize = 200;
-const MAX_BLOCKED: usize = 500;
-const MAX_IGNORED: usize = 500;
 const MAX_RECENT: usize = 40;
 const MAX_RUNTIME_PROFILES: usize = 256;
-const MAX_PENDING_PROFILES: usize = 8;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PersonStatus {
@@ -243,15 +238,6 @@ impl PeopleHub {
         }
     }
 
-    pub fn profile(&self, username: &str) -> Option<PersonProfile> {
-        self.runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .profiles
-            .get(&person_key(username))
-            .cloned()
-    }
-
     pub fn observe(&self, username: &str) -> bool {
         let Some(username) = valid_username(username) else {
             return false;
@@ -320,117 +306,6 @@ impl PeopleHub {
         Ok(())
     }
 
-    pub fn set_favorite(
-        &self,
-        username: &str,
-        favorite: bool,
-    ) -> Result<PeopleSnapshot, PeopleError> {
-        let username = valid_username(username).ok_or(PeopleError::InvalidUsername)?;
-        self.observe(&username);
-        {
-            let mut store = self
-                .store
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            store
-                .favorites
-                .retain(|value| !value.eq_ignore_ascii_case(&username));
-            if favorite {
-                if store.favorites.len() >= MAX_FAVORITES {
-                    return Err(PeopleError::TooManyFavorites);
-                }
-                store.favorites.push(username.clone());
-            }
-        }
-        if let Some(profile) = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .profiles
-            .get_mut(&person_key(&username))
-        {
-            profile.favorite = favorite;
-            profile.updated_at_ms = timestamp_ms();
-        }
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_blocked(
-        &self,
-        username: &str,
-        blocked: bool,
-    ) -> Result<PeopleSnapshot, PeopleError> {
-        let username = valid_username(username).ok_or(PeopleError::InvalidUsername)?;
-        self.observe(&username);
-        {
-            let mut store = self
-                .store
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            store
-                .blocked
-                .retain(|value| !value.eq_ignore_ascii_case(&username));
-            if blocked {
-                if store.blocked.len() >= MAX_BLOCKED {
-                    return Err(PeopleError::TooManyBlocked);
-                }
-                store.blocked.push(username.clone());
-            }
-        }
-        if let Some(profile) = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .profiles
-            .get_mut(&person_key(&username))
-        {
-            profile.blocked = blocked;
-            profile.updated_at_ms = timestamp_ms();
-        }
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_ignored(
-        &self,
-        username: &str,
-        ignored: bool,
-    ) -> Result<PeopleSnapshot, PeopleError> {
-        let username = valid_username(username).ok_or(PeopleError::InvalidUsername)?;
-        self.observe(&username);
-        {
-            let mut store = self
-                .store
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            store
-                .ignored
-                .retain(|value| !value.eq_ignore_ascii_case(&username));
-            if ignored {
-                if store.ignored.len() >= MAX_IGNORED {
-                    return Err(PeopleError::TooManyIgnored);
-                }
-                store.ignored.push(username.clone());
-            }
-        }
-        if let Some(profile) = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .profiles
-            .get_mut(&person_key(&username))
-        {
-            profile.ignored = ignored;
-            profile.updated_at_ms = timestamp_ms();
-        }
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
     pub fn is_ignored(&self, username: &str) -> bool {
         contains_username(
             &self
@@ -451,37 +326,6 @@ impl PeopleHub {
                 .blocked,
             username,
         )
-    }
-
-    pub fn start_profile(
-        &self,
-        ticket: ProfileTicket,
-    ) -> Result<oneshot::Receiver<Result<PersonProfile, PeopleError>>, PeopleError> {
-        self.remember(&ticket.username)?;
-        let (sender, receiver) = oneshot::channel();
-        let mut runtime = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if runtime.pending.len() >= MAX_PENDING_PROFILES {
-            return Err(PeopleError::TooManyRequests);
-        }
-        if let Some(profile) = runtime.profiles.get_mut(&person_key(&ticket.username)) {
-            profile.profile_state = ProfileState::Loading;
-            profile.error = None;
-            profile.updated_at_ms = timestamp_ms();
-        }
-        runtime.pending.insert(
-            ticket.connection_token,
-            PendingProfile {
-                ticket,
-                claimed: false,
-                response: sender,
-            },
-        );
-        drop(runtime);
-        self.publish();
-        Ok(receiver)
     }
 
     pub fn requesting_for_username(&self, username: &str) -> Option<ProfileTicket> {
@@ -645,14 +489,6 @@ impl PeopleHub {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .watched
             .insert(person_key(username))
-    }
-
-    pub fn mark_unwatched(&self, username: &str) {
-        self.runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .watched
-            .remove(&person_key(username));
     }
 
     pub fn saved_users_to_watch(&self) -> Vec<String> {
@@ -846,14 +682,6 @@ fn timestamp_ms() -> u64 {
 pub enum PeopleError {
     #[error("Choose a valid Soulseek username.")]
     InvalidUsername,
-    #[error("Music Library supports up to {MAX_FAVORITES} favorite users.")]
-    TooManyFavorites,
-    #[error("Music Library supports up to {MAX_BLOCKED} blocked users.")]
-    TooManyBlocked,
-    #[error("Music Library supports up to {MAX_IGNORED} ignored users.")]
-    TooManyIgnored,
-    #[error("Too many user profiles are loading at once.")]
-    TooManyRequests,
     #[error("Connect to Soulseek before opening a live user profile.")]
     Unavailable,
     #[error("{0}")]

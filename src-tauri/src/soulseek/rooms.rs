@@ -141,14 +141,6 @@ impl RoomsHub {
         })
     }
 
-    pub fn snapshot(&self) -> RoomsSnapshot {
-        let state = self
-            .state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        snapshot_from(&state)
-    }
-
     pub fn desired_rooms(&self) -> Vec<String> {
         self.state
             .read()
@@ -180,50 +172,6 @@ impl RoomsHub {
             state.runtime.joined.clear();
             state.runtime.joining.clear();
             state.runtime.members.clear();
-        })
-    }
-
-    pub fn request_join(&self, room: &str) -> Result<RoomsSnapshot, RoomsError> {
-        let room = valid_room_name(room)?;
-        self.mutate_store(|state| {
-            let stored = stored_room_mut(&mut state.store, &room);
-            stored.auto_join = true;
-            state.runtime.joining.insert(room_key(&room));
-        })
-    }
-
-    pub fn request_leave(&self, room: &str) -> Result<RoomsSnapshot, RoomsError> {
-        let room = valid_room_name(room)?;
-        self.mutate_store(|state| {
-            if let Some(stored) = find_stored_mut(&mut state.store, &room) {
-                stored.auto_join = false;
-            }
-            let key = room_key(&room);
-            state.runtime.joining.remove(&key);
-            state.runtime.joined.remove(&key);
-            state.runtime.members.remove(&key);
-            prune_store(&mut state.store);
-        })
-    }
-
-    pub fn set_favorite(&self, room: &str, favorite: bool) -> Result<RoomsSnapshot, RoomsError> {
-        let room = valid_room_name(room)?;
-        self.mutate_store(|state| {
-            let stored = stored_room_mut(&mut state.store, &room);
-            stored.favorite = favorite;
-            prune_store(&mut state.store);
-        })
-    }
-
-    pub fn mark_read(&self, room: &str) -> Result<RoomsSnapshot, RoomsError> {
-        let room = valid_room_name(room)?;
-        self.mutate_store(|state| {
-            if let Some(stored) = find_stored_mut(&mut state.store, &room) {
-                for message in &mut stored.messages {
-                    message.unread = false;
-                    message.mention = false;
-                }
-            }
         })
     }
 
@@ -453,24 +401,11 @@ fn stored_room_mut<'a>(store: &'a mut RoomsStore, name: &str) -> &'a mut StoredR
     &mut store.rooms[index]
 }
 
-fn find_stored_mut<'a>(store: &'a mut RoomsStore, name: &str) -> Option<&'a mut StoredRoom> {
-    store
-        .rooms
-        .iter_mut()
-        .find(|room| room.name.eq_ignore_ascii_case(name))
-}
-
 fn trim_messages(room: &mut StoredRoom) {
     if room.messages.len() > MAX_MESSAGES_PER_ROOM {
         room.messages
             .drain(..room.messages.len() - MAX_MESSAGES_PER_ROOM);
     }
-}
-
-fn prune_store(store: &mut RoomsStore) {
-    store
-        .rooms
-        .retain(|room| room.auto_join || room.favorite || !room.messages.is_empty());
 }
 
 fn trim_store(store: &mut RoomsStore) {

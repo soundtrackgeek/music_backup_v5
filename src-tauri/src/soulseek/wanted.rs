@@ -15,23 +15,9 @@ const STORE_VERSION: u32 = 1;
 const DEFAULT_INTERVAL_MINUTES: u32 = 30;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(15);
 const SEARCH_COOLDOWN: Duration = Duration::from_secs(5);
-const MAX_WANTED_ALBUMS: usize = 500;
-const MAX_BULK_WANTED_ALBUMS: usize = 100;
 const AUDIO_EXTENSIONS: &[&str] = &[
     "aac", "aiff", "alac", "ape", "flac", "m4a", "mp3", "ogg", "opus", "wav", "wma", "wv",
 ];
-
-#[derive(Clone, Debug, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct WantedAlbumRequest {
-    pub album_id: String,
-    pub artist: String,
-    pub title: String,
-    pub first_release_date: String,
-    pub cover_art_url: Option<String>,
-    #[serde(default)]
-    pub minimum_track_count: Option<u32>,
-}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -76,14 +62,6 @@ pub struct WantedBestSource {
     pub score: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct WantedFulfillmentRequest {
-    pub album_id: String,
-    pub owned: bool,
-    pub track_count: Option<u32>,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum WantedFulfillmentSource {
@@ -101,19 +79,6 @@ pub enum WantedDownloadSoundcheck {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WantedDownloadReceipt {
-    pub release_id: String,
-    pub username: String,
-    pub format: String,
-    pub track_count: u32,
-    pub size_bytes: u64,
-    pub soundcheck: WantedDownloadSoundcheck,
-    pub completed_at_ms: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct WantedDownloadFulfillmentRequest {
-    pub album_id: String,
     pub release_id: String,
     pub username: String,
     pub format: String,
@@ -274,347 +239,6 @@ impl WantedHub {
         }
     }
 
-    pub fn add(&self, request: WantedAlbumRequest) -> Result<WantedSnapshot, WantedError> {
-        let request = validate_request(request)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(album) = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id.eq_ignore_ascii_case(&request.album_id))
-        {
-            let was_fulfilled = album.fulfilled;
-            album.artist = request.artist;
-            album.title = request.title;
-            album.first_release_date = request.first_release_date;
-            album.cover_art_url = request.cover_art_url;
-            album.paused = false;
-            if was_fulfilled {
-                reset_for_watch(album, timestamp_ms());
-            }
-        } else {
-            if store.albums.len() >= MAX_WANTED_ALBUMS {
-                return Err(WantedError::TooManyAlbums);
-            }
-            let preferences = store.default_preferences.clone();
-            store.albums.push(WantedAlbum {
-                album_id: request.album_id,
-                artist: request.artist,
-                title: request.title,
-                first_release_date: request.first_release_date,
-                cover_art_url: request.cover_art_url,
-                paused: false,
-                fulfilled: false,
-                fulfilled_at_ms: None,
-                fulfillment_source: None,
-                download_receipt: None,
-                owned_track_count: None,
-                watch_despite_ownership: false,
-                preferences,
-                added_at_ms: timestamp_ms(),
-                last_checked_at_ms: None,
-                source_count: 0,
-                matching_source_count: 0,
-                ready_source_count: 0,
-                complete_source_count: 0,
-                new_source_count: 0,
-                best_format: None,
-                best_track_count: None,
-                best_size_bytes: None,
-                best_speed_bytes_per_second: None,
-                best_source: None,
-                error: None,
-                source_fingerprints: Vec::new(),
-            });
-        }
-        drop(store);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn add_many(
-        &self,
-        requests: Vec<WantedAlbumRequest>,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, WantedError> {
-        if requests.is_empty() || requests.len() > MAX_BULK_WANTED_ALBUMS {
-            return Err(WantedError::InvalidBulkCount);
-        }
-        validate_preferences(&preferences)?;
-        let mut seen = HashSet::new();
-        let requests = requests
-            .into_iter()
-            .map(validate_request)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .filter(|request| seen.insert(request.album_id.to_lowercase()))
-            .collect::<Vec<_>>();
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        merge_bulk_requests(&mut store, requests, &preferences, timestamp_ms())?;
-        drop(store);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn remove(&self, album_id: &str) -> Result<WantedSnapshot, WantedError> {
-        let album_id = valid_album_id(album_id)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let previous = store.albums.len();
-        store
-            .albums
-            .retain(|album| !album.album_id.eq_ignore_ascii_case(album_id));
-        if store.albums.len() == previous {
-            return Err(WantedError::AlbumNotFound);
-        }
-        drop(store);
-        let mut runtime = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if runtime
-            .active
-            .as_ref()
-            .is_some_and(|active| active.album_id.eq_ignore_ascii_case(album_id))
-        {
-            runtime.active = None;
-        }
-        drop(runtime);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn fulfill_downloaded(
-        &self,
-        fulfillments: Vec<WantedDownloadFulfillmentRequest>,
-    ) -> Result<WantedSnapshot, WantedError> {
-        if fulfillments.len() > MAX_WANTED_ALBUMS {
-            return Err(WantedError::TooManyAlbums);
-        }
-        let fulfillments = fulfillments
-            .into_iter()
-            .map(validate_download_fulfillment)
-            .collect::<Result<Vec<_>, _>>()?;
-        if fulfillments.is_empty() {
-            return Ok(self.snapshot());
-        }
-        let album_ids = fulfillments
-            .iter()
-            .map(|fulfillment| fulfillment.album_id.to_ascii_lowercase())
-            .collect::<HashSet<_>>();
-
-        let changed = {
-            let mut store = self
-                .store
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            fulfill_downloaded_in_store(&mut store, fulfillments) > 0
-        };
-        if !changed {
-            return Ok(self.snapshot());
-        }
-
-        let mut runtime = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if runtime
-            .active
-            .as_ref()
-            .is_some_and(|active| album_ids.contains(&active.album_id.to_ascii_lowercase()))
-        {
-            runtime.active = None;
-        }
-        drop(runtime);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_paused(&self, album_id: &str, paused: bool) -> Result<WantedSnapshot, WantedError> {
-        let album_id = valid_album_id(album_id)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let album = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id.eq_ignore_ascii_case(album_id))
-            .ok_or(WantedError::AlbumNotFound)?;
-        album.paused = paused;
-        drop(store);
-        if paused {
-            let mut runtime = self
-                .runtime
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if runtime
-                .active
-                .as_ref()
-                .is_some_and(|active| active.album_id.eq_ignore_ascii_case(album_id))
-            {
-                runtime.active = None;
-            }
-        }
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_interval(&self, interval_minutes: u32) -> Result<WantedSnapshot, WantedError> {
-        if !matches!(interval_minutes, 0 | 15 | 30 | 60) {
-            return Err(WantedError::InvalidInterval);
-        }
-        self.store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .interval_minutes = interval_minutes;
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_preferences(
-        &self,
-        album_id: &str,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, WantedError> {
-        let album_id = valid_album_id(album_id)?;
-        validate_preferences(&preferences)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let album = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id.eq_ignore_ascii_case(album_id))
-            .ok_or(WantedError::AlbumNotFound)?;
-        album.preferences = preferences;
-        album.last_checked_at_ms = None;
-        album.matching_source_count = 0;
-        album.new_source_count = 0;
-        album.best_format = None;
-        album.best_track_count = None;
-        album.best_size_bytes = None;
-        album.best_speed_bytes_per_second = None;
-        album.best_source = None;
-        album.source_fingerprints.clear();
-        drop(store);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn set_default_preferences(
-        &self,
-        preferences: WantedPreferences,
-    ) -> Result<WantedSnapshot, WantedError> {
-        validate_preferences(&preferences)?;
-        self.store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .default_preferences = preferences;
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn sync_fulfilled(
-        &self,
-        fulfillments: Vec<WantedFulfillmentRequest>,
-    ) -> Result<WantedSnapshot, WantedError> {
-        if fulfillments.len() > MAX_WANTED_ALBUMS {
-            return Err(WantedError::TooManyAlbums);
-        }
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut changed = false;
-        for fulfillment in fulfillments {
-            let album_id = valid_album_id(&fulfillment.album_id)?;
-            let Some(album) = store
-                .albums
-                .iter_mut()
-                .find(|album| album.album_id.eq_ignore_ascii_case(album_id))
-            else {
-                continue;
-            };
-            let owned_track_count = if fulfillment.owned {
-                fulfillment.track_count
-            } else {
-                None
-            };
-            if album.fulfillment_source == Some(WantedFulfillmentSource::Download) {
-                continue;
-            }
-            if album.watch_despite_ownership {
-                continue;
-            }
-            let fulfillment_source = fulfillment
-                .owned
-                .then_some(WantedFulfillmentSource::Archive);
-            if album.fulfilled != fulfillment.owned
-                || album.owned_track_count != owned_track_count
-                || album.fulfillment_source != fulfillment_source
-            {
-                album.fulfilled = fulfillment.owned;
-                album.fulfilled_at_ms = fulfillment.owned.then(timestamp_ms);
-                album.fulfillment_source = fulfillment_source;
-                album.download_receipt = None;
-                album.owned_track_count = owned_track_count;
-                album.watch_despite_ownership = false;
-                if fulfillment.owned {
-                    album.new_source_count = 0;
-                } else {
-                    album.last_checked_at_ms = None;
-                }
-                changed = true;
-            }
-        }
-        drop(store);
-        if changed {
-            self.persist()?;
-            self.publish();
-        }
-        Ok(self.snapshot())
-    }
-
-    pub fn restore(&self, album_id: &str) -> Result<WantedSnapshot, WantedError> {
-        let album_id = valid_album_id(album_id)?;
-        let mut store = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let album = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id.eq_ignore_ascii_case(album_id))
-            .ok_or(WantedError::AlbumNotFound)?;
-        reset_for_watch(album, timestamp_ms());
-        drop(store);
-        self.persist()?;
-        self.publish();
-        Ok(self.snapshot())
-    }
-
-    pub fn start_manual(&self, album_id: &str, token: u32) -> Result<String, WantedError> {
-        let album_id = valid_album_id(album_id)?;
-        self.start(album_id, token, true)
-    }
-
     pub fn start_due(&self, token: u32) -> Option<String> {
         let now = timestamp_ms();
         let album_id = {
@@ -757,30 +381,6 @@ impl WantedHub {
         if let Some(active) = active {
             self.finish(active);
         }
-    }
-
-    pub fn fail_active(&self, message: &str) {
-        let active = self
-            .runtime
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .active
-            .take();
-        let Some(active) = active else {
-            return;
-        };
-        if let Some(album) = self
-            .store
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id == active.album_id)
-        {
-            album.error = Some(message.to_owned());
-        }
-        let _ = self.persist();
-        self.publish();
     }
 
     pub fn connection_lost(&self) {
@@ -1029,46 +629,6 @@ fn parent_folder(filename: &str) -> &str {
         .unwrap_or("")
 }
 
-fn fulfill_downloaded_in_store(
-    store: &mut WantedStore,
-    fulfillments: Vec<WantedDownloadFulfillmentRequest>,
-) -> usize {
-    let by_album_id = fulfillments
-        .into_iter()
-        .map(|fulfillment| (fulfillment.album_id.to_ascii_lowercase(), fulfillment))
-        .collect::<HashMap<_, _>>();
-    let mut changed = 0;
-    for album in &mut store.albums {
-        let Some(fulfillment) = by_album_id.get(&album.album_id.to_ascii_lowercase()) else {
-            continue;
-        };
-        let receipt = WantedDownloadReceipt {
-            release_id: fulfillment.release_id.clone(),
-            username: fulfillment.username.clone(),
-            format: fulfillment.format.clone(),
-            track_count: fulfillment.track_count,
-            size_bytes: fulfillment.size_bytes,
-            soundcheck: fulfillment.soundcheck,
-            completed_at_ms: fulfillment.completed_at_ms,
-        };
-        if album.fulfillment_source == Some(WantedFulfillmentSource::Download)
-            && album.download_receipt.as_ref() == Some(&receipt)
-        {
-            continue;
-        }
-        album.fulfilled = true;
-        album.fulfilled_at_ms = Some(receipt.completed_at_ms);
-        album.fulfillment_source = Some(WantedFulfillmentSource::Download);
-        album.download_receipt = Some(receipt);
-        album.owned_track_count = None;
-        album.watch_despite_ownership = false;
-        album.new_source_count = 0;
-        album.error = None;
-        changed += 1;
-    }
-    changed
-}
-
 fn next_check_at(store: &WantedStore, now: u64) -> Option<u64> {
     if store.interval_minutes == 0 {
         return None;
@@ -1094,174 +654,6 @@ fn album_due(album: &WantedAlbum, interval_minutes: u32, now: u64) -> bool {
         .unwrap_or(true)
 }
 
-fn validate_request(mut request: WantedAlbumRequest) -> Result<WantedAlbumRequest, WantedError> {
-    request.album_id = valid_album_id(&request.album_id)?.to_owned();
-    request.artist = valid_text(&request.artist, 180)?;
-    request.title = valid_text(&request.title, 500)?;
-    request.first_release_date = request.first_release_date.trim().chars().take(32).collect();
-    request.cover_art_url = request
-        .cover_art_url
-        .map(|value| value.trim().chars().take(2_048).collect())
-        .filter(|value: &String| value.starts_with("https://"));
-    if request
-        .minimum_track_count
-        .is_some_and(|tracks| !(1..=250).contains(&tracks))
-    {
-        return Err(WantedError::InvalidPreferences);
-    }
-    Ok(request)
-}
-
-fn validate_download_fulfillment(
-    mut fulfillment: WantedDownloadFulfillmentRequest,
-) -> Result<WantedDownloadFulfillmentRequest, WantedError> {
-    fulfillment.album_id = valid_album_id(&fulfillment.album_id)?.to_owned();
-    fulfillment.release_id = valid_text(&fulfillment.release_id, 180)?;
-    fulfillment.username = valid_text(&fulfillment.username, 180)?;
-    fulfillment.format = valid_text(&fulfillment.format, 80)?;
-    if fulfillment.track_count == 0
-        || fulfillment.track_count > 500
-        || fulfillment.size_bytes == 0
-        || fulfillment.completed_at_ms == 0
-    {
-        return Err(WantedError::InvalidDownloadFulfillment);
-    }
-    Ok(fulfillment)
-}
-
-fn reset_for_watch(album: &mut WantedAlbum, added_at_ms: u64) {
-    album.paused = false;
-    album.fulfilled = false;
-    album.fulfilled_at_ms = None;
-    album.fulfillment_source = None;
-    album.download_receipt = None;
-    album.owned_track_count = None;
-    album.watch_despite_ownership = true;
-    album.added_at_ms = added_at_ms;
-    album.last_checked_at_ms = None;
-    album.source_count = 0;
-    album.matching_source_count = 0;
-    album.ready_source_count = 0;
-    album.complete_source_count = 0;
-    album.new_source_count = 0;
-    album.best_format = None;
-    album.best_track_count = None;
-    album.best_size_bytes = None;
-    album.best_speed_bytes_per_second = None;
-    album.best_source = None;
-    album.error = None;
-    album.source_fingerprints.clear();
-}
-
-fn validate_preferences(preferences: &WantedPreferences) -> Result<(), WantedError> {
-    if !matches!(
-        preferences.minimum_bitrate_kbps,
-        None | Some(128 | 192 | 256 | 320)
-    ) || preferences
-        .minimum_track_count
-        .is_some_and(|tracks| !(1..=250).contains(&tracks))
-    {
-        return Err(WantedError::InvalidPreferences);
-    }
-    Ok(())
-}
-
-fn merge_bulk_requests(
-    store: &mut WantedStore,
-    requests: Vec<WantedAlbumRequest>,
-    preferences: &WantedPreferences,
-    added_at_ms: u64,
-) -> Result<(), WantedError> {
-    let new_count = requests
-        .iter()
-        .filter(|request| {
-            !store
-                .albums
-                .iter()
-                .any(|album| album.album_id.eq_ignore_ascii_case(&request.album_id))
-        })
-        .count();
-    if store.albums.len().saturating_add(new_count) > MAX_WANTED_ALBUMS {
-        return Err(WantedError::TooManyAlbums);
-    }
-    for request in requests {
-        let mut album_preferences = preferences.clone();
-        if let Some(minimum_track_count) = request.minimum_track_count {
-            album_preferences.minimum_track_count = Some(minimum_track_count);
-        }
-        if let Some(album) = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id.eq_ignore_ascii_case(&request.album_id))
-        {
-            let was_fulfilled = album.fulfilled;
-            album.artist = request.artist;
-            album.title = request.title;
-            album.first_release_date = request.first_release_date;
-            album.cover_art_url = request.cover_art_url;
-            album.paused = false;
-            album.preferences = album_preferences;
-            if was_fulfilled {
-                reset_for_watch(album, added_at_ms);
-            }
-        } else {
-            store.albums.push(WantedAlbum {
-                album_id: request.album_id,
-                artist: request.artist,
-                title: request.title,
-                first_release_date: request.first_release_date,
-                cover_art_url: request.cover_art_url,
-                paused: false,
-                fulfilled: false,
-                fulfilled_at_ms: None,
-                fulfillment_source: None,
-                download_receipt: None,
-                owned_track_count: None,
-                watch_despite_ownership: false,
-                preferences: album_preferences,
-                added_at_ms,
-                last_checked_at_ms: None,
-                source_count: 0,
-                matching_source_count: 0,
-                ready_source_count: 0,
-                complete_source_count: 0,
-                new_source_count: 0,
-                best_format: None,
-                best_track_count: None,
-                best_size_bytes: None,
-                best_speed_bytes_per_second: None,
-                best_source: None,
-                error: None,
-                source_fingerprints: Vec::new(),
-            });
-        }
-    }
-    Ok(())
-}
-
-fn valid_album_id(value: &str) -> Result<&str, WantedError> {
-    let value = value.trim();
-    if value.is_empty()
-        || value.len() > 100
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-    {
-        Err(WantedError::InvalidAlbum)
-    } else {
-        Ok(value)
-    }
-}
-
-fn valid_text(value: &str, max: usize) -> Result<String, WantedError> {
-    let value = value.trim();
-    if value.is_empty() || value.chars().count() > max || value.chars().any(char::is_control) {
-        Err(WantedError::InvalidAlbum)
-    } else {
-        Ok(value.to_owned())
-    }
-}
-
 fn load_store(path: &Path) -> Result<WantedStore, WantedError> {
     if !path.exists() {
         return Ok(WantedStore::default());
@@ -1284,8 +676,6 @@ fn timestamp_ms() -> u64 {
 
 #[derive(Debug, Error)]
 pub enum WantedError {
-    #[error("Choose a valid MusicBrainz album before adding it to Wanted.")]
-    InvalidAlbum,
     #[error("That album is not in Wanted.")]
     AlbumNotFound,
     #[error("Resume this album before checking it.")]
@@ -1296,16 +686,6 @@ pub enum WantedError {
     CheckInProgress,
     #[error("Wanted checks are briefly cooling down.")]
     RateLimited,
-    #[error("Choose Manual, 15 minutes, 30 minutes, or 1 hour.")]
-    InvalidInterval,
-    #[error("Choose valid Smart Match format, bitrate, and track requirements.")]
-    InvalidPreferences,
-    #[error("Choose a valid verified download before fulfilling this Wanted album.")]
-    InvalidDownloadFulfillment,
-    #[error("Music Library supports up to {MAX_WANTED_ALBUMS} wanted albums.")]
-    TooManyAlbums,
-    #[error("Choose between 1 and {MAX_BULK_WANTED_ALBUMS} missing albums at a time.")]
-    InvalidBulkCount,
     #[error("The Wanted data was created by an unsupported Music Library version.")]
     UnsupportedStore,
     #[error("Could not read or save Wanted data: {0}")]
@@ -1318,17 +698,6 @@ pub enum WantedError {
 mod tests {
     use super::*;
     use crate::soulseek::protocol::SearchFile;
-
-    fn request(id: &str) -> WantedAlbumRequest {
-        WantedAlbumRequest {
-            album_id: id.to_owned(),
-            artist: "Def Leppard".to_owned(),
-            title: "High 'n' Dry".to_owned(),
-            first_release_date: "1981-07-11".to_owned(),
-            cover_art_url: Some("https://coverartarchive.org/cover.jpg".to_owned()),
-            minimum_track_count: None,
-        }
-    }
 
     fn response(
         token: u32,
@@ -1401,7 +770,7 @@ mod tests {
         let path = directory.path().join("wanted.json");
         let mut store = WantedStore::default();
         store.albums.push(WantedAlbum {
-            album_id: request("album-1").album_id,
+            album_id: "album-1".to_owned(),
             artist: "Def Leppard".to_owned(),
             title: "High 'n' Dry".to_owned(),
             first_release_date: "1981".to_owned(),
@@ -1481,108 +850,6 @@ mod tests {
     fn only_supported_intervals_are_accepted_by_the_contract() {
         assert!(matches!(15, 0 | 15 | 30 | 60));
         assert!(!matches!(5, 0 | 15 | 30 | 60));
-    }
-
-    #[test]
-    fn bulk_adds_share_one_profile_and_existing_watches_are_not_duplicated() {
-        let mut store = WantedStore::default();
-        let profile = WantedPreferences {
-            format_preference: WantedFormatPreference::LosslessOnly,
-            minimum_bitrate_kbps: Some(320),
-            minimum_track_count: Some(10),
-        };
-        let first = validate_request(request("album-1")).expect("valid first album");
-        merge_bulk_requests(&mut store, vec![first], &WantedPreferences::default(), 1)
-            .expect("seed watch");
-        store.albums[0].paused = true;
-        let existing = validate_request(request("ALBUM-1")).expect("valid duplicate album");
-        let mut second_request = request("album-2");
-        second_request.minimum_track_count = Some(12);
-        let second = validate_request(second_request).expect("valid second album");
-        merge_bulk_requests(&mut store, vec![existing, second], &profile, 2)
-            .expect("merge bulk watches");
-
-        assert_eq!(store.albums.len(), 2);
-        assert_eq!(store.albums[0].preferences, profile);
-        assert_eq!(store.albums[1].preferences.minimum_track_count, Some(12));
-        assert_eq!(
-            store.albums[1].preferences.format_preference,
-            profile.format_preference
-        );
-        assert!(store.albums.iter().all(|album| !album.paused));
-    }
-
-    #[test]
-    fn verified_download_fulfillment_is_persistent_and_idempotent() {
-        let mut store = WantedStore::default();
-        let profile = WantedPreferences::default();
-        merge_bulk_requests(
-            &mut store,
-            vec![
-                validate_request(request("album-1")).unwrap(),
-                validate_request(request("album-2")).unwrap(),
-            ],
-            &profile,
-            1,
-        )
-        .unwrap();
-        let fulfillment = WantedDownloadFulfillmentRequest {
-            album_id: "album-1".to_owned(),
-            release_id: "release-1".to_owned(),
-            username: "listener".to_owned(),
-            format: "MP3".to_owned(),
-            track_count: 10,
-            size_bytes: 100_000_000,
-            soundcheck: WantedDownloadSoundcheck::Passed,
-            completed_at_ms: 500,
-        };
-
-        assert_eq!(
-            fulfill_downloaded_in_store(&mut store, vec![fulfillment.clone()]),
-            1
-        );
-        assert_eq!(store.albums.len(), 2);
-        let completed = store
-            .albums
-            .iter()
-            .find(|album| album.album_id == "album-1")
-            .expect("fulfilled album remains on its shelf");
-        assert!(completed.fulfilled);
-        assert_eq!(
-            completed.fulfillment_source,
-            Some(WantedFulfillmentSource::Download)
-        );
-        assert_eq!(completed.fulfilled_at_ms, Some(500));
-        assert_eq!(
-            completed
-                .download_receipt
-                .as_ref()
-                .map(|receipt| receipt.track_count),
-            Some(10)
-        );
-        assert_eq!(
-            fulfill_downloaded_in_store(&mut store, vec![fulfillment]),
-            0
-        );
-        let completed = store
-            .albums
-            .iter_mut()
-            .find(|album| album.album_id == "album-1")
-            .expect("fulfilled album can be restored");
-        reset_for_watch(completed, 600);
-        assert!(!completed.fulfilled);
-        assert_eq!(completed.added_at_ms, 600);
-        assert_eq!(completed.fulfillment_source, None);
-        assert_eq!(completed.download_receipt, None);
-        assert!(completed.watch_despite_ownership);
-        assert!(
-            !store
-                .albums
-                .iter()
-                .find(|album| album.album_id == "album-2")
-                .expect("other watch remains")
-                .fulfilled
-        );
     }
 
     #[test]

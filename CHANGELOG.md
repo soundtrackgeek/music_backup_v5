@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.168.2] - 2026-10-07
+
+### Removed
+- Remove about 4,300 lines of Soulseek code that became unreachable when the 60 unregistered commands were deleted: the rooms, messages, people, radar, wanted-list, folder-inspection, and share-browsing request paths, their connection commands and match arms, the Patch Bay, source relay, release ordering, and restart-preparation helpers in downloads, the unused protocol frames, the shares cache, and 21 tests that only exercised those features. The 26 registered Soulseek commands, their events, and downloads, uploads, searches, and local shares behave as before.
+- Drop the blanket `#![allow(dead_code)]` on the Soulseek module, so the compiler now reports unused Soulseek code again.
+
 ## [0.168.1] - 2026-10-06
 
 ### Removed
