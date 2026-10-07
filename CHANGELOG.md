@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.178.1] - 2026-10-07
+
+### Fixed
+- Universal macOS installer builds now prepare the Apple Silicon and Intel analyzer sidecars required by each Tauri Cargo build, alongside the combined universal analyzer. The verification gate covers all three artifacts and the Windows executable naming; macOS release validation checks both architectures in the packaged analyzer.
+
 ## [0.178.0] - 2026-10-07
 
 ### Added

@@ -1,5 +1,8 @@
 # Music Library
 
+Music Library 0.178.1 fixes universal macOS installer builds by preparing the
+Apple Silicon and Intel audio analyzers alongside the combined universal binary.
+
 Music Library 0.178.0 adds local MP3 **Audio analysis** in Tools and album details.
 Analyze favorites first, use Windows idle-only scheduling or overnight hours,
 and pause/resume in Activity Center. Results are saved per track, so **Sounds

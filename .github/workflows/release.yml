@@ -112,6 +112,8 @@ jobs:
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
           xcrun lipo "$app/Contents/MacOS/$executable" -verify_arch arm64
           xcrun lipo "$app/Contents/MacOS/$executable" -verify_arch x86_64
+          xcrun lipo "$app/Contents/MacOS/music-sonic-analyzer" -verify_arch arm64
+          xcrun lipo "$app/Contents/MacOS/music-sonic-analyzer" -verify_arch x86_64
           codesign --verify --deep --strict "$app"
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose "$app"

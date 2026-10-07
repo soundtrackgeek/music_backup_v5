@@ -79,8 +79,12 @@ a separate coordinated backup/export step.
 
 `npm run sonic:prepare` builds the standalone `Tools/sonic-analyzer` executable
 and copies a target-suffixed binary into `src-tauri/binaries` for Tauri bundling.
+Universal macOS builds prepare both Apple Silicon and Intel sidecars as well as
+the combined universal binary: Tauri validates the architecture-specific
+sidecar during each Cargo build before packaging the universal app.
 `npm run sonic:test` checks the independent MIT result/math contract against
-Bliss's weighted distance. The applications use that small contract without
+Bliss's weighted distance and verifies analyzer packaging for macOS and Windows.
+The applications use that small contract without
 linking Bliss. The analyzer is GPL-3.0-only; its license and source notice ship
 with Music Library. Its corresponding source, exact dependency lock, and build
 script are available in the same release's GitHub source archive. See

@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.178.0",
+  "version": "0.178.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -25,7 +25,7 @@
     "test:release": "node --test scripts/release-assets-checks.mjs",
     "lint": "eslint src",
     "sonic:prepare": "node scripts/build-sonic-analyzer.mjs",
-    "sonic:test": "cargo test --manifest-path crates/sonic-core/Cargo.toml && cargo test --locked --manifest-path Tools/sonic-analyzer/Cargo.toml"
+    "sonic:test": "node --test scripts/sonic-analyzer-build-checks.mjs && cargo test --manifest-path crates/sonic-core/Cargo.toml && cargo test --locked --manifest-path Tools/sonic-analyzer/Cargo.toml"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",
