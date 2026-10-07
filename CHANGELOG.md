@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.175.1] - 2026-10-07
+
+### Fixed
+- Skip the Windows database-sync tests on the main PC. `sync-library-from-main-pc.ps1` deliberately refuses to run on JornComputer (the source of truth), so on that machine all 20 tests failed and `npm run check` could not pass locally. The tests now skip there with an explanatory message and still run on CI and every other PC.
+
 ## [0.175.0] - 2026-10-07
 
 ### Changed

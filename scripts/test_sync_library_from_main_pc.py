@@ -11,8 +11,14 @@ import unittest
 
 SCRIPT = Path(__file__).with_name("sync-library-from-main-pc.ps1")
 
+# The script refuses to run on the source-of-truth PC (a PowerShell `-ieq` check on
+# COMPUTERNAME), so these tests can only pass on other machines such as CI.
+ON_MAIN_PC = os.environ.get("COMPUTERNAME", "").lower() == "jorncomputer"
+SKIP_ON_MAIN_PC = "sync-library-from-main-pc.ps1 refuses to run on the main PC (JornComputer)"
+
 
 @unittest.skipUnless(os.name == "nt", "Windows PowerShell script")
+@unittest.skipIf(ON_MAIN_PC, SKIP_ON_MAIN_PC)
 class DatabaseCopyTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="music-library-sync-")
@@ -157,6 +163,7 @@ os._exit(0)
 
 
 @unittest.skipUnless(os.name == "nt", "Windows PowerShell script")
+@unittest.skipIf(ON_MAIN_PC, SKIP_ON_MAIN_PC)
 class AuthenticationTests(unittest.TestCase):
     def run_powershell(self, body):
         # Load helper functions without touching a share or the real database.
