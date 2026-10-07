@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "../bindings";
 import { listen } from "@tauri-apps/api/event";
 import { isTauriRuntime } from "./tauriClient";
 
@@ -54,14 +54,14 @@ export function previewActivity(kind: string, label: string, state: ActivityJob[
 const previewControls = new Map<string, (action: JobAction) => Promise<void>>();
 export function registerPreviewControl(kind: string, control: (action: JobAction) => Promise<void>) { previewControls.set(kind, control); }
 export async function listActivityJobs() {
-  return isTauriRuntime() ? invoke<ActivityJob[]>("list_activity_jobs") : [...previewJobs];
+  return isTauriRuntime() ? commands.listActivityJobs() as Promise<ActivityJob[]> : [...previewJobs];
 }
 export async function listenToActivityJobs(handler: (jobs: ActivityJob[]) => void) {
   if (isTauriRuntime()) return listen<ActivityJob[]>("activity-jobs-changed", event => handler(event.payload));
   handlers.add(handler); return () => { handlers.delete(handler); };
 }
 export async function controlActivityJob(id: number, action: JobAction) {
-  if (isTauriRuntime()) return invoke<ActivityJob[]>("control_activity_job", { id, action });
+  if (isTauriRuntime()) return commands.controlActivityJob(id, action) as Promise<ActivityJob[]>;
   const job = previewJobs.find(row => row.id === id);
   if (!job || !jobActions(job).includes(action)) throw new Error("The job changed; refresh Activity and try again.");
   await previewControls.get(job.kind)?.(action);

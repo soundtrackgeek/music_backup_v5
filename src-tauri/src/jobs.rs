@@ -21,7 +21,7 @@ pub fn cancel_requested() -> bool {
 #[cfg(test)]
 pub fn progress(_: i64, _: i64, _: &str) {}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: i64,

@@ -797,7 +797,7 @@ export async function getLibraryStatus() {
     return mockStatus;
   }
 
-  return invoke<LibraryStatus>("get_library_status");
+  return commands.getLibraryStatus() as Promise<LibraryStatus>;
 }
 
 export async function runPerformanceProbe() {
@@ -897,7 +897,7 @@ export async function runPerformanceProbe() {
     } satisfies PerformanceProbeResponse;
   }
 
-  return invoke<PerformanceProbeResponse>("run_performance_probe");
+  return commands.runPerformanceProbe() as Promise<PerformanceProbeResponse>;
 }
 
 export async function listImportRuns(limit: number) {
@@ -905,7 +905,7 @@ export async function listImportRuns(limit: number) {
     return mockImportRuns.slice(0, limit) satisfies ImportRun[];
   }
 
-  return invoke<ImportRun[]>("list_import_runs", { limit });
+  return commands.listImportRuns(limit) as Promise<ImportRun[]>;
 }
 
 const mockLibraryUpdates: LibraryUpdate[] = [
@@ -1283,7 +1283,7 @@ export async function listDatabaseBackups() {
     return mockDatabaseBackups satisfies DatabaseBackup[];
   }
 
-  return invoke<DatabaseBackup[]>("list_database_backups");
+  return commands.listDatabaseBackups() as Promise<DatabaseBackup[]>;
 }
 
 export async function restoreDatabaseBackup(backupPath: string) {
@@ -1293,9 +1293,7 @@ export async function restoreDatabaseBackup(backupPath: string) {
     );
   }
 
-  return invoke<DatabaseRestoreSummary>("restore_database_backup", {
-    backupPath,
-  });
+  return commands.restoreDatabaseBackup(backupPath) as Promise<DatabaseRestoreSummary>;
 }
 
 export async function getStatistics() {
@@ -1831,7 +1829,7 @@ export async function getCatalogRevision() {
     return `${completedRuns.length}:${latestId}:${latestCompletion}`;
   }
 
-  return invoke<string>("get_catalog_revision");
+  return commands.getCatalogRevision() as Promise<string>;
 }
 
 export async function getDiscoveryDailyEdition(date: string) {
@@ -2528,7 +2526,7 @@ export async function getSettings() {
   }
 
   const settings = normalizeSettings(
-    await invoke<AppSettings>("get_settings"),
+    (await commands.getSettings()) as AppSettings,
   );
   cacheSettings(settings);
   return settings;
@@ -4242,7 +4240,7 @@ export async function deleteSavedExternalDiscovery(id: number) {
     );
     return;
   }
-  return invoke<void>("delete_saved_external_discovery", { id });
+  await commands.deleteSavedExternalDiscovery(id);
 }
 
 export async function listWishList() {
@@ -5333,9 +5331,7 @@ export async function getMusicBrainzCacheStatus(cachePath?: string) {
     } satisfies MusicBrainzCacheStatus;
   }
 
-  return invoke<MusicBrainzCacheStatus>("get_musicbrainz_cache_status", {
-    cachePath: cachePath ?? null,
-  });
+  return commands.getMusicbrainzCacheStatus(cachePath ?? null) as Promise<MusicBrainzCacheStatus>;
 }
 
 function mockOriginPreview(
@@ -5377,9 +5373,7 @@ export async function getMusicBrainzOriginCountryStatus() {
     return mockMusicBrainzOriginCountryStatus;
   }
 
-  return invoke<MusicBrainzOriginCountryStatus>(
-    "get_musicbrainz_origin_country_status",
-  );
+  return commands.getMusicbrainzOriginCountryStatus() as Promise<MusicBrainzOriginCountryStatus>;
 }
 
 export async function previewMusicBrainzOriginCountryImport(
@@ -5389,12 +5383,7 @@ export async function previewMusicBrainzOriginCountryImport(
     return mockOriginPreview(request);
   }
 
-  return invoke<MusicBrainzOriginCountryPreview>(
-    "preview_musicbrainz_origin_country_import",
-    {
-      request,
-    },
-  );
+  return commands.previewMusicbrainzOriginCountryImport(request) as Promise<MusicBrainzOriginCountryPreview>;
 }
 
 export async function importMusicBrainzOriginCountries(
@@ -5519,7 +5508,7 @@ export async function cancelMusicBrainzOriginCountryImport() {
     return;
   }
 
-  await invoke<void>("cancel_musicbrainz_origin_country_import");
+  await commands.cancelMusicbrainzOriginCountryImport();
 }
 
 function mockArtistInfoPreview(
@@ -5557,9 +5546,7 @@ export async function getMusicBrainzArtistInfoStatus() {
     return mockMusicBrainzArtistInfoStatus;
   }
 
-  return invoke<MusicBrainzArtistInfoStatus>(
-    "get_musicbrainz_artist_info_status",
-  );
+  return commands.getMusicbrainzArtistInfoStatus() as Promise<MusicBrainzArtistInfoStatus>;
 }
 
 export async function previewMusicBrainzArtistInfoImport(
@@ -5569,12 +5556,7 @@ export async function previewMusicBrainzArtistInfoImport(
     return mockArtistInfoPreview(request);
   }
 
-  return invoke<MusicBrainzArtistInfoPreview>(
-    "preview_musicbrainz_artist_info_import",
-    {
-      request,
-    },
-  );
+  return commands.previewMusicbrainzArtistInfoImport(request) as Promise<MusicBrainzArtistInfoPreview>;
 }
 
 export async function importMusicBrainzArtistInfos(
@@ -5700,7 +5682,7 @@ export async function cancelMusicBrainzArtistInfoImport() {
     return;
   }
 
-  await invoke<void>("cancel_musicbrainz_artist_info_import");
+  await commands.cancelMusicbrainzArtistInfoImport();
 }
 
 export async function getMusicBrainzArtistDiscography(
@@ -5741,12 +5723,7 @@ export async function getMusicBrainzArtistDiscography(
     } satisfies MusicBrainzArtistDiscographyResponse;
   }
 
-  return invoke<MusicBrainzArtistDiscographyResponse>(
-    "get_musicbrainz_artist_discography",
-    {
-      request: { artistKey, artistName },
-    },
-  );
+  return commands.getMusicbrainzArtistDiscography({ artistKey, artistName }) as Promise<MusicBrainzArtistDiscographyResponse>;
 }
 
 export async function refreshMusicBrainzArtistInfo(input: {
@@ -5808,12 +5785,7 @@ export async function refreshMusicBrainzArtistInfo(input: {
     } satisfies MusicBrainzArtistRefreshResult;
   }
 
-  return invoke<MusicBrainzArtistRefreshResult>(
-    "refresh_musicbrainz_artist_releases",
-    {
-      request: input,
-    },
-  );
+  return commands.refreshMusicbrainzArtistReleases(input) as Promise<MusicBrainzArtistRefreshResult>;
 }
 
 export async function setMusicBrainzArtistOriginCountry(input: {
@@ -5840,12 +5812,7 @@ export async function setMusicBrainzArtistOriginCountry(input: {
     );
   }
 
-  return invoke<MusicBrainzArtistOriginCountryUpdate>(
-    "set_musicbrainz_artist_origin_country",
-    {
-      request: input,
-    },
-  );
+  return commands.setMusicbrainzArtistOriginCountry(input) as Promise<MusicBrainzArtistOriginCountryUpdate>;
 }
 
 export async function setMusicBrainzArtistLink(input: {
@@ -5912,9 +5879,7 @@ export async function setMusicBrainzArtistLink(input: {
     return;
   }
 
-  return invoke<void>("set_musicbrainz_artist_link", {
-    request: input,
-  });
+  await commands.setMusicbrainzArtistLink(input);
 }
 
 export async function setMusicBrainzReleaseDecision(input: {
@@ -5947,9 +5912,7 @@ export async function setMusicBrainzReleaseDecision(input: {
     return;
   }
 
-  return invoke<void>("set_musicbrainz_release_decision", {
-    request: input,
-  });
+  await commands.setMusicbrainzReleaseDecision(input);
 }
 
 export async function syncMusicBrainzOverlay(
@@ -5978,10 +5941,7 @@ export async function listMusicBrainzOverlaySyncLog(limit = 12) {
     ) satisfies MusicBrainzOverlaySyncLogEntry[];
   }
 
-  return invoke<MusicBrainzOverlaySyncLogEntry[]>(
-    "list_musicbrainz_overlay_sync_log",
-    { limit },
-  );
+  return commands.listMusicbrainzOverlaySyncLog(limit) as Promise<MusicBrainzOverlaySyncLogEntry[]>;
 }
 
 function createMockMusicBrainzOverlaySyncResult(): MusicBrainzOverlaySyncLogEntry {
@@ -6068,9 +6028,7 @@ export async function saveSettings(settings: AppSettings) {
   }
 
   const saved = normalizeSettings(
-    await invoke<AppSettings>("save_settings", {
-      settings: normalizedSettings,
-    }),
+    (await commands.saveSettings(normalizedSettings)) as AppSettings,
   );
   cacheSettings(saved);
   return saved;
@@ -6083,7 +6041,7 @@ export async function getImportPreview(sourcePath: string) {
       : null;
   }
 
-  return invoke<ImportPreview | null>("get_import_preview", { sourcePath });
+  return commands.getImportPreview(sourcePath) as Promise<ImportPreview | null>;
 }
 
 export async function selectTaggedAlbumFolder(defaultPath?: string) {
@@ -6175,7 +6133,7 @@ export async function prepareImportPreview(sourcePath: string) {
     return mockPreparedImport;
   }
 
-  return invoke<ImportPreview>("prepare_import_preview", { sourcePath });
+  return commands.prepareImportPreview(sourcePath) as Promise<ImportPreview>;
 }
 
 export async function cancelImportPreview() {
@@ -6192,7 +6150,7 @@ export async function cancelImportPreview() {
     return;
   }
 
-  await invoke<void>("cancel_import_preview");
+  await commands.cancelImportPreview();
 }
 
 export async function applyImportPreview(sessionId: number) {
@@ -6240,7 +6198,7 @@ export async function applyImportPreview(sessionId: number) {
     } satisfies ImportSummary;
   }
 
-  return invoke<ImportSummary>("apply_import_preview", { sessionId });
+  return commands.applyImportPreview(sessionId) as Promise<ImportSummary>;
 }
 
 export async function rollbackImportRun(importRunId: number) {
@@ -6271,9 +6229,7 @@ export async function rollbackImportRun(importRunId: number) {
     } satisfies DatabaseRestoreSummary;
   }
 
-  return invoke<DatabaseRestoreSummary>("rollback_import_run", {
-    importRunId,
-  });
+  return commands.rollbackImportRun(importRunId) as Promise<DatabaseRestoreSummary>;
 }
 
 export async function importAlbumCovers(request: CoverImportRequest) {
@@ -6301,9 +6257,7 @@ export async function importBillboardCharts(sourcePath: string) {
     } satisfies BillboardImportSummary;
   }
 
-  return invoke<BillboardImportSummary>("import_billboard_charts", {
-    sourcePath,
-  });
+  return commands.importBillboardCharts(sourcePath) as Promise<BillboardImportSummary>;
 }
 
 export async function importBillboardSingles(sourcePath: string) {
@@ -6325,9 +6279,7 @@ export async function importBillboardSingles(sourcePath: string) {
     } satisfies BillboardSinglesImportSummary;
   }
 
-  return invoke<BillboardSinglesImportSummary>("import_billboard_singles", {
-    sourcePath,
-  });
+  return commands.importBillboardSingles(sourcePath) as Promise<BillboardSinglesImportSummary>;
 }
 
 export async function importVgListaAlbums(sourcePath: string) {
@@ -6345,9 +6297,7 @@ export async function importVgListaAlbums(sourcePath: string) {
     } satisfies VgListaImportSummary;
   }
 
-  return invoke<VgListaImportSummary>("import_vg_lista_albums", {
-    sourcePath,
-  });
+  return commands.importVgListaAlbums(sourcePath) as Promise<VgListaImportSummary>;
 }
 
 export async function importVgListaSingles(sourcePath: string) {
@@ -6365,9 +6315,7 @@ export async function importVgListaSingles(sourcePath: string) {
     } satisfies VgListaImportSummary;
   }
 
-  return invoke<VgListaImportSummary>("import_vg_lista_singles", {
-    sourcePath,
-  });
+  return commands.importVgListaSingles(sourcePath) as Promise<VgListaImportSummary>;
 }
 
 export async function importOfficialUkAlbums(sourcePath: string) {
@@ -6385,9 +6333,7 @@ export async function importOfficialUkAlbums(sourcePath: string) {
     } satisfies OfficialUkImportSummary;
   }
 
-  return invoke<OfficialUkImportSummary>("import_official_uk_albums", {
-    sourcePath,
-  });
+  return commands.importOfficialUkAlbums(sourcePath) as Promise<OfficialUkImportSummary>;
 }
 
 export async function importOfficialUkSingles(sourcePath: string) {
@@ -6405,9 +6351,7 @@ export async function importOfficialUkSingles(sourcePath: string) {
     } satisfies OfficialUkImportSummary;
   }
 
-  return invoke<OfficialUkImportSummary>("import_official_uk_singles", {
-    sourcePath,
-  });
+  return commands.importOfficialUkSingles(sourcePath) as Promise<OfficialUkImportSummary>;
 }
 
 export async function importTiISkuddetSingles(sourcePath: string) {
@@ -6426,9 +6370,7 @@ export async function importTiISkuddetSingles(sourcePath: string) {
     } satisfies TiISkuddetImportSummary;
   }
 
-  return invoke<TiISkuddetImportSummary>("import_ti_i_skuddet_singles", {
-    sourcePath,
-  });
+  return commands.importTiISkuddetSingles(sourcePath) as Promise<TiISkuddetImportSummary>;
 }
 
 export async function importNorsktoppenSingles(sourcePath: string) {
@@ -6447,9 +6389,7 @@ export async function importNorsktoppenSingles(sourcePath: string) {
     } satisfies NorsktoppenImportSummary;
   }
 
-  return invoke<NorsktoppenImportSummary>("import_norsktoppen_singles", {
-    sourcePath,
-  });
+  return commands.importNorsktoppenSingles(sourcePath) as Promise<NorsktoppenImportSummary>;
 }
 
 export async function getAlbumCoverUrl(albumId: string, size: ThumbnailSize = 300) {
@@ -7641,9 +7581,7 @@ export async function exportMusicBrainzArtistReleases(
   }
 
   return finalizeExport(
-    await invoke<RawExportResult>("export_musicbrainz_artist_releases", {
-      input: { ...request, rows: visibleRows, format },
-    }),
+    (await commands.exportMusicbrainzArtistReleases({ ...request, rows: visibleRows, format })) as RawExportResult,
   );
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.171.0] - 2026-10-07
+
+### Changed
+- Migrate the remaining 39 typed commands to generated TypeScript bindings: settings and library status, the performance probe, import runs and the catalog revision, database backups and restore, the TSV import preview, prepare, cancel, apply, and rollback commands, all eight chart importers, the MusicBrainz cache, origin-country, artist-info, discography, release-decision, artist-link, overlay-log, and export commands, saved-discovery delete, Activity Center jobs and controls, and app update install. `backend.ts`, `backend/activity.ts`, and `app/updater.ts` call `commands.*` for them.
+- Only the eight job-backed commands that return raw `serde_json::Value` still use `generate_handler!` and hand-written `invoke` calls.
+- Jobs types derive `specta::Type`.
+
 ## [0.170.0] - 2026-10-07
 
 ### Changed

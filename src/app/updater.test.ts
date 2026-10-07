@@ -2,15 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkForAppUpdate, getAppUpdateStatus, installAppUpdate, listenToAppUpdateChecks } from "./updater";
 
 const mocks = vi.hoisted(() => ({
-  invoke: vi.fn(),
+  installAppUpdate: vi.fn(),
   listen: vi.fn(),
   relaunch: vi.fn(),
   getAppUpdateStatus: vi.fn(),
   checkAppUpdate: vi.fn(),
 }));
-vi.mock("../backend/tauriClient", () => ({ invoke: mocks.invoke, listen: mocks.listen }));
+vi.mock("../backend/tauriClient", () => ({ listen: mocks.listen }));
 vi.mock("../bindings", () => ({
-  commands: { getAppUpdateStatus: mocks.getAppUpdateStatus, checkAppUpdate: mocks.checkAppUpdate },
+  commands: {
+    getAppUpdateStatus: mocks.getAppUpdateStatus,
+    checkAppUpdate: mocks.checkAppUpdate,
+    installAppUpdate: mocks.installAppUpdate,
+  },
 }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: mocks.relaunch }));
 
@@ -43,13 +47,13 @@ describe("Rust updater bridge", () => {
   it("subscribes before installing the selected version and cleans up after success", async () => {
     const cleanup = vi.fn();
     mocks.listen.mockResolvedValue(cleanup);
-    mocks.invoke.mockImplementation(async () => {
+    mocks.installAppUpdate.mockImplementation(async () => {
       expect(mocks.listen).toHaveBeenCalledWith("app-update-install-progress", expect.any(Function));
       mocks.listen.mock.calls[0][1]({ payload: { phase: "downloading", percent: 50 } });
     });
     const progress = vi.fn();
     await installAppUpdate("1.1.0", progress);
-    expect(mocks.invoke).toHaveBeenCalledWith("install_app_update", { version: "1.1.0" });
+    expect(mocks.installAppUpdate).toHaveBeenCalledWith("1.1.0");
     expect(progress).toHaveBeenCalledWith({ phase: "downloading", percent: 50 });
     expect(mocks.relaunch).toHaveBeenCalledOnce();
     expect(cleanup).toHaveBeenCalledOnce();
@@ -58,7 +62,7 @@ describe("Rust updater bridge", () => {
   it("cleans up failed installations without relaunching", async () => {
     const cleanup = vi.fn();
     mocks.listen.mockResolvedValue(cleanup);
-    mocks.invoke.mockRejectedValue(new Error("signature mismatch"));
+    mocks.installAppUpdate.mockRejectedValue(new Error("signature mismatch"));
     await expect(installAppUpdate("1.1.0", vi.fn())).rejects.toThrow("signature mismatch");
     expect(cleanup).toHaveBeenCalledOnce();
     expect(mocks.relaunch).not.toHaveBeenCalled();

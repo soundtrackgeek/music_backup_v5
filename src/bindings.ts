@@ -4,6 +4,70 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getLibraryStatus: () => __TAURI_INVOKE<LibraryStatus>("get_library_status"),
+	runPerformanceProbe: () => __TAURI_INVOKE<PerformanceProbeResponse>("run_performance_probe"),
+	listImportRuns: (limit: number | null) => __TAURI_INVOKE<ImportRun[]>("list_import_runs", { limit }),
+	getCatalogRevision: () => __TAURI_INVOKE<string>("get_catalog_revision"),
+	listDatabaseBackups: () => __TAURI_INVOKE<DatabaseBackup[]>("list_database_backups"),
+	restoreDatabaseBackup: (backupPath: string) => __TAURI_INVOKE<DatabaseRestoreSummary>("restore_database_backup", { backupPath }),
+	getSettings: () => __TAURI_INVOKE<AppSettings_Serialize>("get_settings"),
+	deleteSavedExternalDiscovery: (id: number) => __TAURI_INVOKE<null>("delete_saved_external_discovery", { id }),
+	getMusicbrainzCacheStatus: (cachePath: string | null) => __TAURI_INVOKE<MusicBrainzCacheStatus>("get_musicbrainz_cache_status", { cachePath }),
+	getMusicbrainzOriginCountryStatus: () => __TAURI_INVOKE<MusicBrainzOriginCountryStatus>("get_musicbrainz_origin_country_status"),
+	previewMusicbrainzOriginCountryImport: (request: MusicBrainzOriginCountryImportRequest) => __TAURI_INVOKE<MusicBrainzOriginCountryPreview>("preview_musicbrainz_origin_country_import", { request }),
+	cancelMusicbrainzOriginCountryImport: () => __TAURI_INVOKE<null>("cancel_musicbrainz_origin_country_import"),
+	getMusicbrainzArtistInfoStatus: () => __TAURI_INVOKE<MusicBrainzArtistInfoStatus>("get_musicbrainz_artist_info_status"),
+	previewMusicbrainzArtistInfoImport: (request: MusicBrainzArtistInfoImportRequest) => __TAURI_INVOKE<MusicBrainzArtistInfoPreview>("preview_musicbrainz_artist_info_import", { request }),
+	cancelMusicbrainzArtistInfoImport: () => __TAURI_INVOKE<null>("cancel_musicbrainz_artist_info_import"),
+	getMusicbrainzArtistDiscography: (request: MusicBrainzArtistDiscographyRequest) => __TAURI_INVOKE<MusicBrainzArtistDiscographyResponse>("get_musicbrainz_artist_discography", { request }),
+	setMusicbrainzReleaseDecision: (request: MusicBrainzReleaseDecisionRequest) => __TAURI_INVOKE<null>("set_musicbrainz_release_decision", { request }),
+	setMusicbrainzArtistLink: (request: MusicBrainzArtistLinkRequest) => __TAURI_INVOKE<null>("set_musicbrainz_artist_link", { request }),
+	refreshMusicbrainzArtistReleases: (request: MusicBrainzArtistRefreshRequest) => __TAURI_INVOKE<MusicBrainzArtistRefreshResult>("refresh_musicbrainz_artist_releases", { request }),
+	setMusicbrainzArtistOriginCountry: (request: MusicBrainzArtistOriginCountryRequest) => __TAURI_INVOKE<MusicBrainzArtistOriginCountryUpdate>("set_musicbrainz_artist_origin_country", { request }),
+	listMusicbrainzOverlaySyncLog: (limit: number | null) => __TAURI_INVOKE<MusicBrainzOverlaySyncLogEntry[]>("list_musicbrainz_overlay_sync_log", { limit }),
+	saveSettings: (settings: AppSettings_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("save_settings", { settings }),
+	installAppUpdate: (version: string) => __TAURI_INVOKE<null>("install_app_update", { version }),
+	exportMusicbrainzArtistReleases: (input: MusicBrainzArtistExportRequest) => __TAURI_INVOKE<ExportResult>("export_musicbrainz_artist_releases", { input }),
+	getImportPreview: (sourcePath: string) => __TAURI_INVOKE<{
+	sessionId: number,
+	sourcePath: string,
+	sourceSizeBytes: number,
+	sourceModifiedMs: number,
+	status: string,
+	processedRows: number,
+	processedBytes: number,
+	trackRows: number,
+	albumCount: number,
+	addedTracks: number,
+	changedTracks: number,
+	removedTracks: number,
+	addedAlbums: number,
+	changedAlbums: number,
+	removedAlbums: number,
+	suspiciousAlbumCount: number,
+	suspiciousAlbums: ImportSuspiciousAlbum[],
+	createdAt: string,
+	updatedAt: string,
+	completedAt: string | null,
+	importRunId: number | null,
+	errorMessage: string | null,
+	canResume: boolean,
+	sourceChanged: boolean,
+} | null>("get_import_preview", { sourcePath }),
+	prepareImportPreview: (sourcePath: string) => __TAURI_INVOKE<ImportPreview>("prepare_import_preview", { sourcePath }),
+	cancelImportPreview: () => __TAURI_INVOKE<null>("cancel_import_preview"),
+	applyImportPreview: (sessionId: number) => __TAURI_INVOKE<ImportSummary>("apply_import_preview", { sessionId }),
+	rollbackImportRun: (importRunId: number) => __TAURI_INVOKE<DatabaseRestoreSummary>("rollback_import_run", { importRunId }),
+	importBillboardCharts: (sourcePath: string) => __TAURI_INVOKE<BillboardImportSummary>("import_billboard_charts", { sourcePath }),
+	importBillboardSingles: (sourcePath: string) => __TAURI_INVOKE<BillboardSinglesImportSummary>("import_billboard_singles", { sourcePath }),
+	importVgListaAlbums: (sourcePath: string) => __TAURI_INVOKE<VgListaImportSummary>("import_vg_lista_albums", { sourcePath }),
+	importVgListaSingles: (sourcePath: string) => __TAURI_INVOKE<VgListaImportSummary>("import_vg_lista_singles", { sourcePath }),
+	importOfficialUkAlbums: (sourcePath: string) => __TAURI_INVOKE<OfficialUkImportSummary>("import_official_uk_albums", { sourcePath }),
+	importOfficialUkSingles: (sourcePath: string) => __TAURI_INVOKE<OfficialUkImportSummary>("import_official_uk_singles", { sourcePath }),
+	importTiISkuddetSingles: (sourcePath: string) => __TAURI_INVOKE<TiISkuddetImportSummary>("import_ti_i_skuddet_singles", { sourcePath }),
+	importNorsktoppenSingles: (sourcePath: string) => __TAURI_INVOKE<NorsktoppenImportSummary>("import_norsktoppen_singles", { sourcePath }),
+	listActivityJobs: () => __TAURI_INVOKE<Job[]>("list_activity_jobs"),
+	controlActivityJob: (id: number, action: string) => __TAURI_INVOKE<Job[]>("control_activity_job", { id, action }),
 	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse>("search_library", { request }),
 	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse>("list_artists", { request }),
 	getArtistTrackHighlights: (artistId: string) => __TAURI_INVOKE<ArtistTrackHighlights>("get_artist_track_highlights", { artistId }),
@@ -506,6 +570,69 @@ export type AlbumReview = {
 	message: string,
 };
 
+export type AppSettings = AppSettings_Serialize | AppSettings_Deserialize;
+
+export type AppSettings_Deserialize = {
+	backupRetention?: number,
+	darkMode?: boolean,
+	countryFlagDisplay?: string,
+	leftSidebarDefault?: string,
+	rightSidebarDefault?: string,
+	importSourcePath?: string,
+	coverSourcePath?: string,
+	billboardSourcePath?: string,
+	billboardSinglesSourcePath?: string,
+	vgListaAlbumSourcePath?: string,
+	vgListaSinglesSourcePath?: string,
+	officialUkAlbumSourcePath?: string,
+	officialUkSinglesSourcePath?: string,
+	tiISkuddetSourcePath?: string,
+	norsktoppenSourcePath?: string,
+	deemixDownloadPath?: string,
+	deemixDownloadQuality?: string,
+	deemixDownloadFallback?: boolean,
+	deemixDownloadOrganization?: string,
+	musicDoctorDatabasePath?: string,
+	musicDoctorAutoSync?: boolean,
+	updateAutoCheckMinutes?: number,
+	updatedAt?: string | null,
+} & {
+	musicBrainzCachePath?: string,
+} & {
+	musicBrainzOverlaySyncPath?: string,
+} & {
+	musicBrainzOverlayAutoSyncMinutes?: number,
+};
+
+export type AppSettings_Serialize = {
+	backupRetention: number,
+	darkMode: boolean,
+	countryFlagDisplay: string,
+	leftSidebarDefault: string,
+	rightSidebarDefault: string,
+	importSourcePath: string,
+	coverSourcePath: string,
+	billboardSourcePath: string,
+	billboardSinglesSourcePath: string,
+	vgListaAlbumSourcePath: string,
+	vgListaSinglesSourcePath: string,
+	officialUkAlbumSourcePath: string,
+	officialUkSinglesSourcePath: string,
+	tiISkuddetSourcePath: string,
+	norsktoppenSourcePath: string,
+	deemixDownloadPath: string,
+	deemixDownloadQuality: string,
+	deemixDownloadFallback: boolean,
+	deemixDownloadOrganization: string,
+	musicBrainzCachePath: string,
+	musicBrainzOverlaySyncPath: string,
+	musicBrainzOverlayAutoSyncMinutes: number,
+	musicDoctorDatabasePath: string,
+	musicDoctorAutoSync: boolean,
+	updateAutoCheckMinutes: number,
+	updatedAt: string | null,
+};
+
 export type ArtistBiography = {
 	artistId: string,
 	artistName: string,
@@ -667,6 +794,28 @@ export type Assessment = {
 	builder: Score,
 	breather: Score,
 	closer: Score,
+};
+
+export type BillboardImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedAlbums: number,
+	datedAlbums: number,
+	durationMs: number,
+};
+
+export type BillboardSinglesImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedTracks: number,
+	datedTracks: number,
+	exactDates: number,
+	qualifiedDates: number,
+	missingDates: number,
+	invalidDates: number,
+	durationMs: number,
 };
 
 export type BrowseFilters = {
@@ -943,6 +1092,29 @@ export type CountryCatalogStats = {
 	countryName: string,
 	artistCount: number,
 	albumCount: number,
+};
+
+export type DatabaseBackup = {
+	id: number | null,
+	createdAt: string,
+	operation: string,
+	sourcePath: string | null,
+	sourceSizeBytes: number,
+	backupPath: string,
+	fileSizeBytes: number,
+	trackRows: number | null,
+	albumCount: number | null,
+	schemaVersion: number | null,
+	exists: boolean,
+	canRestore: boolean,
+};
+
+export type DatabaseRestoreSummary = {
+	restoredBackup: DatabaseBackup,
+	preRestoreBackupPath: string | null,
+	trackCount: number,
+	albumCount: number,
+	schemaVersion: number,
 };
 
 export type DecadeProgressStats = {
@@ -1695,6 +1867,33 @@ export type GenreTimelineYearCount = {
 	albumCount: number,
 };
 
+export type ImportPreview = {
+	sessionId: number,
+	sourcePath: string,
+	sourceSizeBytes: number,
+	sourceModifiedMs: number,
+	status: string,
+	processedRows: number,
+	processedBytes: number,
+	trackRows: number,
+	albumCount: number,
+	addedTracks: number,
+	changedTracks: number,
+	removedTracks: number,
+	addedAlbums: number,
+	changedAlbums: number,
+	removedAlbums: number,
+	suspiciousAlbumCount: number,
+	suspiciousAlbums: ImportSuspiciousAlbum[],
+	createdAt: string,
+	updatedAt: string,
+	completedAt: string | null,
+	importRunId: number | null,
+	errorMessage: string | null,
+	canResume: boolean,
+	sourceChanged: boolean,
+};
+
 export type ImportRun = {
 	id: number,
 	sourcePath: string,
@@ -1714,6 +1913,42 @@ export type ImportRun = {
 	changedAlbums: number,
 	removedAlbums: number,
 	ratingEventsCount: number,
+};
+
+export type ImportSummary = {
+	importRun: ImportRun,
+	trackRows: number,
+	albumCount: number,
+	durationMs: number,
+	backupPath: string | null,
+};
+
+export type ImportSuspiciousAlbum = {
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	year: number | null,
+	reason: string,
+	previousTrackCount: number | null,
+	currentTrackCount: number | null,
+};
+
+export type Job = {
+	id: number,
+	kind: string,
+	label: string,
+	state: string,
+	progress: number | null,
+	completed: number,
+	total: number,
+	etaSeconds: number | null,
+	message: string,
+	error: string | null,
+	createdAt: string,
+	updatedAt: string,
+	resumable: boolean,
+	canCancel: boolean,
+	canRetry: boolean,
 };
 
 export type LastFmAlbumPopularity = {
@@ -2078,6 +2313,16 @@ export type LibraryShapeStats = {
 	peakYearAlbums: number,
 };
 
+export type LibraryStatus = {
+	dbPath: string,
+	hasDatabase: boolean,
+	trackCount: number,
+	albumCount: number,
+	coverCount: number,
+	importRunCount: number,
+	lastImport: ImportRun | null,
+};
+
 export type LibraryUpdate = {
 	id: number,
 	importRunId: number | null,
@@ -2194,6 +2439,322 @@ export type MixtapeDraft = {
 	assessments: Assessment[],
 	scoredBriefs: [string, string] | null,
 	sides: [Slot[], Slot[]],
+};
+
+export type MusicBrainzArtistCandidateRow = {
+	name: string,
+	mbid: string,
+	matchMethod: string,
+	score: number | null,
+	cachedNameCount: number,
+	totalReleaseGroupCount: number,
+	suspectMapping: boolean,
+};
+
+export type MusicBrainzArtistDiscographyRequest = {
+	artistKey?: string,
+	artistName?: string,
+};
+
+export type MusicBrainzArtistDiscographyResponse = {
+	artistKey: string,
+	artistName: string,
+	state: string,
+	message: string,
+	cachePath: string,
+	resolvedPath: string,
+	musicbrainzMbid: string | null,
+	matchedCacheName: string | null,
+	matchMethod: string,
+	artistLinkState: string,
+	artistLinkIgnored: boolean,
+	suspectMapping: boolean,
+	cachedNameCount: number,
+	totalReleaseGroupCount: number,
+	pureAlbumCount: number,
+	ownedCount: number,
+	missingCount: number,
+	excludedCount: number,
+	localAlbumCount: number,
+	completion: number | null,
+	releaseGroupSource: string,
+	releaseGroupUpdatedAt: string | null,
+	releases: MusicBrainzArtistReleaseRow[],
+	candidates: MusicBrainzArtistCandidateRow[],
+};
+
+export type MusicBrainzArtistExportRequest = {
+	artistKey?: string,
+	artistName?: string,
+	musicbrainzMbid?: string | null,
+	matchedCacheName?: string | null,
+	matchMethod?: string,
+	artistLinkState?: string,
+	artistLinkIgnored?: boolean,
+	rows?: MusicBrainzArtistExportRow[],
+	format?: string,
+};
+
+export type MusicBrainzArtistExportRow = {
+	releaseMbid?: string,
+	title?: string,
+	year: number | null,
+	status?: string,
+	localAlbumTitle?: string | null,
+	localYear: number | null,
+	matchMethod?: string,
+	confidence?: number | null,
+};
+
+export type MusicBrainzArtistInfoImportRequest = {
+	artistKeys?: string[],
+	refetch?: boolean,
+	limit?: number | null,
+};
+
+export type MusicBrainzArtistInfoImportRun = {
+	id: number,
+	scope: string,
+	status: string,
+	totalArtists: number,
+	eligibleCount: number,
+	fetchedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	failedCount: number,
+	lastProcessedArtistKey: string | null,
+	startedAt: string,
+	completedAt: string | null,
+	errorSummary: string | null,
+};
+
+export type MusicBrainzArtistInfoPreview = {
+	totalAlbumArtists: number,
+	eligibleCount: number,
+	alreadyImportedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	estimatedSeconds: number,
+	rows: MusicBrainzArtistInfoPreviewRow[],
+};
+
+export type MusicBrainzArtistInfoPreviewRow = {
+	localArtistKey: string,
+	displayArtist: string,
+	albumCount: number,
+	musicbrainzMbid: string | null,
+	matchedName: string | null,
+	matchMethod: string,
+	artistLinkState: string,
+	suspectMapping: boolean,
+	existingSortName: string | null,
+	existingArtistType: string | null,
+	existingGender: string | null,
+	existingBeginDate: string | null,
+	existingBeginYear: number | null,
+	existingEndDate: string | null,
+	existingEndYear: number | null,
+	existingEnded: boolean | null,
+	existingBeginAreaName: string | null,
+	existingEndAreaName: string | null,
+	existingReviewState: string | null,
+	status: string,
+	skippedReason: string | null,
+};
+
+export type MusicBrainzArtistInfoStatus = {
+	totalAlbumArtists: number,
+	importedInfos: number,
+	personArtists: number,
+	groupArtists: number,
+	genderedArtists: number,
+	bornArtists: number,
+	diedArtists: number,
+	foundedArtists: number,
+	dissolvedArtists: number,
+	missingInfos: number,
+	lastRun: MusicBrainzArtistInfoImportRun | null,
+};
+
+export type MusicBrainzArtistLinkRequest = {
+	artistKey?: string,
+	artistName?: string,
+	action?: string,
+	musicbrainzMbid?: string | null,
+	canonicalName?: string | null,
+};
+
+export type MusicBrainzArtistOriginCountryRequest = {
+	artistKey?: string,
+	artistName?: string,
+	musicbrainzMbid?: string | null,
+	countryCode?: string,
+	countryName?: string | null,
+};
+
+export type MusicBrainzArtistOriginCountryUpdate = {
+	artistKey: string,
+	artistName: string,
+	musicbrainzMbid: string | null,
+	originCountryCode: string | null,
+	originCountryName: string | null,
+	originCountryRawArea: string | null,
+	originCountryReviewState: string | null,
+};
+
+export type MusicBrainzArtistOriginImportRun = {
+	id: number,
+	scope: string,
+	status: string,
+	totalArtists: number,
+	eligibleCount: number,
+	fetchedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	failedCount: number,
+	lastProcessedArtistKey: string | null,
+	startedAt: string,
+	completedAt: string | null,
+	errorSummary: string | null,
+};
+
+export type MusicBrainzArtistRefreshRequest = {
+	artistKey?: string,
+	artistName?: string,
+	musicbrainzMbid?: string | null,
+};
+
+export type MusicBrainzArtistRefreshResult = {
+	artistKey: string,
+	artistName: string,
+	musicbrainzMbid: string,
+	fetchedCount: number,
+	storedCount: number,
+	fetchedAt: string,
+	origin: MusicBrainzArtistOriginCountryUpdate | null,
+};
+
+export type MusicBrainzArtistReleaseRow = {
+	releaseMbid: string,
+	title: string,
+	year: number | null,
+	trackCount: number | null,
+	status: string,
+	localAlbumId: string | null,
+	localAlbumTitle: string | null,
+	localYear: number | null,
+	matchMethod: string,
+	confidence: number | null,
+	decision: string | null,
+};
+
+export type MusicBrainzCacheStatus = {
+	cachePath: string,
+	resolvedPath: string,
+	exists: boolean,
+	valid: boolean,
+	state: string,
+	message: string,
+	fileSizeBytes: number,
+	artistCount: number,
+	distinctMbidCount: number,
+	duplicateMbidCount: number,
+	suspiciousMappingCount: number,
+	releaseGroupCount: number,
+	officialReleaseGroupCount: number,
+	pureAlbumReleaseGroupCount: number,
+	releaseYearMin: number | null,
+	releaseYearMax: number | null,
+	cacheDateMin: string | null,
+	cacheDateMax: string | null,
+	warningExamples: MusicBrainzCacheWarningExample[],
+};
+
+export type MusicBrainzCacheWarningExample = {
+	mbid: string,
+	cachedNameCount: number,
+	releaseGroupCount: number,
+	cachedNames: string[],
+};
+
+export type MusicBrainzOriginCountryImportRequest = {
+	artistKeys?: string[],
+	refetch?: boolean,
+	limit?: number | null,
+};
+
+export type MusicBrainzOriginCountryOption = {
+	code: string,
+	name: string,
+	artistCount: number,
+};
+
+export type MusicBrainzOriginCountryPreview = {
+	totalAlbumArtists: number,
+	eligibleCount: number,
+	alreadyImportedCount: number,
+	skippedCount: number,
+	unresolvedCount: number,
+	estimatedSeconds: number,
+	rows: MusicBrainzOriginCountryPreviewRow[],
+};
+
+export type MusicBrainzOriginCountryPreviewRow = {
+	localArtistKey: string,
+	displayArtist: string,
+	albumCount: number,
+	musicbrainzMbid: string | null,
+	matchedName: string | null,
+	matchMethod: string,
+	artistLinkState: string,
+	suspectMapping: boolean,
+	existingCountryCode: string | null,
+	existingCountryName: string | null,
+	existingReviewState: string | null,
+	status: string,
+	skippedReason: string | null,
+};
+
+export type MusicBrainzOriginCountryStatus = {
+	totalAlbumArtists: number,
+	importedOrigins: number,
+	countryCount: number,
+	manualOrigins: number,
+	unresolvedOrigins: number,
+	missingOrigins: number,
+	lastRun: MusicBrainzArtistOriginImportRun | null,
+	countries: MusicBrainzOriginCountryOption[],
+};
+
+export type MusicBrainzOverlaySyncLogEntry = {
+	id: number,
+	syncedAt: string,
+	syncPath: string,
+	importedCount: number,
+	exportedCount: number,
+	changedCount: number,
+	summary: string,
+	artistLinksImported: number,
+	artistLinksExported: number,
+	artistUnlinksImported: number,
+	artistUnlinksExported: number,
+	releaseDecisionsImported: number,
+	releaseDecisionsExported: number,
+	releaseDecisionClearsImported: number,
+	releaseDecisionClearsExported: number,
+	releaseStatusesImported: number,
+	releaseStatusesExported: number,
+	releaseGroupsImported: number,
+	releaseGroupsExported: number,
+};
+
+export type MusicBrainzReleaseDecisionRequest = {
+	artistKey?: string,
+	artistName?: string,
+	musicbrainzMbid?: string | null,
+	releaseMbid?: string,
+	decision?: string,
+	localAlbumId?: string | null,
 };
 
 export type MusicDoctorBitrateStat = {
@@ -2448,6 +3009,25 @@ export type NewLibraryArtist = {
 	addedAt: string,
 };
 
+export type NorsktoppenImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedTracks: number,
+	datedTracks: number,
+	skippedRows: number,
+	durationMs: number,
+};
+
+export type OfficialUkImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedItems: number,
+	datedItems: number,
+	durationMs: number,
+};
+
 export type OutlierStat = {
 	id: string,
 	label: string,
@@ -2462,6 +3042,28 @@ export type PatchRepairSnapshot = {
 	requestedAtMs: number,
 	repairedAtMs?: number | null,
 	warnings?: string[],
+};
+
+export type PerformanceProbeOperation = {
+	id: string,
+	label: string,
+	category: string,
+	status: string,
+	durationMs: number,
+	totalCount: number | null,
+	rowCount: number | null,
+	detail: string,
+	errorMessage: string | null,
+};
+
+export type PerformanceProbeResponse = {
+	generatedAt: string,
+	databasePath: string,
+	trackCount: number,
+	albumCount: number,
+	totalDurationMs: number,
+	slowestOperationMs: number,
+	operations: PerformanceProbeOperation[],
 };
 
 export type PlaylistAutomationStatus = {
@@ -2928,6 +3530,16 @@ export type TextFilter = {
 	value?: string,
 };
 
+export type TiISkuddetImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedTracks: number,
+	datedTracks: number,
+	skippedRows: number,
+	durationMs: number,
+};
+
 export type TrackDebutTimelineResponse = {
 	years: TrackDebutTimelineYear[],
 	selectedYear: number | null,
@@ -3140,6 +3752,15 @@ export type UsenetTransferQueue = {
 export type UsenetTransferStatus = "queued" | "fetchingNzb" | "downloading" | "verifying" | "repairing" | "extracting" | "completed" | "failed";
 
 export type VerificationStatus = "pending" | "verified" | "missing" | "sizeMismatch";
+
+export type VgListaImportSummary = {
+	sourcePath: string,
+	filesScanned: number,
+	chartEntries: number,
+	matchedItems: number,
+	datedItems: number,
+	durationMs: number,
+};
 
 export type Weights = {
 	atmosphere: number | null,

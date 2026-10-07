@@ -134,6 +134,7 @@ use tauri_plugin_window_state::StateFlags;
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_library_status(app: AppHandle) -> Result<LibraryStatus, String> {
     tauri::async_runtime::spawn_blocking(move || db::library_status(&app))
         .await
@@ -143,6 +144,7 @@ async fn get_library_status(app: AppHandle) -> Result<LibraryStatus, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn run_performance_probe(app: AppHandle) -> Result<PerformanceProbeResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::performance_probe_for_app(&app))
         .await
@@ -152,6 +154,7 @@ async fn run_performance_probe(app: AppHandle) -> Result<PerformanceProbeRespons
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<ImportRun>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         db::list_import_runs_for_app(&app, limit.unwrap_or(8))
@@ -163,6 +166,7 @@ async fn list_import_runs(app: AppHandle, limit: Option<u32>) -> Result<Vec<Impo
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_catalog_revision(app: AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || db::catalog_revision_for_app(&app))
         .await
@@ -179,6 +183,7 @@ fn acknowledge_catalog_revision(app: AppHandle, revision: String) {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_database_backups(app: AppHandle) -> Result<Vec<DatabaseBackup>, String> {
     tauri::async_runtime::spawn_blocking(move || db::list_database_backups_for_app(&app))
         .await
@@ -188,6 +193,7 @@ async fn list_database_backups(app: AppHandle) -> Result<Vec<DatabaseBackup>, St
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn restore_database_backup(
     app: AppHandle,
     backup_path: String,
@@ -204,6 +210,7 @@ async fn restore_database_backup(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     tauri::async_runtime::spawn_blocking(move || db::settings_for_app(&app))
         .await
@@ -800,6 +807,7 @@ async fn save_external_discovery(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn delete_saved_external_discovery(app: AppHandle, id: i64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || external_discovery::delete_saved_for_app(&app, id))
         .await
@@ -1062,6 +1070,7 @@ async fn export_playlist(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_musicbrainz_cache_status(
     app: AppHandle,
     cache_path: Option<String>,
@@ -1106,6 +1115,7 @@ async fn refresh_wish_list_artist_album_summary(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_musicbrainz_origin_country_status(
     app: AppHandle,
 ) -> Result<MusicBrainzOriginCountryStatus, String> {
@@ -1117,6 +1127,7 @@ async fn get_musicbrainz_origin_country_status(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn preview_musicbrainz_origin_country_import(
     app: AppHandle,
     request: MusicBrainzOriginCountryImportRequest,
@@ -1140,12 +1151,14 @@ async fn import_musicbrainz_origin_countries(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn cancel_musicbrainz_origin_country_import(app: AppHandle) -> Result<(), String> {
     jobs::cancel_kind(&app,"originCountries").map_err(|e|e.to_string())
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_musicbrainz_artist_info_status(
     app: AppHandle,
 ) -> Result<MusicBrainzArtistInfoStatus, String> {
@@ -1157,6 +1170,7 @@ async fn get_musicbrainz_artist_info_status(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn preview_musicbrainz_artist_info_import(
     app: AppHandle,
     request: MusicBrainzArtistInfoImportRequest,
@@ -1180,12 +1194,14 @@ async fn import_musicbrainz_artist_infos(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn cancel_musicbrainz_artist_info_import(app: AppHandle) -> Result<(), String> {
     jobs::cancel_kind(&app,"artistInfo").map_err(|e|e.to_string())
 }
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_musicbrainz_artist_discography(
     app: AppHandle,
     request: MusicBrainzArtistDiscographyRequest,
@@ -1200,6 +1216,7 @@ async fn get_musicbrainz_artist_discography(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_musicbrainz_release_decision(
     app: AppHandle,
     request: MusicBrainzReleaseDecisionRequest,
@@ -1214,6 +1231,7 @@ async fn set_musicbrainz_release_decision(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_musicbrainz_artist_link(
     app: AppHandle,
     request: MusicBrainzArtistLinkRequest,
@@ -1228,6 +1246,7 @@ async fn set_musicbrainz_artist_link(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn refresh_musicbrainz_artist_releases(
     app: AppHandle,
     request: MusicBrainzArtistRefreshRequest,
@@ -1242,6 +1261,7 @@ async fn refresh_musicbrainz_artist_releases(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn set_musicbrainz_artist_origin_country(
     app: AppHandle,
     request: MusicBrainzArtistOriginCountryRequest,
@@ -1265,6 +1285,7 @@ async fn sync_musicbrainz_overlay(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_musicbrainz_overlay_sync_log(
     app: AppHandle,
     limit: Option<u32>,
@@ -1277,6 +1298,7 @@ async fn list_musicbrainz_overlay_sync_log(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     let saved = tauri::async_runtime::spawn_blocking({
         let app = app.clone();
@@ -1306,6 +1328,7 @@ async fn check_app_update(app: AppHandle) -> Result<updater::UpdateSnapshot, Str
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn install_app_update(app: AppHandle, version: String) -> Result<(), String> {
     updater::install(&app, version).await
 }
@@ -1330,6 +1353,7 @@ async fn sync_music_doctor(app: AppHandle) -> Result<serde_json::Value, String> 
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn export_musicbrainz_artist_releases(
     app: AppHandle,
     input: MusicBrainzArtistExportRequest,
@@ -1649,6 +1673,7 @@ async fn get_discovery_shelf_explorer(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_import_preview(
     app: AppHandle,
     source_path: String,
@@ -1661,6 +1686,7 @@ async fn get_import_preview(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn prepare_import_preview(
     app: AppHandle,
     source_path: String,
@@ -1673,6 +1699,7 @@ async fn prepare_import_preview(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn cancel_import_preview() -> Result<(), String> {
     importer::cancel_import_preview();
     Ok(())
@@ -1680,6 +1707,7 @@ async fn cancel_import_preview() -> Result<(), String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportSummary, String> {
     tauri::async_runtime::spawn_blocking(move || importer::apply_import_preview(app, session_id))
         .await
@@ -1689,6 +1717,7 @@ async fn apply_import_preview(app: AppHandle, session_id: i64) -> Result<ImportS
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn rollback_import_run(
     app: AppHandle,
     import_run_id: i64,
@@ -1714,6 +1743,7 @@ async fn import_album_covers(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_billboard_charts(
     app: AppHandle,
     source_path: String,
@@ -1743,6 +1773,7 @@ async fn enrich_library_completion_cover(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_billboard_singles(
     app: AppHandle,
     source_path: String,
@@ -1862,6 +1893,7 @@ async fn get_published_chart_entries(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_vg_lista_albums(
     app: AppHandle,
     source_path: String,
@@ -1876,6 +1908,7 @@ async fn import_vg_lista_albums(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_vg_lista_singles(
     app: AppHandle,
     source_path: String,
@@ -1890,6 +1923,7 @@ async fn import_vg_lista_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_official_uk_albums(
     app: AppHandle,
     source_path: String,
@@ -1904,6 +1938,7 @@ async fn import_official_uk_albums(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_official_uk_singles(
     app: AppHandle,
     source_path: String,
@@ -1918,6 +1953,7 @@ async fn import_official_uk_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_ti_i_skuddet_singles(
     app: AppHandle,
     source_path: String,
@@ -1932,6 +1968,7 @@ async fn import_ti_i_skuddet_singles(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn import_norsktoppen_singles(
     app: AppHandle,
     source_path: String,
@@ -2234,51 +2271,12 @@ pub fn run() {
             add_wish_list_musicbrainz_candidate,
             search_wish_list_musicbrainz,
             refresh_lastfm_artist_images,
-            list_activity_jobs,
-            control_activity_job,
-            get_library_status,
-            run_performance_probe,
-            list_import_runs,
-            get_catalog_revision,
-            acknowledge_catalog_revision,
-            list_database_backups,
-            restore_database_backup,
-            get_settings,
-            delete_saved_external_discovery,
-            get_musicbrainz_cache_status,
-            get_musicbrainz_origin_country_status,
-            preview_musicbrainz_origin_country_import,
+            acknowledge_catalog_revision,
             import_musicbrainz_origin_countries,
-            cancel_musicbrainz_origin_country_import,
-            get_musicbrainz_artist_info_status,
-            preview_musicbrainz_artist_info_import,
             import_musicbrainz_artist_infos,
-            cancel_musicbrainz_artist_info_import,
-            get_musicbrainz_artist_discography,
-            set_musicbrainz_artist_link,
-            set_musicbrainz_release_decision,
-            refresh_musicbrainz_artist_releases,
-            set_musicbrainz_artist_origin_country,
-            sync_musicbrainz_overlay,
-            list_musicbrainz_overlay_sync_log,
-            export_musicbrainz_artist_releases,
-            save_settings,
-            install_app_update,
+            sync_musicbrainz_overlay,
             sync_music_doctor,
-            get_import_preview,
-            prepare_import_preview,
-            cancel_import_preview,
-            apply_import_preview,
-            rollback_import_run,
-            import_album_covers,
-            import_billboard_charts,
-            import_billboard_singles,
-            import_vg_lista_albums,
-            import_vg_lista_singles,
-            import_official_uk_albums,
-            import_official_uk_singles,
-            import_ti_i_skuddet_singles,
-            import_norsktoppen_singles,
+            import_album_covers,
         ]))
         .build(tauri::generate_context!())
         .expect("failed to build Music Library app")
@@ -2298,12 +2296,14 @@ pub fn run() {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_activity_jobs(app: AppHandle) -> Result<Vec<jobs::Job>, String> {
     tauri::async_runtime::spawn_blocking(move || jobs::list_for_app(&app)).await
         .map_err(|e|e.to_string())?.map_err(|e|e.to_string())
 }
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn control_activity_job(app: AppHandle, id: i64, action: String) -> Result<Vec<jobs::Job>, String> {
     tauri::async_runtime::spawn_blocking(move || jobs::control_for_app(&app,id,&action)).await
         .map_err(|e|e.to_string())?.map_err(|e|e.to_string())
