@@ -23,7 +23,9 @@ const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionCoverEnrichment {
     pub candidate_id: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionCoverEnrichmentState)]
     pub state: String,
+    #[specta(type = Option<crate::wire_enums::LibraryCompletionCoverEnrichmentProvider>)]
     pub provider: Option<String>,
     pub message: String,
     pub has_cover: bool,

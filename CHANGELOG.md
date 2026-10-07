@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.173.0] - 2026-10-07
+
+### Changed
+- Generate the string unions that cross the IPC boundary from Rust. 74 enums in `src-tauri/src/wire_enums.rs` describe the allowed values (browse views, Luna targets and lenses, credential sources, Library and Artist Completion statuses, confidence and verification states, Discovery modes and sources, Music Tool severities, settings choices, and more), and 113 `String` fields in the Rust structs point at them with `#[specta(type = ...)]`. The generated `src/bindings.ts` now types those fields as exact unions instead of `string`.
+- Replace 31 hand-written unions in `src/types.ts` (for example `BrowseView`, `LibraryCompletionConfidence`, `WishListEntity`, and `DiscoverySourceHealthState`) with re-exports of the generated types, so each set of values is defined once, in Rust.
+- Rust behavior is unchanged: the struct fields stay `String`, so request validation and string comparisons work as before. The enums only describe the wire values and are never constructed in Rust.
+
 ## [0.172.0] - 2026-10-07
 
 ### Changed

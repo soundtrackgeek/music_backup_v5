@@ -50,6 +50,7 @@ static RELATED_ALBUMS_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 #[serde(rename_all = "camelCase")]
 pub struct LastFmCredentialStatus {
     pub configured: bool,
+    #[specta(type = crate::wire_enums::DiscogsCredentialStatusSource)]
     pub source: String,
 }
 

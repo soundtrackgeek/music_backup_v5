@@ -17,6 +17,7 @@ const MAX_SEARCH_LENGTH: usize = 300;
 #[serde(rename_all = "camelCase")]
 pub struct DeemixCredentialStatus {
     pub configured: bool,
+    #[specta(type = crate::wire_enums::DeemixCredentialSource)]
     pub source: String,
 }
 
@@ -54,6 +55,7 @@ pub struct DeemixAlbumMatch {
     pub explicit: bool,
     pub deezer_url: String,
     pub match_score: u8,
+    #[specta(type = crate::wire_enums::DeemixAlbumMatchMatchLevel)]
     pub match_level: String,
     pub downloaded_at: Option<String>,
     pub downloaded_path: Option<String>,

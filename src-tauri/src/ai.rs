@@ -174,6 +174,7 @@ Rules:
 #[serde(rename_all = "camelCase")]
 pub struct AiKeyStatus {
     pub configured: bool,
+    #[specta(type = crate::wire_enums::AiKeySource)]
     pub source: String,
     pub model: String,
 }
@@ -182,8 +183,10 @@ pub struct AiKeyStatus {
 #[serde(rename_all = "camelCase")]
 pub struct AiCompileRequest {
     pub prompt: String,
+    #[specta(type = crate::wire_enums::AiQueryTarget)]
     pub target: String,
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::BrowseView>)]
     pub current_view: Option<String>,
     #[serde(default)]
     pub follow_up: Option<AiQueryFollowUpContext>,
@@ -212,8 +215,10 @@ fn default_query_intent() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCompiledQuery {
+    #[specta(type = crate::wire_enums::AiQueryTarget)]
     pub target: String,
     #[serde(default = "default_query_intent")]
+    #[specta(type = crate::wire_enums::AiCompiledQueryQueryIntent)]
     pub query_intent: String,
     pub summary: String,
     pub request: BrowseRequest,
@@ -245,6 +250,7 @@ pub struct AiCurrentViewQuestion {
 #[serde(rename_all = "camelCase")]
 pub struct AiCurrentViewAnswer {
     pub answer: String,
+    #[specta(type = crate::wire_enums::BrowseView)]
     pub view: String,
     pub matching_rows: i64,
     pub analysis_count: usize,
@@ -267,6 +273,7 @@ pub struct AiQueryExchange {
 pub struct AiMusicResearchContext {
     pub workspace: String,
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::AiMusicResearchEntity>)]
     pub selected_entity_type: Option<String>,
     #[serde(default)]
     pub selected_entity_id: Option<String>,
@@ -279,6 +286,7 @@ pub struct AiMusicResearchContext {
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiMusicResearchTurn {
+    #[specta(type = crate::wire_enums::AiMusicResearchTurnRole)]
     pub role: String,
     pub content: String,
 }
@@ -327,6 +335,7 @@ pub struct AiMarkdownExportRequest {
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiLibraryAnalysisRequest {
+    #[specta(type = crate::wire_enums::AiLibraryLens)]
     pub lens: String,
     #[serde(default)]
     pub focus: String,
@@ -343,6 +352,7 @@ pub struct AiLibraryFinding {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiLibraryAnalysis {
+    #[specta(type = crate::wire_enums::AiLibraryLens)]
     pub lens: String,
     pub headline: String,
     pub summary: String,
@@ -405,6 +415,7 @@ pub struct AiPlaylist {
     pub name: String,
     pub description: String,
     pub request: BrowseRequest,
+    #[specta(type = crate::wire_enums::AiPlaylistStrategy)]
     pub strategy: String,
     pub target_track_count: u32,
     pub target_minutes: u32,
@@ -484,6 +495,7 @@ pub struct AiExternalDiscoveryRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AiExternalDiscoveryPlan {
     pub prompt: String,
+    #[specta(type = crate::wire_enums::ExternalDiscoveryEntity2)]
     pub entity: String,
     pub count: u32,
     pub year: i32,
@@ -491,6 +503,7 @@ pub struct AiExternalDiscoveryPlan {
     pub year_from: i32,
     #[serde(default)]
     pub year_to: i32,
+    #[specta(type = crate::wire_enums::AiExternalDiscoveryPlanYearMeaning)]
     pub year_meaning: String,
     pub genres: Vec<String>,
     pub countries: Vec<String>,

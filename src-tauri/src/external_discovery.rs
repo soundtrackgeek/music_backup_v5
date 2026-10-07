@@ -21,6 +21,7 @@ const MAX_SAVED_RESPONSE_BYTES: usize = 1_000_000;
 #[serde(rename_all = "camelCase")]
 pub struct ExternalDiscoveryItem {
     pub id: String,
+    #[specta(type = crate::wire_enums::ExternalDiscoveryEntity)]
     pub entity: String,
     pub title: String,
     pub artist: String,
@@ -42,6 +43,7 @@ pub struct ExternalDiscoveryResponse {
     pub summary: String,
     pub plan: AiExternalDiscoveryPlan,
     pub items: Vec<ExternalDiscoveryItem>,
+    #[specta(type = crate::wire_enums::ExternalDiscoveryResponseSource)]
     pub source: String,
     pub fetched_at: String,
     pub catalog_candidate_count: usize,

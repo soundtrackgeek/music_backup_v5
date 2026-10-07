@@ -20,7 +20,9 @@ const RECENT_VERIFICATION_ITEMS: usize = 8;
 #[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistEvidence {
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistEvidenceSource)]
     pub source: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistEvidenceChartKind)]
     pub chart_kind: String,
     pub label: String,
     pub best_rank: i32,
@@ -35,17 +37,22 @@ pub struct LibraryCompletionArtistCandidate {
     pub id: String,
     pub artist: String,
     pub first_chart_year: i32,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistCandidateConfidence)]
     pub confidence: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionStatus)]
     pub status: String,
     pub wish_list_item_id: Option<i64>,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistCandidateVerificationStatus)]
     pub verification_status: String,
     pub verification_message: Option<String>,
     pub verification_checked_at: Option<String>,
+    #[specta(type = Option<crate::wire_enums::LibraryCompletionArtistCandidateMusicbrainzVerificationStatus>)]
     pub musicbrainz_verification_status: Option<String>,
     pub musicbrainz_verification_message: Option<String>,
     pub musicbrainz_id: Option<String>,
     pub musicbrainz_url: Option<String>,
     pub official_album_count: usize,
+    #[specta(type = Option<crate::wire_enums::LibraryCompletionArtistCandidateDiscogsVerificationStatus>)]
     pub discogs_verification_status: Option<String>,
     pub discogs_verification_message: Option<String>,
     pub discogs_master_id: Option<String>,
@@ -70,7 +77,9 @@ pub struct LibraryCompletionArtistResponse {
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct LibraryCompletionArtistRequest {
+    #[specta(type = Option<crate::wire_enums::LibraryCompletionArtistEvidenceSource>)]
     pub source: Option<String>,
+    #[specta(type = Option<crate::wire_enums::LibraryCompletionArtistRequestChartKind>)]
     pub chart_kind: Option<String>,
     pub year_from: Option<i32>,
     pub year_to: Option<i32>,
@@ -88,6 +97,7 @@ pub struct StartLibraryCompletionArtistVerificationRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SetLibraryCompletionArtistVerificationStateRequest {
     pub batch_id: i64,
+    #[specta(type = crate::wire_enums::SetLibraryCompletionArtistVerificationStateRequestState)]
     pub state: String,
 }
 
@@ -103,6 +113,7 @@ pub struct ConfirmLibraryCompletionArtistMatchRequest {
 pub struct SetLibraryCompletionArtistDecisionRequest {
     pub artist_id: String,
     pub artist: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionStatus)]
     pub status: String,
 }
 
@@ -110,6 +121,7 @@ pub struct SetLibraryCompletionArtistDecisionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct LibraryCompletionArtistDecision {
     pub artist_id: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionStatus)]
     pub status: String,
     pub wish_list_item_id: Option<i64>,
     pub missing_album_count: Option<usize>,
@@ -122,7 +134,9 @@ pub struct LibraryCompletionArtistDecision {
 pub struct LibraryCompletionArtistVerificationItemSummary {
     pub artist_id: String,
     pub artist: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistVerificationItemSummaryState)]
     pub state: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistVerificationItemSummaryProvider)]
     pub provider: String,
     pub message: Option<String>,
     pub official_album_count: usize,
@@ -134,6 +148,7 @@ pub struct LibraryCompletionArtistVerificationItemSummary {
 pub struct LibraryCompletionArtistVerificationBatch {
     pub id: i64,
     pub label: String,
+    #[specta(type = crate::wire_enums::LibraryCompletionArtistVerificationBatchState)]
     pub state: String,
     pub total_count: i64,
     pub queued_count: i64,

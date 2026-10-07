@@ -32,6 +32,7 @@ mod thumbnails;
 #[cfg(not(test))]
 mod updater;
 mod updates;
+mod wire_enums;
 mod usenet;
 mod wishlist;
 

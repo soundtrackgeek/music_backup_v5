@@ -79,6 +79,7 @@ pub struct DeemixAlbumDownloadPreflight {
 pub struct DeemixAlbumDownloadProgress {
     pub request_id: String,
     pub album_id: String,
+    #[specta(type = crate::wire_enums::DeemixAlbumDownloadPhase)]
     pub phase: String,
     pub message: String,
     pub current_track: Option<String>,
@@ -94,6 +95,7 @@ pub struct DeemixAlbumDownloadSummary {
     pub artist: String,
     pub album: String,
     pub year: Option<i32>,
+    #[specta(type = crate::wire_enums::DeemixDownloadQuality)]
     pub quality: String,
     pub destination_path: String,
     pub cover_path: Option<String>,

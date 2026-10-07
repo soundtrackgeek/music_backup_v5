@@ -41,6 +41,7 @@ pub struct PerformanceProbeOperation {
     pub id: String,
     pub label: String,
     pub category: String,
+    #[specta(type = crate::wire_enums::PerformanceProbeOperationStatus)]
     pub status: String,
     pub duration_ms: u128,
     pub total_count: Option<i64>,
@@ -156,6 +157,7 @@ pub struct ImportSummary {
 pub struct LibraryUpdateRequest {
     #[serde(default)]
     pub query: String,
+    #[specta(type = Option<crate::wire_enums::LibraryUpdateKind>)]
     pub change_kind: Option<String>,
     pub date_from: Option<String>,
     #[serde(default = "default_library_update_limit")]
@@ -170,6 +172,7 @@ pub struct LibraryUpdate {
     pub id: i64,
     pub import_run_id: Option<i64>,
     pub created_at: String,
+    #[specta(type = crate::wire_enums::LibraryUpdateKind)]
     pub change_kind: String,
     pub category: String,
     pub album_id: String,
@@ -361,10 +364,13 @@ pub struct AppSettings {
     #[serde(default)]
     pub dark_mode: bool,
     #[serde(default = "default_country_flag_display")]
+    #[specta(type = crate::wire_enums::CountryFlagDisplay)]
     pub country_flag_display: String,
     #[serde(default = "default_left_sidebar_default")]
+    #[specta(type = crate::wire_enums::LeftSidebarMode)]
     pub left_sidebar_default: String,
     #[serde(default = "default_right_sidebar_default")]
+    #[specta(type = crate::wire_enums::RightSidebarMode)]
     pub right_sidebar_default: String,
     #[serde(default = "default_import_source_path")]
     pub import_source_path: String,
@@ -389,10 +395,12 @@ pub struct AppSettings {
     #[serde(default = "default_deemix_download_path")]
     pub deemix_download_path: String,
     #[serde(default = "default_deemix_download_quality")]
+    #[specta(type = crate::wire_enums::DeemixDownloadQuality)]
     pub deemix_download_quality: String,
     #[serde(default = "default_deemix_download_fallback")]
     pub deemix_download_fallback: bool,
     #[serde(default = "default_deemix_download_organization")]
+    #[specta(type = crate::wire_enums::DeemixDownloadOrganization)]
     pub deemix_download_organization: String,
     #[serde(
         default = "default_musicbrainz_cache_path",
@@ -724,6 +732,7 @@ pub struct MusicBrainzCacheStatus {
     pub resolved_path: String,
     pub exists: bool,
     pub valid: bool,
+    #[specta(type = crate::wire_enums::MusicBrainzCacheStatusState)]
     pub state: String,
     pub message: String,
     pub file_size_bytes: i64,
@@ -839,6 +848,7 @@ pub struct MusicBrainzArtistReleaseRow {
     pub title: String,
     pub year: Option<i32>,
     pub track_count: Option<i64>,
+    #[specta(type = crate::wire_enums::MusicBrainzArtistReleaseRowStatus)]
     pub status: String,
     pub local_album_id: Option<String>,
     pub local_album_title: Option<String>,
@@ -857,6 +867,7 @@ pub struct MusicBrainzArtistExportRow {
     pub title: String,
     pub year: Option<i32>,
     #[serde(default)]
+    #[specta(type = crate::wire_enums::MusicBrainzArtistReleaseRowStatus)]
     pub status: String,
     #[serde(default)]
     pub local_album_title: Option<String>,
@@ -881,6 +892,7 @@ pub struct MusicBrainzArtistExportRequest {
     #[serde(default)]
     pub match_method: String,
     #[serde(default)]
+    #[specta(type = crate::wire_enums::MusicBrainzArtistExportRequestArtistLinkState)]
     pub artist_link_state: String,
     #[serde(default)]
     pub artist_link_ignored: bool,
@@ -907,6 +919,7 @@ pub struct MusicBrainzArtistCandidateRow {
 pub struct MusicBrainzArtistDiscographyResponse {
     pub artist_key: String,
     pub artist_name: String,
+    #[specta(type = crate::wire_enums::MusicBrainzArtistDiscographyResponseState)]
     pub state: String,
     pub message: String,
     pub cache_path: String,
@@ -914,6 +927,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub musicbrainz_mbid: Option<String>,
     pub matched_cache_name: Option<String>,
     pub match_method: String,
+    #[specta(type = crate::wire_enums::MusicBrainzArtistExportRequestArtistLinkState)]
     pub artist_link_state: String,
     pub artist_link_ignored: bool,
     pub suspect_mapping: bool,
@@ -925,6 +939,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
     pub excluded_count: i64,
     pub local_album_count: i64,
     pub completion: Option<f64>,
+    #[specta(type = crate::wire_enums::MusicBrainzArtistDiscographyResponseReleaseGroupSource)]
     pub release_group_source: String,
     pub release_group_updated_at: Option<String>,
     pub releases: Vec<MusicBrainzArtistReleaseRow>,
@@ -935,6 +950,7 @@ pub struct MusicBrainzArtistDiscographyResponse {
 #[serde(rename_all = "camelCase")]
 pub struct TextFilter {
     #[serde(default = "default_text_operator")]
+    #[specta(type = crate::wire_enums::TextFilterOperator)]
     pub operator: String,
     #[serde(default)]
     pub value: String,
@@ -1110,6 +1126,7 @@ pub struct BrowseSort {
     #[serde(default = "default_sort_field")]
     pub field: String,
     #[serde(default = "default_sort_direction")]
+    #[specta(type = crate::wire_enums::BrowseSortDirection)]
     pub direction: String,
 }
 
@@ -1397,6 +1414,7 @@ pub struct ArtistTimelineRequest {
     #[serde(default = "default_artist_timeline_limit")]
     pub artist_limit: u32,
     #[serde(default = "default_artist_timeline_metric")]
+    #[specta(type = crate::wire_enums::ArtistTimelineMetric)]
     pub metric: String,
 }
 
@@ -1518,6 +1536,7 @@ pub struct DiscoveryDailyEditionSnapshotResponse {
 pub struct DiscoverySourceHealthResponse {
     pub checked_at: String,
     pub edition_date: String,
+    #[specta(type = crate::wire_enums::DiscoverySourceHealthState)]
     pub overall_state: String,
     pub healthy_count: i64,
     pub stale_count: i64,
@@ -1530,6 +1549,7 @@ pub struct DiscoverySourceHealthResponse {
 pub struct DiscoverySourceHealthItem {
     pub id: String,
     pub label: String,
+    #[specta(type = crate::wire_enums::DiscoverySourceHealthState)]
     pub state: String,
     pub coverage_count: i64,
     pub total_count: i64,
@@ -1540,6 +1560,7 @@ pub struct DiscoverySourceHealthItem {
     pub shelves: Vec<String>,
     pub details: Vec<String>,
     pub sparse_reasons: Vec<String>,
+    #[specta(type = crate::wire_enums::DiscoverySourceHealthAction)]
     pub action: String,
     pub action_label: String,
 }
@@ -1547,12 +1568,14 @@ pub struct DiscoverySourceHealthItem {
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerRequest {
+    #[specta(type = crate::wire_enums::DiscoveryShelf)]
     pub shelf: String,
     #[serde(default)]
     pub date: Option<String>,
     #[serde(default)]
     pub anniversary_years: Option<i32>,
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::DiscoveryShelfExplorerRequestEventType>)]
     pub event_type: Option<String>,
     #[serde(default)]
     pub source: Option<String>,
@@ -1583,6 +1606,7 @@ pub struct DiscoveryShelfExplorerRequest {
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerResponse {
+    #[specta(type = crate::wire_enums::DiscoveryShelf)]
     pub shelf: String,
     pub title: String,
     pub evidence_note: String,
@@ -1619,12 +1643,14 @@ pub struct DiscoveryShelfExplorerResponse {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshotRequest {
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::DiscoveryRecommendationMode>)]
     pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshot {
+    #[specta(type = crate::wire_enums::DiscoveryRecommendationMode)]
     pub mode: String,
     pub anchors: Vec<DiscoveryRecommendationAnchor>,
     pub matching_count: i64,
@@ -1637,6 +1663,7 @@ pub struct DiscoveryRecommendationSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshotRequest {
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::DiscoveryCompletionMode>)]
     pub mode: Option<String>,
     #[serde(default)]
     pub year: Option<i32>,
@@ -1649,6 +1676,7 @@ pub struct DiscoveryCompletionSnapshotRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshot {
+    #[specta(type = crate::wire_enums::DiscoveryCompletionMode)]
     pub mode: String,
     pub year: Option<i32>,
     pub decade: Option<i32>,
@@ -1694,6 +1722,7 @@ pub struct DiscoveryDeepCutGenre {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshotRequest {
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::DiscoveryChartSource>)]
     pub source: Option<String>,
     #[serde(default)]
     pub year: Option<i32>,
@@ -1706,6 +1735,7 @@ pub struct DiscoveryChartSnapshotRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshot {
+    #[specta(type = crate::wire_enums::DiscoveryChartSource)]
     pub source: String,
     pub source_label: String,
     pub year: Option<i32>,
@@ -1851,6 +1881,7 @@ pub struct DiscoveryRecommendationStory {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerSeedOption {
+    #[specta(type = crate::wire_enums::DiscoveryMixerSeedKind)]
     pub kind: String,
     pub id: String,
     pub title: String,
@@ -1865,6 +1896,7 @@ pub struct DiscoveryMixerSeedSearchRequest {
     #[serde(default)]
     pub query: Option<String>,
     #[serde(default)]
+    #[specta(type = Option<crate::wire_enums::DiscoveryMixerSeedKind>)]
     pub kind: Option<String>,
     #[serde(default)]
     pub limit: Option<i64>,
@@ -1953,6 +1985,7 @@ pub struct DiscoveryMission {
     pub rating_completeness_max: Option<f64>,
     pub loved_tracks_min: Option<i64>,
     pub sort_field: String,
+    #[specta(type = crate::wire_enums::DiscoveryMissionSortDirection)]
     pub sort_direction: String,
     pub limit: u32,
 }
@@ -2010,7 +2043,9 @@ pub struct MusicToolSummary {
     pub id: String,
     pub label: String,
     pub description: String,
+    #[specta(type = crate::wire_enums::MusicToolSeverity)]
     pub severity: String,
+    #[specta(type = crate::wire_enums::MusicToolScope)]
     pub scope: String,
     pub issue_count: i64,
     pub album_count: i64,
@@ -2055,6 +2090,7 @@ impl Default for MusicToolIssueRequest {
 pub struct MusicToolProgress {
     pub tool_id: String,
     pub request_id: String,
+    #[specta(type = crate::wire_enums::MusicToolProgressStatus)]
     pub status: String,
     pub percent: u8,
     pub message: String,
@@ -2065,7 +2101,9 @@ pub struct MusicToolProgress {
 pub struct MusicToolIssueRow {
     pub id: String,
     pub tool_id: String,
+    #[specta(type = crate::wire_enums::MusicToolSeverity)]
     pub severity: String,
+    #[specta(type = crate::wire_enums::MusicToolScope)]
     pub entity_type: String,
     pub album_id: String,
     pub track_id: Option<i64>,
@@ -2118,12 +2156,14 @@ pub struct MusicToolFieldDiff {
 #[serde(rename_all = "camelCase")]
 pub struct MusicToolFixDiff {
     pub id: String,
+    #[specta(type = crate::wire_enums::MusicToolFixDiffEntityType)]
     pub entity_type: String,
     pub entity_id: String,
     pub album_id: String,
     pub track_id: Option<i64>,
     pub label: String,
     pub context: Option<String>,
+    #[specta(type = crate::wire_enums::MusicToolFixConfidence)]
     pub confidence: String,
     pub source_warning: String,
     pub changes: Vec<MusicToolFieldDiff>,
@@ -2136,6 +2176,7 @@ pub struct MusicToolFixSummary {
     pub tool_id: String,
     pub action: String,
     pub applied: bool,
+    #[specta(type = crate::wire_enums::MusicToolFixConfidence)]
     pub confidence: String,
     pub source_warning: String,
     pub requested_count: usize,
@@ -2157,7 +2198,9 @@ pub struct MusicToolFixHistoryEntry {
     pub tool_id: String,
     pub tool_label: String,
     pub action: String,
+    #[specta(type = crate::wire_enums::MusicToolFixHistoryEntryStatus)]
     pub status: String,
+    #[specta(type = crate::wire_enums::MusicToolFixConfidence)]
     pub confidence: String,
     pub requested_count: usize,
     pub fixable_count: usize,
@@ -2189,6 +2232,7 @@ pub struct MusicToolUndoSummary {
 #[serde(rename_all = "camelCase")]
 pub struct BrowseRequest {
     #[serde(default = "default_browse_view")]
+    #[specta(type = crate::wire_enums::BrowseView)]
     pub view: String,
     #[serde(default)]
     pub search_text: String,
@@ -2305,6 +2349,7 @@ pub struct BrowseRow {
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseResponse {
+    #[specta(type = crate::wire_enums::BrowseView)]
     pub view: String,
     pub rows: Vec<BrowseRow>,
     pub total: i64,
@@ -2398,6 +2443,7 @@ pub struct TrackDebutTimelineResponse {
 pub struct SavedSearch {
     pub id: i64,
     pub name: String,
+    #[specta(type = crate::wire_enums::BrowseView)]
     pub view: String,
     pub request: BrowseRequest,
     pub created_at: String,
@@ -2428,10 +2474,12 @@ pub struct ChartConfig {
     pub rating_completeness_max: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rating_completeness_threshold: Option<f64>,
+    #[specta(type = crate::wire_enums::DiscoveryMissionSortDirection)]
     pub sort_direction: String,
     pub result_limit: u32,
     pub visible_columns: Vec<String>,
     pub export_columns: Vec<String>,
+    #[specta(type = crate::wire_enums::ChartViewMode)]
     pub view_mode: String,
     #[serde(default = "default_chart_grid_cover_size")]
     pub grid_cover_size: u32,
@@ -2796,6 +2844,7 @@ pub struct MusicMapPoint {
     pub name: String,
     pub country_code: Option<String>,
     pub country_name: Option<String>,
+    #[specta(type = crate::wire_enums::MusicMapPointPrecision)]
     pub precision: String,
     pub latitude: f64,
     pub longitude: f64,

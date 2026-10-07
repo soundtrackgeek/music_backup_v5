@@ -22,6 +22,7 @@ const MUSICBRAINZ_SEARCH_LIMIT: usize = 8;
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AddWishListItemRequest {
+    #[specta(type = crate::wire_enums::WishListEntity)]
     pub entity: String,
     pub title: String,
     #[serde(default)]
@@ -37,6 +38,7 @@ pub struct AddWishListItemRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WishListItem {
     pub id: i64,
+    #[specta(type = crate::wire_enums::WishListEntity2)]
     pub entity: String,
     pub title: String,
     pub artist: String,
@@ -80,6 +82,7 @@ pub struct WishListResponse {
 #[derive(Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzSearchRequest {
+    #[specta(type = crate::wire_enums::WishListEntity)]
     pub entity: String,
     pub query: String,
     #[serde(default)]
@@ -91,6 +94,7 @@ pub struct WishListMusicBrainzSearchRequest {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzCandidate {
+    #[specta(type = crate::wire_enums::WishListEntity)]
     pub entity: String,
     pub title: String,
     pub artist: String,
@@ -105,6 +109,7 @@ pub struct WishListMusicBrainzCandidate {
 #[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WishListMusicBrainzSearchResponse {
+    #[specta(type = crate::wire_enums::WishListEntity)]
     pub entity: String,
     pub query: String,
     pub candidates: Vec<WishListMusicBrainzCandidate>,

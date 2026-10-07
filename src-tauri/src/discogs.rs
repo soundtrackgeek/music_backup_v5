@@ -14,6 +14,7 @@ const MAX_CREDENTIAL_LENGTH: usize = 256;
 #[serde(rename_all = "camelCase")]
 pub struct DiscogsCredentialStatus {
     pub configured: bool,
+    #[specta(type = crate::wire_enums::DiscogsCredentialStatusSource)]
     pub source: String,
 }
 

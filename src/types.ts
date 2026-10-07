@@ -1,3 +1,71 @@
+import type {
+  AiKeySource,
+  AiLibraryLens,
+  AiMusicResearchEntity,
+  AiPlaylistStrategy,
+  AiQueryTarget,
+  ArtistTimelineMetric,
+  BrowseView,
+  ChartViewMode,
+  CountryFlagDisplay,
+  DeemixCredentialSource,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
+  DiscoveryChartSource,
+  DiscoveryCompletionMode,
+  DiscoveryMixerSeedKind,
+  DiscoveryRecommendationMode,
+  DiscoveryShelf,
+  DiscoverySourceHealthAction,
+  DiscoverySourceHealthState,
+  ExternalDiscoveryEntity,
+  LeftSidebarMode,
+  LibraryCompletionConfidence,
+  LibraryCompletionStatus,
+  LibraryUpdateKind,
+  MusicToolFixConfidence,
+  MusicToolScope,
+  MusicToolSeverity,
+  RightSidebarMode,
+  TextFilterOperator,
+  UsenetTransferStatus,
+  WishListEntity,
+} from "./bindings";
+
+export type {
+  AiKeySource,
+  AiLibraryLens,
+  AiMusicResearchEntity,
+  AiPlaylistStrategy,
+  AiQueryTarget,
+  ArtistTimelineMetric,
+  BrowseView,
+  ChartViewMode,
+  CountryFlagDisplay,
+  DeemixCredentialSource,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
+  DiscoveryChartSource,
+  DiscoveryCompletionMode,
+  DiscoveryMixerSeedKind,
+  DiscoveryRecommendationMode,
+  DiscoveryShelf,
+  DiscoverySourceHealthAction,
+  DiscoverySourceHealthState,
+  ExternalDiscoveryEntity,
+  LeftSidebarMode,
+  LibraryCompletionConfidence,
+  LibraryCompletionStatus,
+  LibraryUpdateKind,
+  MusicToolFixConfidence,
+  MusicToolScope,
+  MusicToolSeverity,
+  RightSidebarMode,
+  TextFilterOperator,
+  UsenetTransferStatus,
+  WishListEntity,
+};
+
 export type ImportRun = {
   id: number;
   sourcePath: string;
@@ -18,8 +86,6 @@ export type ImportRun = {
   removedAlbums: number;
   ratingEventsCount: number;
 };
-
-export type LibraryUpdateKind = "new" | "changed" | "removed";
 
 export type LibraryUpdateRequest = {
   query: string;
@@ -291,18 +357,6 @@ export type NorsktoppenImportSummary = {
   skippedRows: number;
   durationMs: number;
 };
-
-export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
-
-export type RightSidebarMode = "expanded" | "hidden";
-
-export type CountryFlagDisplay = "flagAndName" | "name" | "flag";
-
-export type DeemixDownloadQuality = "mp3_128" | "mp3_320" | "flac";
-
-export type DeemixDownloadOrganization =
-  | "flat_artist_album_year"
-  | "artist_album_year_folders";
 
 export type AppSettings = {
   backupRetention: number;
@@ -758,13 +812,6 @@ export type MusicBrainzArtistDiscographyResponse = {
   candidates: MusicBrainzArtistCandidateRow[];
 };
 
-export type BrowseView = "albums" | "tracks";
-
-export type AiKeySource =
-  | "windowsCredentialManager"
-  | "environment"
-  | "none";
-
 export type AiKeyStatus = {
   configured: boolean;
   source: AiKeySource;
@@ -776,8 +823,6 @@ export type AiUsage = {
   cachedInputTokens: number | null;
   outputTokens: number | null;
 };
-
-export type AiMusicResearchEntity = "album" | "artist" | "genre";
 
 export type AiMusicResearchContext = {
   workspace: string;
@@ -817,8 +862,6 @@ export type AiMusicResearchExchange = {
   result: AiMusicResearchAnswer;
 };
 
-export type AiQueryTarget = "search" | "chart";
-
 export type AiQueryFollowUpContext = {
   previousPrompt: string;
   previousSummary: string;
@@ -854,13 +897,6 @@ export type AiQueryExchange = {
   result: AiCompiledQuery;
   answer?: AiCurrentViewAnswer | null;
 };
-
-export type AiLibraryLens =
-  | "overview"
-  | "ratingBacklog"
-  | "tasteProfile"
-  | "catalogBalance"
-  | "metadataHealth";
 
 export type AiLibraryAnalysisRequest = {
   lens: AiLibraryLens;
@@ -947,12 +983,6 @@ export type SaveAiSnapshotRequest = {
   content: AiSnapshotContent;
 };
 
-export type AiPlaylistStrategy =
-  | "ranked"
-  | "variety"
-  | "discovery"
-  | "random";
-
 export type AiPlaylistBuildRequest = {
   prompt: string;
   sourceRequest?: BrowseRequest | null;
@@ -1036,8 +1066,6 @@ export type SmartPlaylistRefreshResult = {
   refreshedAt: string;
 };
 
-export type ExternalDiscoveryEntity = "artist" | "album" | "song";
-
 export type ExternalDiscoveryPlan = {
   prompt: string;
   entity: ExternalDiscoveryEntity;
@@ -1100,8 +1128,6 @@ export type SavedExternalDiscovery = {
   createdAt: string;
   updatedAt: string;
 };
-
-export type WishListEntity = "artist" | "album";
 
 export type AddWishListItemRequest = {
   entity: WishListEntity;
@@ -1205,18 +1231,6 @@ export type WishListArtistAlbumDiscoveryResponse = {
   albumSummary: WishListArtistAlbumSummary;
   searchedAt: string;
 };
-
-export type LibraryCompletionStatus =
-  | "candidate"
-  | "wanted"
-  | "notForMe"
-  | "needsReview";
-
-export type LibraryCompletionConfidence =
-  | "best"
-  | "good"
-  | "needsReview"
-  | "low";
 
 export type LibraryCompletionEvidence = {
   source: "billboard" | "officialUk" | "vgLista";
@@ -1497,8 +1511,6 @@ export type LibraryCompletionArtistVerificationStatus = {
   batch: LibraryCompletionArtistVerificationBatch | null;
   recentItems: LibraryCompletionArtistVerificationItemSummary[];
 };
-
-export type DeemixCredentialSource = "windowsCredentialManager" | "none";
 
 export type DiscogsCredentialStatus = {
   configured: boolean;
@@ -1892,16 +1904,6 @@ export type UsenetDownloadRequest = {
   releaseGroupId: string | null;
 };
 
-export type UsenetTransferStatus =
-  | "queued"
-  | "fetchingNzb"
-  | "downloading"
-  | "verifying"
-  | "repairing"
-  | "extracting"
-  | "completed"
-  | "failed";
-
 export type UsenetTransfer = {
   id: string;
   guid: string;
@@ -1929,12 +1931,6 @@ export type AiConnectionTest = {
   message: string;
   usage: AiUsage;
 };
-
-export type TextFilterOperator =
-  | "contains"
-  | "doesNotContain"
-  | "equals"
-  | "startsWith";
 
 export type TextFilter = {
   operator: TextFilterOperator;
@@ -2199,8 +2195,6 @@ export type GenreTimelineResponse = {
   availableYearTo: number | null;
 };
 
-export type ArtistTimelineMetric = "charts" | "albumScore";
-
 export type ArtistTimelineRequest = {
   yearFrom: number | null;
   yearTo: number | null;
@@ -2438,15 +2432,6 @@ export type DiscoveryDailyEditionSnapshotResponse = {
   archive: DiscoveryDailyEditionArchive;
 };
 
-export type DiscoverySourceHealthState = "healthy" | "stale" | "missing";
-
-export type DiscoverySourceHealthAction =
-  | "rebuild-chart-matches"
-  | "open-imports"
-  | "open-musicbrainz"
-  | "open-lastfm"
-  | "open-covers";
-
 export type DiscoverySourceHealthItem = {
   id: string;
   label: string;
@@ -2485,14 +2470,6 @@ export type DiscoveryDailyEdition = {
   recommendationSnapshot: DiscoveryRecommendationSnapshot;
   listeningEvidenceNote: string;
 };
-
-export type DiscoveryShelf =
-  | "anniversaries"
-  | "life-events"
-  | "charts"
-  | "deep-cuts"
-  | "completion"
-  | "recommendations";
 
 export type DiscoveryShelfExplorerRequest = {
   shelf: DiscoveryShelf;
@@ -2546,8 +2523,6 @@ export type DiscoveryShelfExplorerResponse = {
   anchors: DiscoveryRecommendationAnchor[];
 };
 
-export type DiscoveryRecommendationMode = "played" | "loved";
-
 export type DiscoveryRecommendationSnapshotRequest = {
   mode?: DiscoveryRecommendationMode;
 };
@@ -2560,8 +2535,6 @@ export type DiscoveryRecommendationSnapshot = {
   stories: DiscoveryRecommendationStory[];
   evidence: string;
 };
-
-export type DiscoveryCompletionMode = "artist" | "album";
 
 export type DiscoveryCompletionSnapshotRequest = {
   mode?: DiscoveryCompletionMode;
@@ -2602,8 +2575,6 @@ export type DiscoveryDeepCutGenre = {
   id: string;
   label: string;
 };
-
-export type DiscoveryChartSource = "billboard" | "official-uk" | "vg-lista";
 
 export type DiscoveryChartSnapshotRequest = {
   source?: DiscoveryChartSource;
@@ -2739,8 +2710,6 @@ export type DiscoveryRecommendationStory = {
   evidence: string;
 };
 
-export type DiscoveryMixerSeedKind = "artist" | "album";
-
 export type DiscoveryMixerSeedOption = {
   kind: DiscoveryMixerSeedKind;
   id: string;
@@ -2870,10 +2839,6 @@ export type DiscoveryArtistPoint = {
   topGenre: string | null;
 };
 
-export type MusicToolSeverity = "high" | "medium" | "low";
-
-export type MusicToolScope = "albums" | "tracks" | "artists";
-
 export type MusicToolSummary = {
   id: string;
   label: string;
@@ -2938,8 +2903,6 @@ export type MusicToolFixRequest = {
   issueIds: string[];
   apply: boolean;
 };
-
-export type MusicToolFixConfidence = "high" | "medium" | "low";
 
 export type MusicToolFieldDiff = {
   field: string;
@@ -3188,8 +3151,6 @@ export type SavedSearch = {
   createdAt: string;
   updatedAt: string;
 };
-
-export type ChartViewMode = "table" | "compact" | "grid";
 
 export type ChartConfig = {
   request: BrowseRequest;

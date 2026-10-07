@@ -204,7 +204,7 @@ export const commands = {
 	discoverWishListArtistAlbums: (input: WishListArtistAlbumDiscoveryRequest) => __TAURI_INVOKE<WishListArtistAlbumDiscoveryResponse>("discover_wish_list_artist_albums", { input }),
 	refreshWishListArtistAlbumSummary: (input: WishListArtistAlbumDiscoveryRequest) => __TAURI_INVOKE<WishListArtistAlbumSummary>("refresh_wish_list_artist_album_summary", { input }),
 	getLibraryCompletion: (input: {
-	source?: string | null,
+	source?: LibraryCompletionAtlasCellSource | null,
 	decade?: number | null,
 	yearFrom?: number | null,
 	yearTo?: number | null,
@@ -215,8 +215,8 @@ export const commands = {
 	retryLibraryCompletionVerificationFailures: (batchId: number) => __TAURI_INVOKE<LibraryCompletionVerificationStatus>("retry_library_completion_verification_failures", { batchId }),
 	setLibraryCompletionDecision: (input: SetLibraryCompletionDecisionRequest) => __TAURI_INVOKE<LibraryCompletionDecision>("set_library_completion_decision", { input }),
 	getLibraryCompletionArtists: (input: {
-	source?: string | null,
-	chartKind?: string | null,
+	source?: LibraryCompletionArtistEvidenceSource | null,
+	chartKind?: LibraryCompletionArtistRequestChartKind | null,
 	yearFrom?: number | null,
 	yearTo?: number | null,
 } | null) => __TAURI_INVOKE<LibraryCompletionArtistResponse>("get_library_completion_artists", { input }),
@@ -255,7 +255,7 @@ export const commands = {
 
 /* Types */
 export type AddWishListItemRequest = {
-	entity: string,
+	entity: WishListEntity,
 	title: string,
 	artist?: string,
 	year: number | null,
@@ -277,16 +277,18 @@ export type AddWishListMusicBrainzCandidateResponse = {
 
 export type AiCompileRequest = {
 	prompt: string,
-	target: string,
-	currentView?: string | null,
+	target: AiQueryTarget,
+	currentView?: BrowseView | null,
 	followUp?: AiQueryFollowUpContext | null,
 };
 
 export type AiCompiledQuery = AiCompiledQuery_Serialize | AiCompiledQuery_Deserialize;
 
+export type AiCompiledQueryQueryIntent = "filter" | "answer";
+
 export type AiCompiledQuery_Deserialize = {
-	target: string,
-	queryIntent?: string,
+	target: AiQueryTarget,
+	queryIntent?: AiCompiledQueryQueryIntent,
 	summary: string,
 	request: BrowseRequest,
 	chartConfig: ChartConfig_Deserialize | null,
@@ -295,8 +297,8 @@ export type AiCompiledQuery_Deserialize = {
 };
 
 export type AiCompiledQuery_Serialize = {
-	target: string,
-	queryIntent: string,
+	target: AiQueryTarget,
+	queryIntent: AiCompiledQueryQueryIntent,
 	summary: string,
 	request: BrowseRequest,
 	chartConfig: ChartConfig_Serialize | null,
@@ -312,7 +314,7 @@ export type AiConnectionTest = {
 
 export type AiCurrentViewAnswer = {
 	answer: string,
-	view: string,
+	view: BrowseView,
 	matchingRows: number,
 	analysisCount: number,
 	namedRowsShared: number,
@@ -329,12 +331,12 @@ export type AiCurrentViewQuestion = {
 
 export type AiExternalDiscoveryPlan = {
 	prompt: string,
-	entity: string,
+	entity: ExternalDiscoveryEntity2,
 	count: number,
 	year: number,
 	yearFrom?: number,
 	yearTo?: number,
-	yearMeaning: string,
+	yearMeaning: AiExternalDiscoveryPlanYearMeaning,
 	genres: string[],
 	countries: string[],
 	keywords: string,
@@ -344,18 +346,22 @@ export type AiExternalDiscoveryPlan = {
 	usage: AiUsage,
 };
 
+export type AiExternalDiscoveryPlanYearMeaning = "releaseYear" | "formedYear";
+
 export type AiExternalDiscoveryRequest = {
 	prompt: string,
 };
 
+export type AiKeySource = "windowsCredentialManager" | "environment" | "none";
+
 export type AiKeyStatus = {
 	configured: boolean,
-	source: string,
+	source: AiKeySource,
 	model: string,
 };
 
 export type AiLibraryAnalysis = {
-	lens: string,
+	lens: AiLibraryLens,
 	headline: string,
 	summary: string,
 	findings: AiLibraryFinding[],
@@ -367,7 +373,7 @@ export type AiLibraryAnalysis = {
 };
 
 export type AiLibraryAnalysisRequest = {
-	lens: string,
+	lens: AiLibraryLens,
 	focus?: string,
 };
 
@@ -376,6 +382,8 @@ export type AiLibraryFinding = {
 	evidence: string,
 	interpretation: string,
 };
+
+export type AiLibraryLens = "overview" | "ratingBacklog" | "tasteProfile" | "catalogBalance" | "metadataHealth";
 
 export type AiMarkdownExportRequest = {
 	title: string,
@@ -393,11 +401,13 @@ export type AiMusicResearchAnswer = {
 
 export type AiMusicResearchContext = {
 	workspace: string,
-	selectedEntityType?: string | null,
+	selectedEntityType?: AiMusicResearchEntity | null,
 	selectedEntityId?: string | null,
 	selectedLabel?: string | null,
 	selectedSubtitle?: string | null,
 };
+
+export type AiMusicResearchEntity = "album" | "artist" | "genre";
 
 export type AiMusicResearchExchange = {
 	question: string,
@@ -416,9 +426,11 @@ export type AiMusicResearchSource = {
 };
 
 export type AiMusicResearchTurn = {
-	role: string,
+	role: AiMusicResearchTurnRole,
 	content: string,
 };
+
+export type AiMusicResearchTurnRole = "user" | "assistant";
 
 export type AiPlaylist = AiPlaylist_Serialize | AiPlaylist_Deserialize;
 
@@ -426,6 +438,8 @@ export type AiPlaylistBuildRequest = {
 	prompt: string,
 	sourceRequest?: BrowseRequest | null,
 };
+
+export type AiPlaylistStrategy = "ranked" | "variety" | "discovery" | "random";
 
 export type AiPlaylistTrack = {
 	trackId: number,
@@ -449,7 +463,7 @@ export type AiPlaylist_Deserialize = {
 	name: string,
 	description: string,
 	request: BrowseRequest,
-	strategy: string,
+	strategy: AiPlaylistStrategy,
 	targetTrackCount: number,
 	targetMinutes: number,
 	maxTracksPerArtist: number,
@@ -468,7 +482,7 @@ export type AiPlaylist_Serialize = {
 	name: string,
 	description: string,
 	request: BrowseRequest,
-	strategy: string,
+	strategy: AiPlaylistStrategy,
 	targetTrackCount: number,
 	targetMinutes: number,
 	maxTracksPerArtist: number,
@@ -500,6 +514,8 @@ export type AiQueryFollowUpContext = {
 	previousSummary: string,
 	previousAnswer: string,
 };
+
+export type AiQueryTarget = "search" | "chart";
 
 export type AiSnapshot = AiSnapshot_Serialize | AiSnapshot_Deserialize;
 
@@ -595,9 +611,9 @@ export type AppSettings = AppSettings_Serialize | AppSettings_Deserialize;
 export type AppSettings_Deserialize = {
 	backupRetention?: number,
 	darkMode?: boolean,
-	countryFlagDisplay?: string,
-	leftSidebarDefault?: string,
-	rightSidebarDefault?: string,
+	countryFlagDisplay?: CountryFlagDisplay,
+	leftSidebarDefault?: LeftSidebarMode,
+	rightSidebarDefault?: RightSidebarMode,
 	importSourcePath?: string,
 	coverSourcePath?: string,
 	billboardSourcePath?: string,
@@ -609,9 +625,9 @@ export type AppSettings_Deserialize = {
 	tiISkuddetSourcePath?: string,
 	norsktoppenSourcePath?: string,
 	deemixDownloadPath?: string,
-	deemixDownloadQuality?: string,
+	deemixDownloadQuality?: DeemixDownloadQuality,
 	deemixDownloadFallback?: boolean,
-	deemixDownloadOrganization?: string,
+	deemixDownloadOrganization?: DeemixDownloadOrganization,
 	musicDoctorDatabasePath?: string,
 	musicDoctorAutoSync?: boolean,
 	updateAutoCheckMinutes?: number,
@@ -627,9 +643,9 @@ export type AppSettings_Deserialize = {
 export type AppSettings_Serialize = {
 	backupRetention: number,
 	darkMode: boolean,
-	countryFlagDisplay: string,
-	leftSidebarDefault: string,
-	rightSidebarDefault: string,
+	countryFlagDisplay: CountryFlagDisplay,
+	leftSidebarDefault: LeftSidebarMode,
+	rightSidebarDefault: RightSidebarMode,
 	importSourcePath: string,
 	coverSourcePath: string,
 	billboardSourcePath: string,
@@ -641,9 +657,9 @@ export type AppSettings_Serialize = {
 	tiISkuddetSourcePath: string,
 	norsktoppenSourcePath: string,
 	deemixDownloadPath: string,
-	deemixDownloadQuality: string,
+	deemixDownloadQuality: DeemixDownloadQuality,
 	deemixDownloadFallback: boolean,
-	deemixDownloadOrganization: string,
+	deemixDownloadOrganization: DeemixDownloadOrganization,
 	musicBrainzCachePath: string,
 	musicBrainzOverlaySyncPath: string,
 	musicBrainzOverlayAutoSyncMinutes: number,
@@ -771,6 +787,8 @@ export type ArtistTimelineArtist = {
 	representativeCoverPath: string | null,
 };
 
+export type ArtistTimelineMetric = "charts" | "albumScore";
+
 export type ArtistTimelineRequest = {
 	yearFrom?: number | null,
 	yearTo?: number | null,
@@ -778,7 +796,7 @@ export type ArtistTimelineRequest = {
 	excludedGenres?: string[],
 	artists?: string[],
 	artistLimit?: number,
-	metric?: string,
+	metric?: ArtistTimelineMetric,
 };
 
 export type ArtistTimelineResponse = {
@@ -917,7 +935,7 @@ export type BrowseFilters = {
 };
 
 export type BrowseRequest = {
-	view?: string,
+	view?: BrowseView,
 	searchText?: string,
 	filters?: BrowseFilters,
 	sort?: BrowseSort,
@@ -926,7 +944,7 @@ export type BrowseRequest = {
 };
 
 export type BrowseResponse = {
-	view: string,
+	view: BrowseView,
 	rows: BrowseRow[],
 	total: number,
 	limit: number,
@@ -1020,8 +1038,12 @@ export type BrowseRow = {
 
 export type BrowseSort = {
 	field?: string,
-	direction?: string,
+	direction?: BrowseSortDirection,
 };
+
+export type BrowseSortDirection = "asc" | "desc";
+
+export type BrowseView = "albums" | "tracks";
 
 export type CatalogConcentrationStats = {
 	artistPoints: ConcentrationPoint[],
@@ -1041,11 +1063,11 @@ export type ChartConfig_Deserialize = {
 	ratingCompletenessMin?: number | null,
 	ratingCompletenessMax?: number | null,
 	ratingCompletenessThreshold?: number | null,
-	sortDirection: string,
+	sortDirection: DiscoveryMissionSortDirection,
 	resultLimit: number,
 	visibleColumns: string[],
 	exportColumns: string[],
-	viewMode: string,
+	viewMode: ChartViewMode,
 	gridCoverSize?: number,
 };
 
@@ -1056,13 +1078,15 @@ export type ChartConfig_Serialize = {
 	ratingCompletenessMin: number | null,
 	ratingCompletenessMax: number | null,
 	ratingCompletenessThreshold?: number | null,
-	sortDirection: string,
+	sortDirection: DiscoveryMissionSortDirection,
 	resultLimit: number,
 	visibleColumns: string[],
 	exportColumns: string[],
-	viewMode: string,
+	viewMode: ChartViewMode,
 	gridCoverSize: number,
 };
+
+export type ChartViewMode = "table" | "compact" | "grid";
 
 export type ConcentrationPoint = {
 	topN: number,
@@ -1113,6 +1137,8 @@ export type CountryCatalogStats = {
 	artistCount: number,
 	albumCount: number,
 };
+
+export type CountryFlagDisplay = "flagAndName" | "name" | "flag";
 
 export type CoverImportRequest = {
 	sourcePath: string,
@@ -1199,7 +1225,7 @@ export type DeemixAlbumDownloadSummary = {
 	artist: string,
 	album: string,
 	year: number | null,
-	quality: string,
+	quality: DeemixDownloadQuality,
 	destinationPath: string,
 	coverPath: string | null,
 	warning: string | null,
@@ -1217,10 +1243,12 @@ export type DeemixAlbumMatch = {
 	explicit: boolean,
 	deezerUrl: string,
 	matchScore: number,
-	matchLevel: string,
+	matchLevel: DeemixAlbumMatchMatchLevel,
 	downloadedAt: string | null,
 	downloadedPath: string | null,
 };
+
+export type DeemixAlbumMatchMatchLevel = "exact" | "likely" | "possible";
 
 export type DeemixAlbumSearchRequest = {
 	title: string,
@@ -1245,10 +1273,16 @@ export type DeemixConnectionTest = {
 	message: string,
 };
 
+export type DeemixCredentialSource = "windowsCredentialManager" | "none";
+
 export type DeemixCredentialStatus = {
 	configured: boolean,
-	source: string,
+	source: DeemixCredentialSource,
 };
+
+export type DeemixDownloadOrganization = "flat_artist_album_year" | "artist_album_year_folders";
+
+export type DeemixDownloadQuality = "mp3_128" | "mp3_320" | "flac";
 
 export type DiagnosticEntry = {
 	timestampMs: number,
@@ -1266,8 +1300,10 @@ export type DiscogsConnectionTest = {
 
 export type DiscogsCredentialStatus = {
 	configured: boolean,
-	source: string,
+	source: DiscogsCredentialStatusSource,
 };
+
+export type DiscogsCredentialStatusSource = "windowsCredentialManager" | "none";
 
 export type DiscoveryAlbumCompletionStory = {
 	albumId: string,
@@ -1342,7 +1378,7 @@ export type DiscoveryArtistPoint = {
 };
 
 export type DiscoveryChartSnapshot = {
-	source: string,
+	source: DiscoveryChartSource,
 	sourceLabel: string,
 	year: number | null,
 	week: number | null,
@@ -1352,11 +1388,13 @@ export type DiscoveryChartSnapshot = {
 };
 
 export type DiscoveryChartSnapshotRequest = {
-	source?: string | null,
+	source?: DiscoveryChartSource | null,
 	year?: number | null,
 	week?: number | null,
 	random?: boolean,
 };
+
+export type DiscoveryChartSource = "billboard" | "official-uk" | "vg-lista";
 
 export type DiscoveryChartStory = {
 	entity: string,
@@ -1374,8 +1412,10 @@ export type DiscoveryChartStory = {
 	evidence: string,
 };
 
+export type DiscoveryCompletionMode = "artist" | "album";
+
 export type DiscoveryCompletionSnapshot = {
-	mode: string,
+	mode: DiscoveryCompletionMode,
 	year: number | null,
 	decade: number | null,
 	genre: string | null,
@@ -1387,7 +1427,7 @@ export type DiscoveryCompletionSnapshot = {
 };
 
 export type DiscoveryCompletionSnapshotRequest = {
-	mode?: string | null,
+	mode?: DiscoveryCompletionMode | null,
 	year?: number | null,
 	decade?: number | null,
 	genre?: string | null,
@@ -1518,9 +1558,11 @@ export type DiscoveryMission = {
 	ratingCompletenessMax: number | null,
 	lovedTracksMin: number | null,
 	sortField: string,
-	sortDirection: string,
+	sortDirection: DiscoveryMissionSortDirection,
 	limit: number,
 };
+
+export type DiscoveryMissionSortDirection = "asc" | "desc";
 
 export type DiscoveryMixerRecommendation = {
 	albumId: string,
@@ -1556,8 +1598,10 @@ export type DiscoveryMixerSeedInput = {
 	id: string,
 };
 
+export type DiscoveryMixerSeedKind = "artist" | "album";
+
 export type DiscoveryMixerSeedOption = {
-	kind: string,
+	kind: DiscoveryMixerSeedKind,
 	id: string,
 	title: string,
 	subtitle: string,
@@ -1567,7 +1611,7 @@ export type DiscoveryMixerSeedOption = {
 
 export type DiscoveryMixerSeedSearchRequest = {
 	query?: string | null,
-	kind?: string | null,
+	kind?: DiscoveryMixerSeedKind | null,
 	limit?: number | null,
 };
 
@@ -1580,8 +1624,10 @@ export type DiscoveryRecommendationAnchor = {
 	evidence: string,
 };
 
+export type DiscoveryRecommendationMode = "played" | "loved";
+
 export type DiscoveryRecommendationSnapshot = {
-	mode: string,
+	mode: DiscoveryRecommendationMode,
 	anchors: DiscoveryRecommendationAnchor[],
 	matchingCount: number,
 	lastfmLinkedCount: number,
@@ -1590,7 +1636,7 @@ export type DiscoveryRecommendationSnapshot = {
 };
 
 export type DiscoveryRecommendationSnapshotRequest = {
-	mode?: string | null,
+	mode?: DiscoveryRecommendationMode | null,
 };
 
 export type DiscoveryRecommendationStory = {
@@ -1622,11 +1668,13 @@ export type DiscoveryResponse = {
 	generatedAt: string | null,
 };
 
+export type DiscoveryShelf = "anniversaries" | "life-events" | "charts" | "deep-cuts" | "completion" | "recommendations";
+
 export type DiscoveryShelfExplorerRequest = {
-	shelf: string,
+	shelf: DiscoveryShelf,
 	date?: string | null,
 	anniversaryYears?: number | null,
-	eventType?: string | null,
+	eventType?: DiscoveryShelfExplorerRequestEventType | null,
 	source?: string | null,
 	year?: number | null,
 	week?: number | null,
@@ -1641,8 +1689,10 @@ export type DiscoveryShelfExplorerRequest = {
 	offset?: number | null,
 };
 
+export type DiscoveryShelfExplorerRequestEventType = "birthday" | "memorial";
+
 export type DiscoveryShelfExplorerResponse = {
-	shelf: string,
+	shelf: DiscoveryShelf,
 	title: string,
 	evidenceNote: string,
 	total: number,
@@ -1674,10 +1724,12 @@ export type DiscoveryShelfExplorerResponse = {
 	anchors: DiscoveryRecommendationAnchor[],
 };
 
+export type DiscoverySourceHealthAction = "rebuild-chart-matches" | "open-imports" | "open-musicbrainz" | "open-lastfm" | "open-covers";
+
 export type DiscoverySourceHealthItem = {
 	id: string,
 	label: string,
-	state: string,
+	state: DiscoverySourceHealthState,
 	coverageCount: number,
 	totalCount: number,
 	coveragePercent: number | null,
@@ -1687,19 +1739,21 @@ export type DiscoverySourceHealthItem = {
 	shelves: string[],
 	details: string[],
 	sparseReasons: string[],
-	action: string,
+	action: DiscoverySourceHealthAction,
 	actionLabel: string,
 };
 
 export type DiscoverySourceHealthResponse = {
 	checkedAt: string,
 	editionDate: string,
-	overallState: string,
+	overallState: DiscoverySourceHealthState,
 	healthyCount: number,
 	staleCount: number,
 	missingCount: number,
 	sources: DiscoverySourceHealthItem[],
 };
+
+export type DiscoverySourceHealthState = "healthy" | "stale" | "missing";
 
 export type DistributedSnapshot = {
 	state: DistributedState,
@@ -1779,9 +1833,13 @@ export type ExportSearchRequest = {
 	exportColumns?: string[],
 };
 
+export type ExternalDiscoveryEntity = "artist" | "album" | "song";
+
+export type ExternalDiscoveryEntity2 = "artist" | "album" | "song";
+
 export type ExternalDiscoveryItem = {
 	id: string,
-	entity: string,
+	entity: ExternalDiscoveryEntity,
 	title: string,
 	artist: string,
 	anchor: string | null,
@@ -1800,12 +1858,14 @@ export type ExternalDiscoveryResponse = {
 	summary: string,
 	plan: AiExternalDiscoveryPlan,
 	items: ExternalDiscoveryItem[],
-	source: string,
+	source: ExternalDiscoveryResponseSource,
 	fetchedAt: string,
 	catalogCandidateCount: number,
 	excludedOwnedCount: number,
 	limitations: string[],
 };
+
+export type ExternalDiscoveryResponseSource = "MusicBrainz";
 
 export type GenreListRequest = {
 	searchText?: string,
@@ -2048,7 +2108,7 @@ export type LastFmConnectionTest = {
 
 export type LastFmCredentialStatus = {
 	configured: boolean,
-	source: string,
+	source: DiscogsCredentialStatusSource,
 };
 
 export type LastFmPopularTrack = {
@@ -2110,22 +2170,24 @@ export type LastFmSimilarArtist = {
 	representativeCoverPath: string | null,
 };
 
+export type LeftSidebarMode = "expanded" | "iconOnly" | "hidden";
+
 export type LibraryCompletionArtistCandidate = {
 	id: string,
 	artist: string,
 	firstChartYear: number,
-	confidence: string,
-	status: string,
+	confidence: LibraryCompletionArtistCandidateConfidence,
+	status: LibraryCompletionStatus,
 	wishListItemId: number | null,
-	verificationStatus: string,
+	verificationStatus: LibraryCompletionArtistCandidateVerificationStatus,
 	verificationMessage: string | null,
 	verificationCheckedAt: string | null,
-	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationStatus: LibraryCompletionArtistCandidateMusicbrainzVerificationStatus | null,
 	musicbrainzVerificationMessage: string | null,
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
 	officialAlbumCount: number,
-	discogsVerificationStatus: string | null,
+	discogsVerificationStatus: LibraryCompletionArtistCandidateDiscogsVerificationStatus | null,
 	discogsVerificationMessage: string | null,
 	discogsMasterId: string | null,
 	discogsUrl: string | null,
@@ -2133,9 +2195,17 @@ export type LibraryCompletionArtistCandidate = {
 	evidence: LibraryCompletionArtistEvidence[],
 };
 
+export type LibraryCompletionArtistCandidateConfidence = "best" | "good" | "low";
+
+export type LibraryCompletionArtistCandidateDiscogsVerificationStatus = "verified" | "noMatch" | "ambiguous" | "failed";
+
+export type LibraryCompletionArtistCandidateMusicbrainzVerificationStatus = "verified" | "noMatch" | "ambiguous" | "failed";
+
+export type LibraryCompletionArtistCandidateVerificationStatus = "unverified" | "queued" | "checking" | "verified" | "noMatch" | "ambiguous" | "failed";
+
 export type LibraryCompletionArtistDecision = {
 	artistId: string,
-	status: string,
+	status: LibraryCompletionStatus,
 	wishListItemId: number | null,
 	missingAlbumCount: number | null,
 	message: string,
@@ -2143,8 +2213,8 @@ export type LibraryCompletionArtistDecision = {
 };
 
 export type LibraryCompletionArtistEvidence = {
-	source: string,
-	chartKind: string,
+	source: LibraryCompletionArtistEvidenceSource,
+	chartKind: LibraryCompletionArtistEvidenceChartKind,
 	label: string,
 	bestRank: number,
 	firstYear: number,
@@ -2152,12 +2222,18 @@ export type LibraryCompletionArtistEvidence = {
 	appearances: number,
 };
 
+export type LibraryCompletionArtistEvidenceChartKind = "albums" | "singles";
+
+export type LibraryCompletionArtistEvidenceSource = "billboard" | "officialUk" | "vgLista" | "tiISkuddet" | "norsktoppen";
+
 export type LibraryCompletionArtistRequest = {
-	source?: string | null,
-	chartKind?: string | null,
+	source?: LibraryCompletionArtistEvidenceSource | null,
+	chartKind?: LibraryCompletionArtistRequestChartKind | null,
 	yearFrom?: number | null,
 	yearTo?: number | null,
 };
+
+export type LibraryCompletionArtistRequestChartKind = "albums" | "singles";
 
 export type LibraryCompletionArtistResponse = {
 	generatedAt: string,
@@ -2172,7 +2248,7 @@ export type LibraryCompletionArtistResponse = {
 export type LibraryCompletionArtistVerificationBatch = {
 	id: number,
 	label: string,
-	state: string,
+	state: LibraryCompletionArtistVerificationBatchState,
 	totalCount: number,
 	queuedCount: number,
 	checkingCount: number,
@@ -2187,15 +2263,21 @@ export type LibraryCompletionArtistVerificationBatch = {
 	completedAt: string | null,
 };
 
+export type LibraryCompletionArtistVerificationBatchState = "running" | "paused" | "completed";
+
 export type LibraryCompletionArtistVerificationItemSummary = {
 	artistId: string,
 	artist: string,
-	state: string,
-	provider: string,
+	state: LibraryCompletionArtistVerificationItemSummaryState,
+	provider: LibraryCompletionArtistVerificationItemSummaryProvider,
 	message: string | null,
 	officialAlbumCount: number,
 	updatedAt: string,
 };
+
+export type LibraryCompletionArtistVerificationItemSummaryProvider = "musicbrainz" | "discogs";
+
+export type LibraryCompletionArtistVerificationItemSummaryState = "queued" | "checking" | "verified" | "noMatch" | "ambiguous" | "failed";
 
 export type LibraryCompletionArtistVerificationStatus = {
 	batch: LibraryCompletionArtistVerificationBatch | null,
@@ -2203,7 +2285,7 @@ export type LibraryCompletionArtistVerificationStatus = {
 };
 
 export type LibraryCompletionAtlasCell = {
-	source: string,
+	source: LibraryCompletionAtlasCellSource,
 	label: string,
 	decade: number,
 	owned: number,
@@ -2215,46 +2297,66 @@ export type LibraryCompletionAtlasCell = {
 	total: number,
 };
 
+export type LibraryCompletionAtlasCellSource = "billboard" | "officialUk" | "vgLista";
+
 export type LibraryCompletionCandidate = {
 	id: string,
 	artist: string,
 	title: string,
 	chartYear: number,
-	confidence: string,
-	status: string,
+	confidence: LibraryCompletionConfidence,
+	status: LibraryCompletionStatus,
 	wishListItemId: number | null,
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
 	coverUrl: string | null,
-	coverStatus: string | null,
-	coverProvider: string | null,
+	coverStatus: LibraryCompletionCandidateCoverStatus | null,
+	coverProvider: LibraryCompletionCandidateCoverProvider | null,
 	coverMessage: string | null,
 	coverCheckedAt: string | null,
-	verificationStatus: string,
-	verificationProvider: string | null,
+	verificationStatus: LibraryCompletionCandidateVerificationStatus,
+	verificationProvider: LibraryCompletionCandidateVerificationProvider | null,
 	verificationMessage: string | null,
 	verificationCheckedAt: string | null,
-	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationStatus: LibraryCompletionCandidateMusicbrainzVerificationStatus | null,
 	musicbrainzVerificationMessage: string | null,
-	discogsVerificationStatus: string | null,
+	discogsVerificationStatus: LibraryCompletionCandidateDiscogsVerificationStatus | null,
 	discogsVerificationMessage: string | null,
 	discogsMasterId: string | null,
 	discogsUrl: string | null,
 	evidence: LibraryCompletionEvidence[],
 };
 
+export type LibraryCompletionCandidateCoverProvider = "musicbrainz" | "discogs";
+
+export type LibraryCompletionCandidateCoverStatus = "checking" | "available" | "unavailable" | "failed";
+
+export type LibraryCompletionCandidateDiscogsVerificationStatus = "verified" | "noMatch" | "ambiguous" | "failed";
+
+export type LibraryCompletionCandidateMusicbrainzVerificationStatus = "verified" | "noMatch" | "ambiguous" | "failed";
+
+export type LibraryCompletionCandidateVerificationProvider = "musicbrainz" | "discogs";
+
+export type LibraryCompletionCandidateVerificationStatus = "unverified" | "queued" | "checking" | "verified" | "noMatch" | "ambiguous" | "failed";
+
+export type LibraryCompletionConfidence = "best" | "good" | "needsReview" | "low";
+
 export type LibraryCompletionCoverEnrichment = {
 	candidateId: string,
-	state: string,
-	provider: string | null,
+	state: LibraryCompletionCoverEnrichmentState,
+	provider: LibraryCompletionCoverEnrichmentProvider | null,
 	message: string,
 	hasCover: boolean,
 	checkedAt: string,
 };
 
+export type LibraryCompletionCoverEnrichmentProvider = "musicbrainz" | "discogs";
+
+export type LibraryCompletionCoverEnrichmentState = "checking" | "available" | "unavailable" | "failed";
+
 export type LibraryCompletionDecision = {
 	candidateId: string,
-	status: string,
+	status: LibraryCompletionStatus,
 	wishListItemId: number | null,
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
@@ -2262,7 +2364,7 @@ export type LibraryCompletionDecision = {
 };
 
 export type LibraryCompletionEvidence = {
-	source: string,
+	source: LibraryCompletionEvidenceSource,
 	label: string,
 	bestRank: number,
 	firstYear: number,
@@ -2270,8 +2372,10 @@ export type LibraryCompletionEvidence = {
 	appearances: number,
 };
 
+export type LibraryCompletionEvidenceSource = "billboard" | "officialUk" | "vgLista";
+
 export type LibraryCompletionRequest = {
-	source?: string | null,
+	source?: LibraryCompletionAtlasCellSource | null,
 	decade?: number | null,
 	yearFrom?: number | null,
 	yearTo?: number | null,
@@ -2287,12 +2391,14 @@ export type LibraryCompletionResponse = {
 	atlas: LibraryCompletionAtlasCell[],
 };
 
+export type LibraryCompletionStatus = "candidate" | "wanted" | "notForMe" | "needsReview";
+
 export type LibraryCompletionVerificationBatch = {
 	id: number,
 	label: string,
-	source: string | null,
+	source: LibraryCompletionAtlasCellSource | null,
 	decade: number | null,
-	state: string,
+	state: LibraryCompletionArtistVerificationBatchState,
 	totalCount: number,
 	queuedCount: number,
 	checkingCount: number,
@@ -2313,14 +2419,14 @@ export type LibraryCompletionVerificationItemSummary = {
 	candidateId: string,
 	artist: string,
 	title: string,
-	state: string,
-	provider: string,
+	state: LibraryCompletionArtistVerificationItemSummaryState,
+	provider: LibraryCompletionArtistVerificationItemSummaryProvider,
 	message: string | null,
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
-	musicbrainzVerificationStatus: string | null,
+	musicbrainzVerificationStatus: LibraryCompletionArtistCandidateMusicbrainzVerificationStatus | null,
 	musicbrainzVerificationMessage: string | null,
-	discogsVerificationStatus: string | null,
+	discogsVerificationStatus: LibraryCompletionArtistCandidateDiscogsVerificationStatus | null,
 	discogsVerificationMessage: string | null,
 	discogsMasterId: string | null,
 	discogsUrl: string | null,
@@ -2373,7 +2479,7 @@ export type LibraryUpdate = {
 	id: number,
 	importRunId: number | null,
 	createdAt: string,
-	changeKind: string,
+	changeKind: LibraryUpdateKind,
 	category: string,
 	albumId: string,
 	albumArtistDisplay: string | null,
@@ -2411,9 +2517,11 @@ export type LibraryUpdateArtistSummary = {
 	lastUpdatedAt: string,
 };
 
+export type LibraryUpdateKind = "new" | "changed" | "removed";
+
 export type LibraryUpdateRequest = {
 	query?: string,
-	changeKind: string | null,
+	changeKind: LibraryUpdateKind | null,
 	dateFrom: string | null,
 	limit?: number,
 	offset?: number,
@@ -2505,14 +2613,14 @@ export type MusicBrainzArtistDiscographyRequest = {
 export type MusicBrainzArtistDiscographyResponse = {
 	artistKey: string,
 	artistName: string,
-	state: string,
+	state: MusicBrainzArtistDiscographyResponseState,
 	message: string,
 	cachePath: string,
 	resolvedPath: string,
 	musicbrainzMbid: string | null,
 	matchedCacheName: string | null,
 	matchMethod: string,
-	artistLinkState: string,
+	artistLinkState: MusicBrainzArtistExportRequestArtistLinkState,
 	artistLinkIgnored: boolean,
 	suspectMapping: boolean,
 	cachedNameCount: number,
@@ -2523,11 +2631,15 @@ export type MusicBrainzArtistDiscographyResponse = {
 	excludedCount: number,
 	localAlbumCount: number,
 	completion: number | null,
-	releaseGroupSource: string,
+	releaseGroupSource: MusicBrainzArtistDiscographyResponseReleaseGroupSource,
 	releaseGroupUpdatedAt: string | null,
 	releases: MusicBrainzArtistReleaseRow[],
 	candidates: MusicBrainzArtistCandidateRow[],
 };
+
+export type MusicBrainzArtistDiscographyResponseReleaseGroupSource = "cache" | "refreshed";
+
+export type MusicBrainzArtistDiscographyResponseState = "available" | "warning" | "unavailable" | "invalid" | "notFound" | "ignored";
 
 export type MusicBrainzArtistExportRequest = {
 	artistKey?: string,
@@ -2535,17 +2647,19 @@ export type MusicBrainzArtistExportRequest = {
 	musicbrainzMbid?: string | null,
 	matchedCacheName?: string | null,
 	matchMethod?: string,
-	artistLinkState?: string,
+	artistLinkState?: MusicBrainzArtistExportRequestArtistLinkState,
 	artistLinkIgnored?: boolean,
 	rows?: MusicBrainzArtistExportRow[],
 	format?: string,
 };
 
+export type MusicBrainzArtistExportRequestArtistLinkState = "none" | "unverified" | "verified" | "ignored";
+
 export type MusicBrainzArtistExportRow = {
 	releaseMbid?: string,
 	title?: string,
 	year: number | null,
-	status?: string,
+	status?: MusicBrainzArtistReleaseRowStatus,
 	localAlbumTitle?: string | null,
 	localYear: number | null,
 	matchMethod?: string,
@@ -2698,7 +2812,7 @@ export type MusicBrainzArtistReleaseRow = {
 	title: string,
 	year: number | null,
 	trackCount: number | null,
-	status: string,
+	status: MusicBrainzArtistReleaseRowStatus,
 	localAlbumId: string | null,
 	localAlbumTitle: string | null,
 	localYear: number | null,
@@ -2707,12 +2821,14 @@ export type MusicBrainzArtistReleaseRow = {
 	decision: string | null,
 };
 
+export type MusicBrainzArtistReleaseRowStatus = "owned" | "missing" | "excluded";
+
 export type MusicBrainzCacheStatus = {
 	cachePath: string,
 	resolvedPath: string,
 	exists: boolean,
 	valid: boolean,
-	state: string,
+	state: MusicBrainzCacheStatusState,
 	message: string,
 	fileSizeBytes: number,
 	artistCount: number,
@@ -2728,6 +2844,8 @@ export type MusicBrainzCacheStatus = {
 	cacheDateMax: string | null,
 	warningExamples: MusicBrainzCacheWarningExample[],
 };
+
+export type MusicBrainzCacheStatusState = "available" | "warning" | "unavailable" | "invalid";
 
 export type MusicBrainzCacheWarningExample = {
 	mbid: string,
@@ -2946,7 +3064,7 @@ export type MusicMapPoint = {
 	name: string,
 	countryCode: string | null,
 	countryName: string | null,
-	precision: string,
+	precision: MusicMapPointPrecision,
 	latitude: number | null,
 	longitude: number | null,
 	artistCount: number,
@@ -2955,6 +3073,8 @@ export type MusicMapPoint = {
 	lovedTracks: number,
 	topGenre: string,
 };
+
+export type MusicMapPointPrecision = "area" | "country";
 
 export type MusicMapRefreshSummary = {
 	candidateAreas: number,
@@ -2992,26 +3112,30 @@ export type MusicToolFieldDiff = {
 	after: string | null,
 };
 
+export type MusicToolFixConfidence = "high" | "medium" | "low";
+
 export type MusicToolFixDiff = {
 	id: string,
-	entityType: string,
+	entityType: MusicToolFixDiffEntityType,
 	entityId: string,
 	albumId: string,
 	trackId: number | null,
 	label: string,
 	context: string | null,
-	confidence: string,
+	confidence: MusicToolFixConfidence,
 	sourceWarning: string,
 	changes: MusicToolFieldDiff[],
 };
+
+export type MusicToolFixDiffEntityType = "tracks" | "albums";
 
 export type MusicToolFixHistoryEntry = {
 	id: number,
 	toolId: string,
 	toolLabel: string,
 	action: string,
-	status: string,
-	confidence: string,
+	status: MusicToolFixHistoryEntryStatus,
+	confidence: MusicToolFixConfidence,
 	requestedCount: number,
 	fixableCount: number,
 	affectedAlbumCount: number,
@@ -3028,6 +3152,8 @@ export type MusicToolFixHistoryEntry = {
 	canUndo: boolean,
 };
 
+export type MusicToolFixHistoryEntryStatus = "applied" | "undone";
+
 export type MusicToolFixRequest = {
 	toolId: string,
 	issueIds?: string[],
@@ -3039,7 +3165,7 @@ export type MusicToolFixSummary = {
 	toolId: string,
 	action: string,
 	applied: boolean,
-	confidence: string,
+	confidence: MusicToolFixConfidence,
 	sourceWarning: string,
 	requestedCount: number,
 	fixableCount: number,
@@ -3073,8 +3199,8 @@ export type MusicToolIssueResponse = {
 export type MusicToolIssueRow = {
 	id: string,
 	toolId: string,
-	severity: string,
-	entityType: string,
+	severity: MusicToolSeverity,
+	entityType: MusicToolScope,
 	albumId: string,
 	trackId: number | null,
 	album: string | null,
@@ -3093,12 +3219,16 @@ export type MusicToolIssueRow = {
 	norsktoppen: string | null,
 };
 
+export type MusicToolScope = "albums" | "tracks" | "artists";
+
+export type MusicToolSeverity = "high" | "medium" | "low";
+
 export type MusicToolSummary = {
 	id: string,
 	label: string,
 	description: string,
-	severity: string,
-	scope: string,
+	severity: MusicToolSeverity,
+	scope: MusicToolScope,
 	issueCount: number,
 	albumCount: number,
 	trackCount: number,
@@ -3157,13 +3287,15 @@ export type PerformanceProbeOperation = {
 	id: string,
 	label: string,
 	category: string,
-	status: string,
+	status: PerformanceProbeOperationStatus,
 	durationMs: number,
 	totalCount: number | null,
 	rowCount: number | null,
 	detail: string,
 	errorMessage: string | null,
 };
+
+export type PerformanceProbeOperationStatus = "ok" | "failed";
 
 export type PerformanceProbeResponse = {
 	generatedAt: string,
@@ -3346,6 +3478,8 @@ export type ReleaseAlternativeSource = {
 	files: ReleaseAlternativeFile[],
 };
 
+export type RightSidebarMode = "expanded" | "hidden";
+
 export type SaveAiSnapshotRequest = SaveAiSnapshotRequest_Serialize | SaveAiSnapshotRequest_Deserialize;
 
 export type SaveAiSnapshotRequest_Deserialize = {
@@ -3476,7 +3610,7 @@ export type SavedPlaylist_Serialize = {
 export type SavedSearch = {
 	id: number,
 	name: string,
-	view: string,
+	view: BrowseView,
 	request: BrowseRequest,
 	createdAt: string,
 	updatedAt: string,
@@ -3516,13 +3650,15 @@ export type SearchState = "idle" | "searching" | "completed" | "stopped" | "erro
 export type SetLibraryCompletionArtistDecisionRequest = {
 	artistId: string,
 	artist: string,
-	status: string,
+	status: LibraryCompletionStatus,
 };
 
 export type SetLibraryCompletionArtistVerificationStateRequest = {
 	batchId: number,
-	state: string,
+	state: SetLibraryCompletionArtistVerificationStateRequestState,
 };
+
+export type SetLibraryCompletionArtistVerificationStateRequestState = "running" | "paused";
 
 export type SetLibraryCompletionDecisionRequest = {
 	candidateId: string,
@@ -3530,7 +3666,7 @@ export type SetLibraryCompletionDecisionRequest = {
 	title: string,
 	chartYear: number,
 	source: string,
-	status: string,
+	status: LibraryCompletionStatus,
 	wishListItemId: number | null,
 	musicbrainzId: string | null,
 	musicbrainzUrl: string | null,
@@ -3538,7 +3674,7 @@ export type SetLibraryCompletionDecisionRequest = {
 
 export type SetLibraryCompletionVerificationStateRequest = {
 	batchId: number,
-	state: string,
+	state: SetLibraryCompletionArtistVerificationStateRequestState,
 };
 
 export type SetPlaylistAutomationRequest = {
@@ -3604,12 +3740,14 @@ export type StartLibraryCompletionArtistVerificationRequest = {
 };
 
 export type StartLibraryCompletionVerificationRequest = {
-	scope: string,
+	scope: StartLibraryCompletionVerificationRequestScope,
 	candidateIds?: string[],
-	source: string | null,
+	source: LibraryCompletionAtlasCellSource | null,
 	decade: number | null,
 	label: string | null,
 };
+
+export type StartLibraryCompletionVerificationRequestScope = "candidate" | "selection" | "campaign";
 
 export type StatisticsResponse = {
 	overview: LibraryOverviewStats,
@@ -3635,9 +3773,11 @@ export type StatisticsResponse = {
 };
 
 export type TextFilter = {
-	operator?: string,
+	operator?: TextFilterOperator,
 	value?: string,
 };
+
+export type TextFilterOperator = "contains" | "doesNotContain" | "equals" | "startsWith";
 
 export type TiISkuddetImportSummary = {
 	sourcePath: string,
@@ -3916,9 +4056,13 @@ export type WishListArtistAlbumSummary = {
 	updatedAt: string,
 };
 
+export type WishListEntity = "artist" | "album";
+
+export type WishListEntity2 = "artist" | "album";
+
 export type WishListItem = {
 	id: number,
-	entity: string,
+	entity: WishListEntity2,
 	title: string,
 	artist: string,
 	year: number | null,
@@ -3940,7 +4084,7 @@ export type WishListMissingAlbum = {
 };
 
 export type WishListMusicBrainzCandidate = {
-	entity: string,
+	entity: WishListEntity,
 	title: string,
 	artist: string,
 	year: number | null,
@@ -3952,14 +4096,14 @@ export type WishListMusicBrainzCandidate = {
 };
 
 export type WishListMusicBrainzSearchRequest = {
-	entity: string,
+	entity: WishListEntity,
 	query: string,
 	artist?: string,
 	year?: number | null,
 };
 
 export type WishListMusicBrainzSearchResponse = {
-	entity: string,
+	entity: WishListEntity,
 	query: string,
 	candidates: WishListMusicBrainzCandidate[],
 	searchedAt: string,
