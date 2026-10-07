@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.176.0] - 2026-10-07
+
+### Added
+- Type the events the backend pushes to the UI. 21 events (import, Deemix, cover, MusicBrainz, Music Tool, Activity Center, catalog revision, verification, update, Published Charts, Usenet, and the Soulseek connection, transfer, share, upload, and search events) are declared once in `src-tauri/src/events.rs` with their payload type and their existing wire name, so nothing on the wire changes. tauri-specta exports the payloads and a generated `events.<name>.listen(...)` to `src/bindings.ts`; Rust emits through `Event::emit`, so a wrong payload no longer compiles. One macro generates both the event structs and the registry, so an event cannot be declared without being registered (which would panic when emitted), and a test checks the wire names are unique.
+- Regenerate `src/bindings.ts` automatically when `tauri dev` starts (debug builds only). The file is rewritten only when its content changed, so the dev server does not reload for nothing.
+
+### Changed
+- All 21 frontend `listen("event-name", ...)` calls use the generated `events` object; the payload types for progress events, the Activity Center jobs, the update checks, and the Soulseek search event are now the generated ones instead of hand copies. `AiSnapshotKind`, `LibraryCompletionArtistChartSource`, and `ExternalDiscoveryPlan` derive from generated types, and update-install phases, job states, and MusicBrainz release decisions are generated enums.
+- Split `webPreview.ts` (3,850 lines) into domain modules under `src/backend/preview/` (`discovery`, `statistics`, `musicBrainz`); the preview data is still type-checked against the generated contract, and the file is under the 1,500-line lint limit.
+
+### Fixed
+- Keep `use tauri::{AppHandle, Manager}` in `db.rs` available to the test build (a cleanup had left a stray `#[cfg(not(test))]` on it).
+
 ## [0.175.1] - 2026-10-07
 
 ### Fixed

@@ -13,8 +13,9 @@ use std::fs;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use url::Url;
+use tauri_specta::Event as _;
 
 const SUPPORTED_ARCHIVE_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "gif", "bmp"];
 const COMPLETION_COVER_MAX_BYTES: usize = 5 * 1024 * 1024;
@@ -1177,9 +1178,7 @@ fn emit_progress(
     message: &str,
 ) {
     crate::jobs::progress(counters.scanned_albums as i64,counters.total_albums as i64,message);
-    let _ = app.emit(
-        "cover-import-progress",
-        CoverImportProgress {
+    let _ = crate::events::CoverImportProgressEvent(CoverImportProgress {
             status: status.to_string(),
             total_albums: counters.total_albums,
             scanned_albums: counters.scanned_albums,
@@ -1190,8 +1189,7 @@ fn emit_progress(
             missing_covers: counters.missing_covers,
             percent,
             message: message.to_string(),
-        },
-    );
+        }).emit(app);
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
-import { commands } from "../bindings";
-import { isTauriRuntime, listen } from "./tauriClient";
+import { commands, events } from "../bindings";
+import { isTauriRuntime } from "./tauriClient";
 
 export type PublishedChartSeries = {
   chart: string;
@@ -133,10 +133,7 @@ export function subscribePublishedChartsImportProgress(
   callback: (progress: PublishedChartsImportProgress) => void,
 ) {
   if (!isTauriRuntime()) return Promise.resolve(() => undefined);
-  return listen<PublishedChartsImportProgress>(
-    "published-charts-import-progress",
-    (event) => callback(event.payload),
-  );
+  return events.publishedChartsImportProgress.listen((event) => callback(event.payload));
 }
 
 export type PublishedSongRow = PublishedArtistRow & { title: string; firstWeek: string; lastWeek: string };

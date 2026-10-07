@@ -27,6 +27,7 @@ pub struct Job {
     pub id: i64,
     pub kind: String,
     pub label: String,
+    #[specta(type = crate::wire_enums::JobState)]
     pub state: String,
     pub progress: f64,
     pub completed: i64,

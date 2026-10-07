@@ -855,6 +855,7 @@ pub struct MusicBrainzArtistReleaseRow {
     pub local_year: Option<i32>,
     pub match_method: String,
     pub confidence: f64,
+    #[specta(type = Option<crate::wire_enums::MusicBrainzReleaseDecision>)]
     pub decision: Option<String>,
 }
 

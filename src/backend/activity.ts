@@ -1,24 +1,7 @@
-import { commands } from "../bindings";
-import { listen } from "@tauri-apps/api/event";
+import { commands, events, type Job } from "../bindings";
 import { isTauriRuntime } from "./tauriClient";
 
-export type ActivityJob = {
-  id: number;
-  kind: string;
-  label: string;
-  state: "queued" | "running" | "pausing" | "paused" | "cancelling" | "cancelled" | "failed" | "completed";
-  progress: number;
-  completed: number;
-  total: number;
-  etaSeconds: number | null;
-  message: string;
-  error: string | null;
-  createdAt: string;
-  updatedAt: string;
-  resumable: boolean;
-  canCancel: boolean;
-  canRetry: boolean;
-};
+export type ActivityJob = Job;
 export type JobAction = "pause" | "resume" | "retry" | "cancel";
 export function jobActions(job: ActivityJob): JobAction[] {
   if (job.state === "paused") return ["resume", "cancel"];
@@ -57,7 +40,7 @@ export async function listActivityJobs() {
   return isTauriRuntime() ? commands.listActivityJobs() as Promise<ActivityJob[]> : [...previewJobs];
 }
 export async function listenToActivityJobs(handler: (jobs: ActivityJob[]) => void) {
-  if (isTauriRuntime()) return listen<ActivityJob[]>("activity-jobs-changed", event => handler(event.payload));
+  if (isTauriRuntime()) return events.activityJobsChanged.listen(event => handler(event.payload));
   handlers.add(handler); return () => { handlers.delete(handler); };
 }
 export async function controlActivityJob(id: number, action: JobAction) {

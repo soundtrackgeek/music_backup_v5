@@ -19,14 +19,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
 use url::Url;
 use zeroize::Zeroizing;
+use tauri_specta::Event as _;
 
 const DEEZER_GATEWAY_URL: &str = "https://www.deezer.com/ajax/gw-light.php";
 const DEEZER_MEDIA_URL: &str = "https://media.deezer.com/v1/get_url";
 const DEEMIX_USER_AGENT: &str = crate::http::BROWSER_USER_AGENT;
-const DOWNLOAD_EVENT: &str = "deemix-download-progress";
 const STREAM_CHUNK_SIZE: usize = 2048;
 const MAX_ARTWORK_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_ALBUM_TRACKS: usize = 500;
@@ -666,9 +666,7 @@ fn emit_progress(
     completed_tracks: usize,
     total_tracks: usize,
 ) {
-    let _ = app.emit(
-        DOWNLOAD_EVENT,
-        DeemixAlbumDownloadProgress {
+    let _ = crate::events::DeemixDownloadProgress(DeemixAlbumDownloadProgress {
             request_id: input.request_id.clone(),
             album_id: input.album_id.clone(),
             phase: phase.to_string(),
@@ -676,8 +674,7 @@ fn emit_progress(
             current_track,
             completed_tracks,
             total_tracks,
-        },
-    );
+        }).emit(app);
 }
 
 fn validate_request(input: &mut DeemixAlbumDownloadRequest) -> Result<()> {

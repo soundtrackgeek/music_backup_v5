@@ -9,7 +9,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
+use tauri_specta::Event as _;
 
 const MAX_RETURNED_CANDIDATES: usize = 5_000;
 const MAX_CANDIDATE_KEY_LENGTH: usize = 800;
@@ -1855,7 +1856,7 @@ pub fn control_job(app: &AppHandle, batch_id: i64, action: &str) -> Result<()> {
     }
     let status = verification_status_for_connection(&conn, Some(batch_id))?;
     drop(conn);
-    let _ = app.emit("library-completion-verification-progress", &status);
+    let _ = crate::events::LibraryCompletionVerificationProgress(status.clone()).emit(app);
     Ok(())
 }
 
@@ -1873,7 +1874,7 @@ fn emit_verification_status(app: &AppHandle) {
             "albumVerification",
             &serde_json::to_value(&status).unwrap_or_default(),
         );
-        let _ = app.emit("library-completion-verification-progress", status);
+        let _ = crate::events::LibraryCompletionVerificationProgress(status).emit(app);
     }
 }
 
@@ -1887,7 +1888,7 @@ pub fn start_verification_for_app(
     let status = start_verification_for_connection(&mut conn, request)?;
     drop(conn);
     crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
-    let _ = app.emit("library-completion-verification-progress", &status);
+    let _ = crate::events::LibraryCompletionVerificationProgress(status.clone()).emit(app);
     resume_verification_worker(app.clone());
     Ok(status)
 }
@@ -1902,7 +1903,7 @@ pub fn set_verification_state_for_app(
     let status = set_verification_state_for_connection(&conn, request)?;
     drop(conn);
     crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
-    let _ = app.emit("library-completion-verification-progress", &status);
+    let _ = crate::events::LibraryCompletionVerificationProgress(status.clone()).emit(app);
     if should_resume {
         resume_verification_worker(app.clone());
     }
@@ -1919,7 +1920,7 @@ pub fn retry_verification_failures_for_app(
     let status = retry_verification_failures_for_connection(&mut conn, batch_id)?;
     drop(conn);
     crate::jobs::verification_status(app, "albumVerification", &serde_json::to_value(&status)?)?;
-    let _ = app.emit("library-completion-verification-progress", &status);
+    let _ = crate::events::LibraryCompletionVerificationProgress(status.clone()).emit(app);
     resume_verification_worker(app.clone());
     Ok(status)
 }

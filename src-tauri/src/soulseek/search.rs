@@ -5,9 +5,9 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
+use tauri_specta::Event as _;
 
-pub const SEARCH_EVENT: &str = "music-library://soulseek-search";
 pub const SEARCH_TIMEOUT: Duration = Duration::from_secs(15);
 const SEARCH_RESULT_LIMIT: usize = 5_000;
 const SEARCH_EVENT_BATCH_SIZE: usize = 200;
@@ -426,14 +426,11 @@ impl SearchHub {
     }
 
     fn emit(&self, event: &'static str, snapshot: SearchSnapshot, results: Vec<SearchResult>) {
-        let _ = self.app.emit(
-            SEARCH_EVENT,
-            SearchEvent {
+        let _ = crate::events::SoulseekSearchProgress(SearchEvent {
                 event,
                 snapshot,
                 results,
-            },
-        );
+            }).emit(&self.app);
     }
 }
 

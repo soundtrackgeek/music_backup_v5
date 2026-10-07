@@ -62,8 +62,6 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
-#[cfg(not(test))]
-use tauri::Emitter;
 use tauri::{AppHandle, Manager};
 
 #[cfg(not(test))]

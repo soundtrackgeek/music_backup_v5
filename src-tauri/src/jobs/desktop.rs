@@ -11,8 +11,9 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     time::Instant,
 };
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tokio::sync::{oneshot, Notify};
+use tauri_specta::Event as _;
 
 type Handler = fn(&AppHandle, Value) -> Result<Value>;
 struct Registration {
@@ -123,7 +124,7 @@ const HANDLERS: &[Registration] = &[
         true,
         |app, _| {
             let result = music_doctor::sync_for_app(app)?;
-            let _ = app.emit("music-doctor-sync-completed", &result);
+            let _ = crate::events::MusicDoctorSyncCompleted(result.clone()).emit(app);
             encode(result)
         }
     ),
@@ -139,7 +140,7 @@ const HANDLERS: &[Registration] = &[
                 p["recordNoop"].as_bool().unwrap_or(true),
             )?;
             if result.changed_count > 0 {
-                let _ = app.emit("musicbrainz-overlay-sync-completed", &result);
+                let _ = crate::events::MusicBrainzOverlaySyncCompleted(result.clone()).emit(app);
             }
             encode(result)
         }
@@ -267,7 +268,7 @@ fn emit(app: &AppHandle) {
     let system = app.state::<JobSystem>();
     let _events = system.events.lock().unwrap_or_else(|e| e.into_inner());
     if let Ok(jobs) = list_for_app(app) {
-        let _ = app.emit("activity-jobs-changed", jobs);
+        let _ = crate::events::ActivityJobsChanged(jobs).emit(app);
     }
 }
 pub fn submit(app: &AppHandle, kind: &str, payload: Value) -> Result<i64> {

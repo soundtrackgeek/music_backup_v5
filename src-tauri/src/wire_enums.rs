@@ -775,3 +775,45 @@ pub enum MixtapeRole {
     #[serde(rename = "closer")]
     Closer,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum AppUpdateInstallPhase {
+    #[serde(rename = "downloading")]
+    Downloading,
+    #[serde(rename = "installing")]
+    Installing,
+    #[serde(rename = "restarting")]
+    Restarting,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum JobState {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "pausing")]
+    Pausing,
+    #[serde(rename = "paused")]
+    Paused,
+    #[serde(rename = "cancelling")]
+    Cancelling,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "completed")]
+    Completed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum MusicBrainzReleaseDecision {
+    #[serde(rename = "not-in-scope")]
+    NotInScope,
+    #[serde(rename = "ignored")]
+    Ignored,
+    #[serde(rename = "include")]
+    Include,
+    #[serde(rename = "auto-not-official")]
+    AutoNotOfficial,
+}

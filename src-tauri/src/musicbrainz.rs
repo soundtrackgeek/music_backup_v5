@@ -29,7 +29,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
+use tauri_specta::Event as _;
 
 const DEFAULT_CACHE_PATH: &str = "MusicBrainz/musicbrainz_cache.db";
 const SUSPICIOUS_RELEASE_GROUP_THRESHOLD: i64 = 150;
@@ -110,7 +111,7 @@ fn emit_origin_country_import_progress(
     progress: MusicBrainzOriginCountryImportProgress,
 ) {
     crate::jobs::progress(progress.processed_count,progress.eligible_count,&progress.message);
-    let _ = app.emit("musicbrainz-origin-country-import-progress", progress);
+    let _ = crate::events::MusicBrainzOriginCountryImportProgressEvent(progress).emit(app);
 }
 
 #[cfg(not(test))]
@@ -165,7 +166,7 @@ fn emit_artist_info_import_progress(
     progress: MusicBrainzArtistInfoImportProgress,
 ) {
     crate::jobs::progress(progress.processed_count,progress.eligible_count,&progress.message);
-    let _ = app.emit("musicbrainz-artist-info-import-progress", progress);
+    let _ = crate::events::MusicBrainzArtistInfoImportProgressEvent(progress).emit(app);
 }
 
 #[cfg(not(test))]

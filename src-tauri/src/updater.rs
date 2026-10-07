@@ -1,9 +1,10 @@
 use chrono::Utc;
 use serde::Serialize;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::sync::Mutex;
+use tauri_specta::Event as _;
 
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -68,7 +69,7 @@ pub async fn check(app: &AppHandle) -> Result<UpdateSnapshot, String> {
         }
     }
     let snapshot = snapshot.clone();
-    let _ = app.emit("app-update-checked", &snapshot);
+    let _ = crate::events::AppUpdateChecked(snapshot.clone()).emit(app);
     Ok(snapshot)
 }
 
@@ -76,9 +77,10 @@ pub async fn check_quietly(app: &AppHandle) {
     let _ = check(app).await;
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
-struct InstallProgress {
+pub struct InstallProgress {
+    #[specta(type = crate::wire_enums::AppUpdateInstallPhase)]
     phase: &'static str,
     downloaded_bytes: u64,
     total_bytes: Option<u64>,
@@ -102,30 +104,24 @@ pub async fn install(app: &AppHandle, version: String) -> Result<(), String> {
             |chunk, length| {
                 downloaded += chunk as u64;
                 total = length;
-                let _ = app.emit(
-                    "app-update-install-progress",
-                    InstallProgress {
+                let _ = crate::events::AppUpdateInstallProgress(InstallProgress {
                         phase: "downloading",
                         downloaded_bytes: downloaded,
                         total_bytes: length,
                         percent: length
                             .filter(|length| *length > 0)
                             .map(|length| (downloaded as f64 / length as f64 * 100.0).min(100.0)),
-                    },
-                );
+                    }).emit(app);
             },
             || {},
         )
         .await
         .map_err(|error| error.to_string())?;
-    let _ = app.emit(
-        "app-update-install-progress",
-        InstallProgress {
+    let _ = crate::events::AppUpdateInstallProgress(InstallProgress {
             phase: "installing",
             downloaded_bytes: downloaded,
             total_bytes: total,
             percent: Some(100.0),
-        },
-    );
+        }).emit(app);
     update.install(bytes).map_err(|error| error.to_string())
 }

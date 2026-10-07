@@ -1,12 +1,11 @@
 import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
-import { commands } from "./bindings";
+import { commands, events } from "./bindings";
 import { completed } from "./backend/complete";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import {
   isTauriRuntime,
-  listen,
   openUrl,
   selectDirectory,
   type UnlistenFn,
@@ -3399,9 +3398,7 @@ export async function searchSoulseekAlbum(
     }, 25_000);
 
     try {
-      unlisten = await listen<SoulseekSearchEvent>(
-        "music-library://soulseek-search",
-        (event) => {
+      unlisten = await events.musicLibrarySoulseekSearch.listen((event) => {
         const payload = event.payload;
         if (payload.snapshot.clientId !== clientId) return;
         for (const result of payload.results) results.set(result.id, result);
@@ -3410,8 +3407,7 @@ export async function searchSoulseekAlbum(
         } else if (payload.event === "error") {
           finish(payload.snapshot, payload.snapshot.message);
         }
-        },
-      );
+        });
       await commands.searchStart(clientId, query);
     } catch (error) {
       finish(
@@ -7602,7 +7598,7 @@ export async function listenToImportProgress(
     return (() => mockImportProgressHandlers.delete(handler)) satisfies UnlistenFn;
   }
 
-  return listen<ImportProgress>("import-progress", (event) => {
+  return events.importProgress.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7617,19 +7613,16 @@ export async function listenToDeemixDownloadProgress(
     }) satisfies UnlistenFn;
   }
 
-  return listen<DeemixAlbumDownloadProgress>(
-    "deemix-download-progress",
-    (event) => {
+  return events.deemixDownloadProgress.listen((event) => {
       handler(event.payload);
-    },
-  );
+    });
 }
 
 export async function listenToSoulseekConnection(
   handler: (snapshot: SoulseekConnectionSnapshot) => void,
 ): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
-  return listen<SoulseekConnectionSnapshot>("music-library://soulseek-connection", (event) => {
+  return events.musicLibrarySoulseekConnection.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7641,7 +7634,7 @@ export async function listenToSoulseekTransfers(
     mockSoulseekTransferHandlers.add(handler);
     return (() => mockSoulseekTransferHandlers.delete(handler)) satisfies UnlistenFn;
   }
-  return listen<SoulseekTransferQueue>("music-library://soulseek-transfers", (event) => {
+  return events.musicLibrarySoulseekTransfers.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7650,7 +7643,7 @@ export async function listenToSoulseekLocalShares(
   handler: (snapshot: SoulseekLocalShares) => void,
 ): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
-  return listen<SoulseekLocalShares>("music-library://soulseek-local-shares", (event) => {
+  return events.musicLibrarySoulseekLocalShares.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7659,7 +7652,7 @@ export async function listenToSoulseekUploads(
   handler: (snapshot: SoulseekUploadQueue) => void,
 ): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
-  return listen<SoulseekUploadQueue>("music-library://soulseek-uploads", (event) => {
+  return events.musicLibrarySoulseekUploads.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7671,7 +7664,7 @@ export async function listenToUsenetTransfers(
     mockUsenetTransferHandlers.add(handler);
     return () => mockUsenetTransferHandlers.delete(handler);
   }
-  return listen<UsenetTransferQueue>("music-library://usenet-transfers", (event) => {
+  return events.musicLibraryUsenetTransfers.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7683,7 +7676,7 @@ export async function listenToCoverImportProgress(
     return (() => undefined) satisfies UnlistenFn;
   }
 
-  return listen<CoverImportProgress>("cover-import-progress", (event) => {
+  return events.coverImportProgress.listen((event) => {
     handler(event.payload);
   });
 }
@@ -7698,12 +7691,9 @@ export async function listenToMusicBrainzOriginCountryImportProgress(
     }) satisfies UnlistenFn;
   }
 
-  return listen<MusicBrainzOriginCountryImportProgress>(
-    "musicbrainz-origin-country-import-progress",
-    (event) => {
+  return events.musicbrainzOriginCountryImportProgress.listen((event) => {
       handler(event.payload);
-    },
-  );
+    });
 }
 
 export async function listenToMusicBrainzArtistInfoImportProgress(
@@ -7716,12 +7706,9 @@ export async function listenToMusicBrainzArtistInfoImportProgress(
     }) satisfies UnlistenFn;
   }
 
-  return listen<MusicBrainzArtistInfoImportProgress>(
-    "musicbrainz-artist-info-import-progress",
-    (event) => {
+  return events.musicbrainzArtistInfoImportProgress.listen((event) => {
       handler(event.payload);
-    },
-  );
+    });
 }
 
 export async function listenToMusicToolProgress(
@@ -7734,7 +7721,7 @@ export async function listenToMusicToolProgress(
     }) satisfies UnlistenFn;
   }
 
-  return listen<MusicToolProgress>("music-tool-progress", (event) => {
+  return events.musicToolProgress.listen((event) => {
     handler(event.payload);
   });
 }
@@ -8185,7 +8172,7 @@ function musicToolIssueSortValue(issue: MusicToolIssueRow, field: string) {
 
 export async function listenToCatalogRevision(handler: (revision: string) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
-  return listen<string>("catalog-revision-changed", (event) => handler(event.payload));
+  return events.catalogRevisionChanged.listen((event) => handler(event.payload));
 }
 
 export async function acknowledgeCatalogRevision(revision: string): Promise<void> {
@@ -8195,12 +8182,12 @@ export async function acknowledgeCatalogRevision(revision: string): Promise<void
 
 export async function listenToMusicDoctorSync(handler: (result: MusicDoctorSyncResult) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
-  return listen<MusicDoctorSyncResult>("music-doctor-sync-completed", (event) => handler(event.payload));
+  return events.musicDoctorSyncCompleted.listen((event) => handler(event.payload));
 }
 
 export async function listenToMusicBrainzOverlaySync(handler: (result: MusicBrainzOverlaySyncResult) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
-  return listen<MusicBrainzOverlaySyncResult>("musicbrainz-overlay-sync-completed", (event) => handler(event.payload));
+  return events.musicbrainzOverlaySyncCompleted.listen((event) => handler(event.payload));
 }
 
 const mockCompletionHandlers = new Set<(status: LibraryCompletionVerificationStatus) => void>();
@@ -8233,7 +8220,7 @@ export async function listenToLibraryCompletionVerification(handler: (status: Li
     scheduleMockCompletionProgress();
     return () => { mockCompletionHandlers.delete(handler); };
   }
-  return listen<LibraryCompletionVerificationStatus>("library-completion-verification-progress", (event) => handler(event.payload));
+  return events.libraryCompletionVerificationProgress.listen((event) => handler(event.payload));
 }
 
 export async function listenToArtistCompletionVerification(handler: (status: LibraryCompletionArtistVerificationStatus) => void): Promise<UnlistenFn> {
@@ -8242,7 +8229,7 @@ export async function listenToArtistCompletionVerification(handler: (status: Lib
     scheduleMockCompletionProgress();
     return () => { mockArtistCompletionHandlers.delete(handler); };
   }
-  return listen<LibraryCompletionArtistVerificationStatus>("artist-completion-verification-progress", (event) => handler(event.payload));
+  return events.artistCompletionVerificationProgress.listen((event) => handler(event.payload));
 }
 
 registerPreviewControl("albumVerification", async action => {

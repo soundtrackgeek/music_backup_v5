@@ -14,15 +14,14 @@ use std::process::Command;
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use url::Url;
 use zeroize::Zeroizing;
+use tauri_specta::Event as _;
 
 const PROWLARR_CREDENTIAL_SERVICE: &str = "com.local.musiclibrary.usenet.prowlarr";
 const NEWS_CREDENTIAL_SERVICE: &str = "com.local.musiclibrary.usenet.news";
 const PROWLARR_CREDENTIAL_ACCOUNT: &str = "api-key";
-const TRANSFER_EVENT: &str = "music-library://usenet-transfers";
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UsenetProfile {
@@ -1020,7 +1019,7 @@ impl UsenetManager {
     }
 
     fn emit(&self) {
-        let _ = self.app.emit(TRANSFER_EVENT, self.snapshot());
+        let _ = crate::events::UsenetTransfersChanged(self.snapshot()).emit(&self.app);
     }
 }
 

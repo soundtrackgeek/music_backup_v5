@@ -29,7 +29,7 @@ mod musicbrainz_sync;
 mod published_charts;
 mod soulseek;
 mod thumbnails;
-#[cfg(not(test))]
+mod events;
 mod updater;
 mod updates;
 mod wire_enums;
@@ -2224,6 +2224,9 @@ async fn export_music_tool_issues(
 
 #[cfg(not(test))]
 pub fn run() {
+    // `tauri dev` runs from src-tauri, so this keeps ../src/bindings.ts in step with the commands.
+    #[cfg(debug_assertions)]
+    bindings::export_in_debug(std::path::Path::new("../src/bindings.ts"));
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("cover", |context, request, responder| {
             let app = context.app_handle().clone();
@@ -2261,6 +2264,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            bindings::mount_events(app);
             app.manage(db::pool_for_path(&db::database_path(app.handle())?)?);
             let (conn, _) = db::open(app.handle())?;
             if let Err(error) = importer::cleanup_legacy_completed_staging(&conn) {

@@ -10,10 +10,10 @@ use std::{
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
 use thiserror::Error;
+use tauri_specta::Event as _;
 
-const SHARES_EVENT: &str = "music-library://soulseek-local-shares";
 const STORE_VERSION: u32 = 1;
 const MAX_SHARED_ROOTS: usize = 16;
 const MAX_SHARED_FILES: usize = 250_000;
@@ -534,7 +534,7 @@ impl LocalSharesHub {
     }
 
     fn publish(&self) {
-        let _ = self.app.emit(SHARES_EVENT, self.snapshot());
+        let _ = crate::events::SoulseekLocalSharesChanged(self.snapshot()).emit(&self.app);
     }
 }
 

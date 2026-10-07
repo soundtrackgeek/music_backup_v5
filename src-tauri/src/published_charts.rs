@@ -12,7 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 #[cfg(not(test))]
-use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri_specta::Event as _;
 
 const ENTRY_HEADERS: [&str; 21] = [
     "book",
@@ -757,7 +758,7 @@ pub fn import_for_app(app: &AppHandle) -> Result<PublishedChartsImportSummary> {
     let folder = bundled_folder(app)?;
     let (mut conn, _) = crate::db::open(app)?;
     import_folder(&mut conn, &folder, |progress| {
-        let _ = app.emit("published-charts-import-progress", progress);
+        let _ = crate::events::PublishedChartsImportProgressEvent(progress).emit(app);
     })
 }
 

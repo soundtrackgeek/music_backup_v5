@@ -70,7 +70,7 @@ use std::{
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
 use thiserror::Error;
 use tokio::{
     fs::{File, OpenOptions},
@@ -80,8 +80,8 @@ use tokio::{
     time::timeout,
 };
 use zeroize::Zeroizing;
+use tauri_specta::Event as _;
 
-const CONNECTION_EVENT: &str = "music-library://soulseek-connection";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(12);
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(60);
@@ -1820,7 +1820,7 @@ impl ConnectionManager {
             .snapshot
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = snapshot.clone();
-        let _ = self.app.emit(CONNECTION_EVENT, snapshot);
+        let _ = crate::events::SoulseekConnectionChanged(snapshot).emit(&self.app);
     }
 
     fn stop_active_task(&self) {

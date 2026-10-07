@@ -1,4 +1,5 @@
 use super::*;
+use tauri_specta::Event as _;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct MusicToolDefinition {
@@ -507,16 +508,13 @@ pub(super) fn emit_music_tool_progress(
     message: &str,
 ) {
     if let Some(app) = app {
-        let _ = app.emit(
-            "music-tool-progress",
-            MusicToolProgress {
+        let _ = crate::events::MusicToolProgressEvent(MusicToolProgress {
                 tool_id: tool_id.to_string(),
                 request_id: request_id.to_string(),
                 status: status.to_string(),
                 percent: percent.min(100),
                 message: message.to_string(),
-            },
-        );
+            }).emit(app);
     }
 }
 
@@ -577,16 +575,13 @@ pub(super) fn start_music_tool_progress_pulse(
                 break;
             }
             percent = percent.saturating_add(1).min(cap);
-            let _ = app.emit(
-                "music-tool-progress",
-                MusicToolProgress {
+            let _ = crate::events::MusicToolProgressEvent(MusicToolProgress {
                     tool_id: tool_id.clone(),
                     request_id: request_id.clone(),
                     status: status.to_string(),
                     percent,
                     message: message.to_string(),
-                },
-            );
+                }).emit(&app);
         }
     });
 

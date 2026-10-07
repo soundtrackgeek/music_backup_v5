@@ -1,6 +1,5 @@
 import { relaunch } from "@tauri-apps/plugin-process";
-import { commands } from "../bindings";
-import { listen } from "../backend/tauriClient";
+import { commands, events } from "../bindings";
 
 export type AppUpdateInfo = {
   currentVersion: string;
@@ -28,7 +27,7 @@ export function getAppUpdateStatus() {
 }
 
 export function listenToAppUpdateChecks(handler: (snapshot: AppUpdateSnapshot) => void) {
-  return listen<AppUpdateSnapshot>("app-update-checked", (event) => handler(event.payload));
+  return events.appUpdateChecked.listen((event) => handler(event.payload));
 }
 
 export async function checkForAppUpdate() {
@@ -41,7 +40,7 @@ export async function installAppUpdate(
   update: string,
   onProgress: (progress: AppUpdateInstallProgress) => void,
 ) {
-  const unlisten = await listen<AppUpdateInstallProgress>("app-update-install-progress", (event) => onProgress(event.payload));
+  const unlisten = await events.appUpdateInstallProgress.listen((event) => onProgress(event.payload));
   try {
     await commands.installAppUpdate(update);
     onProgress({ phase: "restarting", downloadedBytes: 0, totalBytes: null, percent: 100 });

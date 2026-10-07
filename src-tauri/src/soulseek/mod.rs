@@ -20,11 +20,15 @@ mod uploads;
 mod wanted;
 
 use search::SearchSnapshot;
-use service::{
-    ConnectionBootstrap, ConnectionManager, ConnectionPaths, ConnectionSnapshot,
-    SaveConnectionRequest,
-};
+use service::{ConnectionBootstrap, ConnectionManager, ConnectionPaths, SaveConnectionRequest};
 use tauri::{AppHandle, Manager, State};
+
+// Payload types of the typed UI events (declared in `crate::events`).
+pub(crate) use downloads::TransferQueueSnapshot;
+pub(crate) use local_shares::LocalSharesSnapshot;
+pub(crate) use search::SearchEvent;
+pub(crate) use service::ConnectionSnapshot;
+pub(crate) use uploads::UploadQueueSnapshot;
 
 pub fn initialize(app: &AppHandle) -> Result<ConnectionManager, String> {
     let config_directory = app

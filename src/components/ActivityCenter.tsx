@@ -65,7 +65,7 @@ export function ActivityCenter() {
         {error && <div className="activity-error" role="alert">{error}<button className="secondary-button" onClick={() => { setError(null); void listActivityJobs().then(receive).catch(e => setError(String(e))); }}>Refresh</button></div>}
         <div className="activity-list">{visible.length === 0 ? <div className="activity-empty"><Check size={28} /><h3>{filter === "all" ? "Nothing running right now" : "No jobs here"}</h3><p>Imports, verification and sync work appear here automatically. You can keep browsing while they run.</p></div> : visible.map(job => <article key={job.id} className={`activity-job activity-job-${job.state}`}>
           <div className="activity-job-heading"><h3>{job.label}</h3><span>{stateLabels[job.state]}</span></div>
-          {job.total > 0 && <div className="activity-progress" role="progressbar" aria-label={`${job.label} progress`} aria-valuenow={Math.round(job.progress)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} /></div>}
+          {job.total > 0 && <div className="activity-progress" role="progressbar" aria-label={`${job.label} progress`} aria-valuenow={Math.round(job.progress ?? 0)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.max(0, Math.min(100, job.progress ?? 0))}%` }} /></div>}
           <p className="activity-message">{job.message || (activeJob(job) ? "Preparing work…" : stateLabels[job.state])}</p>
           {job.etaSeconds != null && job.etaSeconds > 0 && activeJob(job) && <p className="activity-eta"><Clock3 size={13} /> About {Math.ceil(job.etaSeconds / 60)} min remaining</p>}
           {job.error && <p className="activity-job-error">{job.error}</p>}

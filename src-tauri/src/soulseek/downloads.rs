@@ -10,10 +10,10 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
 use thiserror::Error;
+use tauri_specta::Event as _;
 
-const TRANSFER_EVENT: &str = "music-library://soulseek-transfers";
 const STORE_VERSION: u32 = 1;
 const MAX_AUTOMATIC_RETRIES: u32 = 3;
 const DEFAULT_MAX_CONCURRENT_DOWNLOADS: u8 = 3;
@@ -953,7 +953,7 @@ impl TransferHub {
 
     fn persist_and_publish(&self) -> Result<(), TransferError> {
         self.persist()?;
-        let _ = self.app.emit(TRANSFER_EVENT, self.snapshot());
+        let _ = crate::events::SoulseekTransfersChanged(self.snapshot()).emit(&self.app);
         Ok(())
     }
 

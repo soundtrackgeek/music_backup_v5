@@ -396,6 +396,7 @@ fn builder() -> Builder<Wry> {
     Builder::<Wry>::new()
         .commands(commands)
         // Keep the existing contract: command errors reject the promise.
+        .events(crate::events::collect())
         .error_handling(ErrorHandlingMode::Throw)
         // Row ids and counts stay far below 2^53, as with the hand-written types.
         .dangerously_cast_bigints_to_number()
@@ -407,9 +408,41 @@ pub fn export(path: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+/// Regenerates the bindings in debug builds so `tauri dev` always serves types that
+/// match the Rust commands. The file is only rewritten when its content changed
+/// (ignoring line endings), so the dev server does not reload for nothing.
+#[cfg(debug_assertions)]
+pub fn export_in_debug(path: &Path) {
+    let temporary = std::env::temp_dir().join("music-library-bindings-dev.ts");
+    let result = export(&temporary).and_then(|()| {
+        let generated = std::fs::read_to_string(&temporary).map_err(|error| error.to_string())?;
+        let current = std::fs::read_to_string(path).unwrap_or_default();
+        let normalize = |text: &str| text.replace("
+", "
+");
+        if normalize(&generated) != normalize(&current) {
+            std::fs::write(path, generated).map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    });
+    if let Err(error) = result {
+        eprintln!("Could not refresh {}: {error}", path.display());
+    }
+}
+
+/// The one builder shared by the invoke handler and event mounting. It lives for the
+/// whole process, which also lets the handler borrow it as `'static`.
+fn shared() -> &'static Builder<Wry> {
+    static BUILDER: std::sync::OnceLock<Builder<Wry>> = std::sync::OnceLock::new();
+    BUILDER.get_or_init(builder)
+}
+
 /// The Tauri invoke handler for every command.
 pub fn invoke_handler() -> impl Fn(Invoke<Wry>) -> bool + Send + Sync + 'static {
-    // The handler borrows the builder; it lives for the whole process anyway.
-    let builder: &'static Builder<Wry> = Box::leak(Box::new(builder()));
-    builder.invoke_handler()
+    shared().invoke_handler()
+}
+
+/// Registers the typed events. Must run in `setup`, before anything emits one.
+pub fn mount_events(app: &tauri::App) {
+    shared().mount_events(app);
 }

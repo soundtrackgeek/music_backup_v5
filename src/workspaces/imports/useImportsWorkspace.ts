@@ -204,7 +204,7 @@ export function useImportsWorkspace({
   const coverProgressPercent = useMemo(() => {
     if (coverProgress.status === "completed") return 100;
     if (coverProgress.scannedAlbums === 0) return isImportingCovers ? 4 : 0;
-    return Math.min(99, Math.max(1, coverProgress.percent));
+    return Math.min(99, Math.max(1, coverProgress.percent ?? 0));
   }, [
     coverProgress.percent,
     coverProgress.scannedAlbums,

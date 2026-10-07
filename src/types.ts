@@ -1,36 +1,3 @@
-import type {
-  AiKeySource,
-  AiLibraryLens,
-  AiMusicResearchEntity,
-  AiPlaylistStrategy,
-  AiQueryTarget,
-  ArtistTimelineMetric,
-  BrowseView,
-  ChartViewMode,
-  CountryFlagDisplay,
-  DeemixCredentialSource,
-  DeemixDownloadOrganization,
-  DeemixDownloadQuality,
-  DiscoveryChartSource,
-  DiscoveryCompletionMode,
-  DiscoveryMixerSeedKind,
-  DiscoveryRecommendationMode,
-  DiscoveryShelf,
-  DiscoverySourceHealthAction,
-  DiscoverySourceHealthState,
-  ExternalDiscoveryEntity,
-  LeftSidebarMode,
-  LibraryCompletionConfidence,
-  LibraryCompletionStatus,
-  LibraryUpdateKind,
-  MusicToolFixConfidence,
-  MusicToolScope,
-  MusicToolSeverity,
-  RightSidebarMode,
-  TextFilterOperator,
-  UsenetTransferStatus,
-  WishListEntity,
-} from "./bindings";
 
 // Types the backend sends or accepts come from Rust: `src/bindings.ts` is generated
 // (`npm run bindings`) and the names below re-export it. Three shapes are used:
@@ -42,21 +9,27 @@ import type {
 //   * `X = X_Serialize` for types that serialize differently from how they
 //     deserialize (the shape the backend sends).
 // Add new backend types in Rust, not here.
+
 import type {
   AddWishListMusicBrainzCandidateResponse,
   AiCompileRequest,
   AiConnectionTest,
   AiCurrentViewAnswer,
+  AiKeySource,
   AiKeyStatus,
   AiLibraryAnalysis,
   AiLibraryFinding,
+  AiLibraryLens,
   AiMarkdownExportRequest,
   AiMusicResearchAnswer,
+  AiMusicResearchEntity,
   AiMusicResearchExchange,
   AiMusicResearchSource,
   AiMusicResearchTurn,
+  AiPlaylistStrategy,
   AiPlaylistTrack,
   AiQueryFollowUpContext,
+  AiQueryTarget,
   AiUsage,
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
@@ -69,6 +42,7 @@ import type {
   ArtistSummary,
   ArtistTimelineAlbum,
   ArtistTimelineArtist,
+  ArtistTimelineMetric,
   ArtistTimelineResponse,
   ArtistTrackChartHistory,
   ArtistTrackHighlights,
@@ -76,20 +50,29 @@ import type {
   BillboardSinglesImportSummary,
   BrowseResponse,
   BrowseRow,
+  BrowseView,
   CatalogConcentrationStats,
+  ChartViewMode,
   ConcentrationPoint,
   ConfirmLibraryCompletionArtistMatchRequest,
   CountryCatalogStats,
+  CountryFlagDisplay,
+  CoverImportProgress,
   CoverImportSummary,
   DatabaseBackup,
   DatabaseRestoreSummary,
   DecadeProgressStats,
+  DeemixAlbumDownloadPhase,
   DeemixAlbumDownloadPreflight,
+  DeemixAlbumDownloadProgress,
   DeemixAlbumDownloadSummary,
   DeemixAlbumMatch,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
+  DeemixCredentialSource,
   DeemixCredentialStatus,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
   DiscogsConnectionTest,
   DiscogsCredentialStatus,
   DiscoveryAlbumCompletionStory,
@@ -99,7 +82,9 @@ import type {
   DiscoveryArtistPoint,
   DiscoveryChartSnapshot,
   DiscoveryChartSnapshotRequest,
+  DiscoveryChartSource,
   DiscoveryChartStory,
+  DiscoveryCompletionMode,
   DiscoveryCompletionSnapshot,
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDailyEdition,
@@ -117,19 +102,25 @@ import type {
   DiscoveryMixerRequest,
   DiscoveryMixerResponse,
   DiscoveryMixerSeedInput,
+  DiscoveryMixerSeedKind,
   DiscoveryMixerSeedOption,
   DiscoveryMixerSeedSearchRequest,
   DiscoveryRecommendationAnchor,
+  DiscoveryRecommendationMode,
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryRecommendationStory,
   DiscoveryResponse,
+  DiscoveryShelf,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthAction,
   DiscoverySourceHealthItem,
   DiscoverySourceHealthResponse,
+  DiscoverySourceHealthState,
   DurationAlbumStat,
   DurationAnalyticsStats,
+  ExternalDiscoveryEntity,
   ExternalDiscoveryItem,
   GenreListResponse,
   GenreProgressStats,
@@ -139,6 +130,7 @@ import type {
   GenreTimelineResponse,
   GenreTimelineYearCount,
   ImportPreview,
+  ImportProgress,
   ImportRun,
   ImportSummary,
   ImportSuspiciousAlbum,
@@ -153,6 +145,7 @@ import type {
   LastFmRelatedAlbum,
   LastFmRelatedAlbums,
   LastFmSimilarArtist,
+  LeftSidebarMode,
   LibraryCompletionArtistCandidate,
   LibraryCompletionArtistDecision,
   LibraryCompletionArtistEvidence,
@@ -163,11 +156,13 @@ import type {
   LibraryCompletionArtistVerificationStatus,
   LibraryCompletionAtlasCell,
   LibraryCompletionCandidate,
+  LibraryCompletionConfidence,
   LibraryCompletionCoverEnrichment,
   LibraryCompletionDecision,
   LibraryCompletionEvidence,
   LibraryCompletionRequest,
   LibraryCompletionResponse,
+  LibraryCompletionStatus,
   LibraryCompletionVerificationBatch,
   LibraryCompletionVerificationItemSummary,
   LibraryCompletionVerificationStatus,
@@ -178,6 +173,7 @@ import type {
   LibraryUpdate,
   LibraryUpdateArtistResponse,
   LibraryUpdateArtistSummary,
+  LibraryUpdateKind,
   LibraryUpdateResponse,
   LibraryUpdateSummary,
   LovedDensityStat,
@@ -185,6 +181,7 @@ import type {
   MetadataCoverageMetric,
   MusicBrainzArtistCandidateRow,
   MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistInfoImportProgress,
   MusicBrainzArtistInfoImportRequest,
   MusicBrainzArtistInfoImportRun,
   MusicBrainzArtistInfoImportSummary,
@@ -197,6 +194,7 @@ import type {
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   MusicBrainzCacheWarningExample,
+  MusicBrainzOriginCountryImportProgress,
   MusicBrainzOriginCountryImportRequest,
   MusicBrainzOriginCountryImportSummary,
   MusicBrainzOriginCountryOption,
@@ -205,6 +203,7 @@ import type {
   MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
+  MusicBrainzReleaseDecision,
   MusicDoctorBitrateStat,
   MusicDoctorFormatStat,
   MusicDoctorSource,
@@ -218,11 +217,15 @@ import type {
   MusicMapResponse,
   MusicMapSummary,
   MusicToolFieldDiff,
+  MusicToolFixConfidence,
   MusicToolFixDiff,
   MusicToolFixHistoryEntry,
   MusicToolFixSummary,
   MusicToolIssueResponse,
   MusicToolIssueRow,
+  MusicToolProgress,
+  MusicToolScope,
+  MusicToolSeverity,
   MusicToolSummary,
   MusicToolUndoSummary,
   NewLibraryArtist,
@@ -236,6 +239,7 @@ import type {
   RatingEvent,
   RatingHistoryPoint,
   RatingProgressStats,
+  RightSidebarMode,
   SaveDiscogsCredentialsRequest,
   SaveLastFmApiKeyRequest,
   SaveUsenetProfileRequest,
@@ -244,7 +248,7 @@ import type {
   SetLibraryCompletionDecisionRequest,
   SetLibraryCompletionVerificationStateRequest,
   SetPlaylistAutomationRequest,
-  StatisticsResponse,
+  TextFilterOperator,
   TiISkuddetImportSummary,
   TrackDebutTimelineResponse,
   TrackDebutTimelineTrack,
@@ -257,18 +261,19 @@ import type {
   UsenetSearchResult,
   UsenetTransfer,
   UsenetTransferQueue,
+  UsenetTransferStatus,
   VgListaImportSummary,
   WishListArtistAlbumDiscoveryRequest,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumDiscoveryRow,
   WishListArtistAlbumSummary,
+  WishListEntity,
   WishListItem,
   WishListMissingAlbum,
   WishListMusicBrainzCandidate,
   WishListMusicBrainzSearchRequest,
   WishListMusicBrainzSearchResponse,
   WishListResponse,
-  YearProgressStats,
   AiCompiledQuery_Serialize,
   AiPlaylist_Serialize,
   AiQueryExchange_Serialize,
@@ -311,9 +316,11 @@ import type {
   SavedSearch as SavedSearch_Generated,
   StartLibraryCompletionArtistVerificationRequest as StartLibraryCompletionArtistVerificationRequest_Generated,
   StartLibraryCompletionVerificationRequest as StartLibraryCompletionVerificationRequest_Generated,
+  StatisticsResponse as StatisticsResponse_Generated,
   TextFilter as TextFilter_Generated,
   UsenetSearchRequest as UsenetSearchRequest_Generated,
   YearProgressRequest as YearProgressRequest_Generated,
+  YearProgressStats as YearProgressStats_Generated,
 } from "./bindings";
 
 /**
@@ -332,16 +339,21 @@ export type {
   AiCompileRequest,
   AiConnectionTest,
   AiCurrentViewAnswer,
+  AiKeySource,
   AiKeyStatus,
   AiLibraryAnalysis,
   AiLibraryFinding,
+  AiLibraryLens,
   AiMarkdownExportRequest,
   AiMusicResearchAnswer,
+  AiMusicResearchEntity,
   AiMusicResearchExchange,
   AiMusicResearchSource,
   AiMusicResearchTurn,
+  AiPlaylistStrategy,
   AiPlaylistTrack,
   AiQueryFollowUpContext,
+  AiQueryTarget,
   AiUsage,
   AlbumDebutTimelineAlbum,
   AlbumDebutTimelineResponse,
@@ -354,6 +366,7 @@ export type {
   ArtistSummary,
   ArtistTimelineAlbum,
   ArtistTimelineArtist,
+  ArtistTimelineMetric,
   ArtistTimelineResponse,
   ArtistTrackChartHistory,
   ArtistTrackHighlights,
@@ -361,20 +374,29 @@ export type {
   BillboardSinglesImportSummary,
   BrowseResponse,
   BrowseRow,
+  BrowseView,
   CatalogConcentrationStats,
+  ChartViewMode,
   ConcentrationPoint,
   ConfirmLibraryCompletionArtistMatchRequest,
   CountryCatalogStats,
+  CountryFlagDisplay,
+  CoverImportProgress,
   CoverImportSummary,
   DatabaseBackup,
   DatabaseRestoreSummary,
   DecadeProgressStats,
+  DeemixAlbumDownloadPhase,
   DeemixAlbumDownloadPreflight,
+  DeemixAlbumDownloadProgress,
   DeemixAlbumDownloadSummary,
   DeemixAlbumMatch,
   DeemixAlbumSearchResponse,
   DeemixConnectionTest,
+  DeemixCredentialSource,
   DeemixCredentialStatus,
+  DeemixDownloadOrganization,
+  DeemixDownloadQuality,
   DiscogsConnectionTest,
   DiscogsCredentialStatus,
   DiscoveryAlbumCompletionStory,
@@ -384,7 +406,9 @@ export type {
   DiscoveryArtistPoint,
   DiscoveryChartSnapshot,
   DiscoveryChartSnapshotRequest,
+  DiscoveryChartSource,
   DiscoveryChartStory,
+  DiscoveryCompletionMode,
   DiscoveryCompletionSnapshot,
   DiscoveryCompletionSnapshotRequest,
   DiscoveryDailyEdition,
@@ -402,19 +426,25 @@ export type {
   DiscoveryMixerRequest,
   DiscoveryMixerResponse,
   DiscoveryMixerSeedInput,
+  DiscoveryMixerSeedKind,
   DiscoveryMixerSeedOption,
   DiscoveryMixerSeedSearchRequest,
   DiscoveryRecommendationAnchor,
+  DiscoveryRecommendationMode,
   DiscoveryRecommendationSnapshot,
   DiscoveryRecommendationSnapshotRequest,
   DiscoveryRecommendationStory,
   DiscoveryResponse,
+  DiscoveryShelf,
   DiscoveryShelfExplorerRequest,
   DiscoveryShelfExplorerResponse,
+  DiscoverySourceHealthAction,
   DiscoverySourceHealthItem,
   DiscoverySourceHealthResponse,
+  DiscoverySourceHealthState,
   DurationAlbumStat,
   DurationAnalyticsStats,
+  ExternalDiscoveryEntity,
   ExternalDiscoveryItem,
   GenreListResponse,
   GenreProgressStats,
@@ -424,6 +454,7 @@ export type {
   GenreTimelineResponse,
   GenreTimelineYearCount,
   ImportPreview,
+  ImportProgress,
   ImportRun,
   ImportSummary,
   ImportSuspiciousAlbum,
@@ -438,6 +469,7 @@ export type {
   LastFmRelatedAlbum,
   LastFmRelatedAlbums,
   LastFmSimilarArtist,
+  LeftSidebarMode,
   LibraryCompletionArtistCandidate,
   LibraryCompletionArtistDecision,
   LibraryCompletionArtistEvidence,
@@ -448,11 +480,13 @@ export type {
   LibraryCompletionArtistVerificationStatus,
   LibraryCompletionAtlasCell,
   LibraryCompletionCandidate,
+  LibraryCompletionConfidence,
   LibraryCompletionCoverEnrichment,
   LibraryCompletionDecision,
   LibraryCompletionEvidence,
   LibraryCompletionRequest,
   LibraryCompletionResponse,
+  LibraryCompletionStatus,
   LibraryCompletionVerificationBatch,
   LibraryCompletionVerificationItemSummary,
   LibraryCompletionVerificationStatus,
@@ -463,6 +497,7 @@ export type {
   LibraryUpdate,
   LibraryUpdateArtistResponse,
   LibraryUpdateArtistSummary,
+  LibraryUpdateKind,
   LibraryUpdateResponse,
   LibraryUpdateSummary,
   LovedDensityStat,
@@ -470,6 +505,7 @@ export type {
   MetadataCoverageMetric,
   MusicBrainzArtistCandidateRow,
   MusicBrainzArtistDiscographyResponse,
+  MusicBrainzArtistInfoImportProgress,
   MusicBrainzArtistInfoImportRequest,
   MusicBrainzArtistInfoImportRun,
   MusicBrainzArtistInfoImportSummary,
@@ -482,6 +518,7 @@ export type {
   MusicBrainzArtistReleaseRow,
   MusicBrainzCacheStatus,
   MusicBrainzCacheWarningExample,
+  MusicBrainzOriginCountryImportProgress,
   MusicBrainzOriginCountryImportRequest,
   MusicBrainzOriginCountryImportSummary,
   MusicBrainzOriginCountryOption,
@@ -490,6 +527,7 @@ export type {
   MusicBrainzOriginCountryStatus,
   MusicBrainzOverlaySyncLogEntry,
   MusicBrainzOverlaySyncResult,
+  MusicBrainzReleaseDecision,
   MusicDoctorBitrateStat,
   MusicDoctorFormatStat,
   MusicDoctorSource,
@@ -503,11 +541,15 @@ export type {
   MusicMapResponse,
   MusicMapSummary,
   MusicToolFieldDiff,
+  MusicToolFixConfidence,
   MusicToolFixDiff,
   MusicToolFixHistoryEntry,
   MusicToolFixSummary,
   MusicToolIssueResponse,
   MusicToolIssueRow,
+  MusicToolProgress,
+  MusicToolScope,
+  MusicToolSeverity,
   MusicToolSummary,
   MusicToolUndoSummary,
   NewLibraryArtist,
@@ -521,6 +563,7 @@ export type {
   RatingEvent,
   RatingHistoryPoint,
   RatingProgressStats,
+  RightSidebarMode,
   SaveDiscogsCredentialsRequest,
   SaveLastFmApiKeyRequest,
   SaveUsenetProfileRequest,
@@ -529,7 +572,7 @@ export type {
   SetLibraryCompletionDecisionRequest,
   SetLibraryCompletionVerificationStateRequest,
   SetPlaylistAutomationRequest,
-  StatisticsResponse,
+  TextFilterOperator,
   TiISkuddetImportSummary,
   TrackDebutTimelineResponse,
   TrackDebutTimelineTrack,
@@ -542,18 +585,19 @@ export type {
   UsenetSearchResult,
   UsenetTransfer,
   UsenetTransferQueue,
+  UsenetTransferStatus,
   VgListaImportSummary,
   WishListArtistAlbumDiscoveryRequest,
   WishListArtistAlbumDiscoveryResponse,
   WishListArtistAlbumDiscoveryRow,
   WishListArtistAlbumSummary,
+  WishListEntity,
   WishListItem,
   WishListMissingAlbum,
   WishListMusicBrainzCandidate,
   WishListMusicBrainzSearchRequest,
   WishListMusicBrainzSearchResponse,
   WishListResponse,
-  YearProgressStats,
 };
 
 export type AiCompiledQuery = Complete<AiCompiledQuery_Serialize>;
@@ -598,152 +642,19 @@ export type SavedExternalDiscovery = Complete<SavedExternalDiscovery_Generated>;
 export type SavedSearch = Complete<SavedSearch_Generated>;
 export type StartLibraryCompletionArtistVerificationRequest = Complete<StartLibraryCompletionArtistVerificationRequest_Generated>;
 export type StartLibraryCompletionVerificationRequest = Complete<StartLibraryCompletionVerificationRequest_Generated>;
+export type StatisticsResponse = Complete<StatisticsResponse_Generated>;
 export type TextFilter = Complete<TextFilter_Generated>;
 export type UsenetSearchRequest = Complete<UsenetSearchRequest_Generated>;
 export type YearProgressRequest = Complete<YearProgressRequest_Generated>;
+export type YearProgressStats = Complete<YearProgressStats_Generated>;
 
-export type {
-  AiKeySource,
-  AiLibraryLens,
-  AiMusicResearchEntity,
-  AiPlaylistStrategy,
-  AiQueryTarget,
-  ArtistTimelineMetric,
-  BrowseView,
-  ChartViewMode,
-  CountryFlagDisplay,
-  DeemixCredentialSource,
-  DeemixDownloadOrganization,
-  DeemixDownloadQuality,
-  DiscoveryChartSource,
-  DiscoveryCompletionMode,
-  DiscoveryMixerSeedKind,
-  DiscoveryRecommendationMode,
-  DiscoveryShelf,
-  DiscoverySourceHealthAction,
-  DiscoverySourceHealthState,
-  ExternalDiscoveryEntity,
-  LeftSidebarMode,
-  LibraryCompletionConfidence,
-  LibraryCompletionStatus,
-  LibraryUpdateKind,
-  MusicToolFixConfidence,
-  MusicToolScope,
-  MusicToolSeverity,
-  RightSidebarMode,
-  TextFilterOperator,
-  UsenetTransferStatus,
-  WishListEntity,
-};
 
-export type ImportProgress = {
-  status: string;
-  sessionId: number | null;
-  processedRows: number;
-  processedBytes: number;
-  totalBytes: number;
-  albumCount: number;
-  message: string;
-};
 
-export type CoverImportProgress = {
-  status: string;
-  totalAlbums: number;
-  scannedAlbums: number;
-  newCoversFound: number;
-  importedCovers: number;
-  relinkedCovers: number;
-  skippedExisting: number;
-  missingCovers: number;
-  percent: number;
-  message: string;
-};
+export type AiSnapshotKind = AiSnapshotContent["kind"];
 
-export type MusicBrainzOriginCountryImportProgress = {
-  status: string;
-  totalArtists: number;
-  eligibleCount: number;
-  processedCount: number;
-  remainingCount: number;
-  fetchedCount: number;
-  storedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  percent: number;
-  currentArtist: string | null;
-  currentArtistKey: string | null;
-  currentMbid: string | null;
-  message: string;
-};
+export type ExternalDiscoveryPlan = import("./bindings").AiExternalDiscoveryPlan;
 
-export type MusicBrainzArtistInfoImportProgress = {
-  status: string;
-  totalArtists: number;
-  eligibleCount: number;
-  processedCount: number;
-  remainingCount: number;
-  fetchedCount: number;
-  storedCount: number;
-  skippedCount: number;
-  unresolvedCount: number;
-  failedCount: number;
-  percent: number;
-  currentArtist: string | null;
-  currentArtistKey: string | null;
-  currentMbid: string | null;
-  message: string;
-};
-
-export type MusicBrainzReleaseDecision =
-  "not-in-scope" | "ignored" | "include" | "auto-not-official" | null;
-
-export type AiSnapshotKind =
-  | AiQueryTarget
-  | "searchAnswer"
-  | "chartAnswer"
-  | "libraryAnalysis"
-  | "musicResearch";
-
-export type ExternalDiscoveryPlan = {
-  prompt: string;
-  entity: ExternalDiscoveryEntity;
-  count: number;
-  year: number;
-  yearFrom: number;
-  yearTo: number;
-  yearMeaning: "releaseYear" | "formedYear";
-  genres: string[];
-  countries: string[];
-  keywords: string;
-  title: string;
-  summary: string;
-  model: string;
-  usage: AiUsage;
-};
-
-export type LibraryCompletionArtistChartSource =
-  | LibraryCompletionEvidence["source"]
-  | "tiISkuddet"
-  | "norsktoppen";
-
-export type DeemixAlbumDownloadPhase =
-  | "metadata"
-  | "artwork"
-  | "downloading"
-  | "tagging"
-  | "complete"
-  | "failed";
-
-export type DeemixAlbumDownloadProgress = {
-  requestId: string;
-  albumId: string;
-  phase: DeemixAlbumDownloadPhase;
-  message: string;
-  currentTrack: string | null;
-  completedTracks: number;
-  totalTracks: number;
-};
+export type LibraryCompletionArtistChartSource = LibraryCompletionArtistEvidence["source"];
 
 export type SoulseekConnectionState = import("./bindings").ConnectionState;
 
@@ -759,29 +670,9 @@ export type SoulseekSearchState = import("./bindings").SearchState;
 
 export type SoulseekSearchSnapshot = import("./bindings").SearchSnapshot;
 
-export type SoulseekSearchResult = {
-  id: string;
-  token: number;
-  username: string;
-  filename: string;
-  sizeBytes: number;
-  extension: string;
-  bitrate: number | null;
-  durationSeconds: number | null;
-  vbr: boolean | null;
-  sampleRate: number | null;
-  bitDepth: number | null;
-  slotFree: boolean;
-  averageSpeed: number;
-  queueLength: number;
-  isPrivate: boolean;
-};
+export type SoulseekSearchResult = import("./bindings").SearchResult;
 
-export type SoulseekSearchEvent = {
-  event: "started" | "results" | "completed" | "stopped" | "error";
-  snapshot: SoulseekSearchSnapshot;
-  results: SoulseekSearchResult[];
-};
+export type SoulseekSearchEvent = import("./bindings").SearchEvent;
 
 export type SoulseekAlbumSearchRequest = {
   title: string;
@@ -825,14 +716,6 @@ export type SoulseekLocalShares = import("./bindings").LocalSharesSnapshot;
 export type SoulseekUpload = import("./bindings").UploadSnapshot;
 
 export type SoulseekUploadQueue = import("./bindings").UploadQueueSnapshot;
-
-export type MusicToolProgress = {
-  toolId: string;
-  requestId: string;
-  status: "starting" | "counting" | "loading" | "completed" | "failed";
-  percent: number;
-  message: string;
-};
 
 export type TimelineChartSource =
   | "billboard"

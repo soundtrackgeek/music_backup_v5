@@ -10,10 +10,10 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
 use thiserror::Error;
+use tauri_specta::Event as _;
 
-const UPLOAD_EVENT: &str = "music-library://soulseek-uploads";
 const MAX_UPLOAD_QUEUE: usize = 500;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, specta::Type)]
@@ -575,7 +575,7 @@ impl UploadHub {
     }
 
     fn publish(&self) {
-        let _ = self.app.emit(UPLOAD_EVENT, self.snapshot());
+        let _ = crate::events::SoulseekUploadsChanged(self.snapshot()).emit(&self.app);
     }
 }
 

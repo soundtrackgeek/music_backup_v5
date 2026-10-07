@@ -3,17 +3,21 @@ import { checkForAppUpdate, getAppUpdateStatus, installAppUpdate, listenToAppUpd
 
 const mocks = vi.hoisted(() => ({
   installAppUpdate: vi.fn(),
-  listen: vi.fn(),
+  listenChecked: vi.fn(),
+  listenInstall: vi.fn(),
   relaunch: vi.fn(),
   getAppUpdateStatus: vi.fn(),
   checkAppUpdate: vi.fn(),
 }));
-vi.mock("../backend/tauriClient", () => ({ listen: mocks.listen }));
 vi.mock("../bindings", () => ({
   commands: {
     getAppUpdateStatus: mocks.getAppUpdateStatus,
     checkAppUpdate: mocks.checkAppUpdate,
     installAppUpdate: mocks.installAppUpdate,
+  },
+  events: {
+    appUpdateChecked: { listen: mocks.listenChecked },
+    appUpdateInstallProgress: { listen: mocks.listenInstall },
   },
 }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: mocks.relaunch }));
@@ -30,7 +34,7 @@ describe("Rust updater bridge", () => {
     expect(mocks.getAppUpdateStatus).toHaveBeenCalledTimes(1);
     const receive = vi.fn();
     await listenToAppUpdateChecks(receive);
-    mocks.listen.mock.calls[0][1]({ payload: snapshot });
+    mocks.listenChecked.mock.calls[0][0]({ payload: snapshot });
     expect(receive).toHaveBeenCalledWith(snapshot);
   });
 
@@ -46,10 +50,10 @@ describe("Rust updater bridge", () => {
 
   it("subscribes before installing the selected version and cleans up after success", async () => {
     const cleanup = vi.fn();
-    mocks.listen.mockResolvedValue(cleanup);
+    mocks.listenInstall.mockResolvedValue(cleanup);
     mocks.installAppUpdate.mockImplementation(async () => {
-      expect(mocks.listen).toHaveBeenCalledWith("app-update-install-progress", expect.any(Function));
-      mocks.listen.mock.calls[0][1]({ payload: { phase: "downloading", percent: 50 } });
+      expect(mocks.listenInstall).toHaveBeenCalledWith(expect.any(Function));
+      mocks.listenInstall.mock.calls[0][0]({ payload: { phase: "downloading", percent: 50 } });
     });
     const progress = vi.fn();
     await installAppUpdate("1.1.0", progress);
@@ -61,7 +65,7 @@ describe("Rust updater bridge", () => {
 
   it("cleans up failed installations without relaunching", async () => {
     const cleanup = vi.fn();
-    mocks.listen.mockResolvedValue(cleanup);
+    mocks.listenInstall.mockResolvedValue(cleanup);
     mocks.installAppUpdate.mockRejectedValue(new Error("signature mismatch"));
     await expect(installAppUpdate("1.1.0", vi.fn())).rejects.toThrow("signature mismatch");
     expect(cleanup).toHaveBeenCalledOnce();

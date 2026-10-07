@@ -254,7 +254,7 @@ export function useSettingsWorkspace({
     if (!musicBrainzOriginProgress) {
       return 0;
     }
-    return Math.min(100, Math.max(0, musicBrainzOriginProgress.percent));
+    return Math.min(100, Math.max(0, musicBrainzOriginProgress.percent ?? 0));
   }, [musicBrainzOriginProgress]);
 
   const musicBrainzOriginReportQuery = musicBrainzOriginReportSearch
@@ -316,7 +316,7 @@ export function useSettingsWorkspace({
     if (!musicBrainzArtistInfoProgress) {
       return 0;
     }
-    return Math.min(100, Math.max(0, musicBrainzArtistInfoProgress.percent));
+    return Math.min(100, Math.max(0, musicBrainzArtistInfoProgress.percent ?? 0));
   }, [musicBrainzArtistInfoProgress]);
 
   const musicBrainzArtistInfoReportQuery = musicBrainzArtistInfoReportSearch

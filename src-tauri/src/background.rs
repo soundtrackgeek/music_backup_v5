@@ -1,6 +1,7 @@
 //! Process-owned schedules. Only saved scheduling fields can reset a deadline.
 use std::time::Duration;
 use tokio::sync::watch;
+use tauri_specta::Event as _;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Schedule {
@@ -103,7 +104,7 @@ impl RevisionNotifier {
 mod desktop {
     use super::*;
     use crate::{db, models::AppSettings, music_doctor, updater};
-    use tauri::{AppHandle, Emitter, Manager};
+    use tauri::{AppHandle, Manager};
 
     pub struct BackgroundScheduler {
         doctor: watch::Sender<Schedule>,
@@ -232,7 +233,7 @@ mod desktop {
                             .unwrap_or_else(|error| error.into_inner())
                             .observe(&revision)
                         {
-                            let _ = catalog_app.emit("catalog-revision-changed", revision);
+                            let _ = crate::events::CatalogRevisionChanged(revision).emit(&catalog_app);
                         }
                     }
                 }

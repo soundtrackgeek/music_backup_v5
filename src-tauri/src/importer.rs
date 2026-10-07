@@ -24,7 +24,8 @@ use std::sync::{
 use std::time::Instant;
 use std::time::UNIX_EPOCH;
 #[cfg(not(test))]
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, };
+use tauri_specta::Event as _;
 
 const IMPORT_STAGE_BATCH_SIZE: usize = 5_000;
 const IMPORT_SUSPICIOUS_EXAMPLE_LIMIT: i64 = 12;
@@ -5461,9 +5462,7 @@ fn emit_progress(
     album_count: u64,
     message: &str,
 ) {
-    let _ = app.emit(
-        "import-progress",
-        ImportProgress {
+    let _ = crate::events::ImportProgressEvent(ImportProgress {
             status: status.to_string(),
             session_id,
             processed_rows,
@@ -5471,8 +5470,7 @@ fn emit_progress(
             total_bytes,
             album_count,
             message: message.to_string(),
-        },
-    );
+        }).emit(app);
 }
 
 #[cfg(test)]
