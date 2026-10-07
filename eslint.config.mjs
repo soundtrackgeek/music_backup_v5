@@ -14,4 +14,14 @@ export default [
       ],
     },
   },
+  {
+    // Every backend entry point declares its return type, so the web-preview branch
+    // of each function is checked against the generated Rust contract.
+    files: ["src/backend.ts"],
+    languageOptions: { parser: tseslint.parser },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      "@typescript-eslint/explicit-module-boundary-types": "error",
+    },
+  },
 ];

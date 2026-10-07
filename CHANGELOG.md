@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.175.0] - 2026-10-07
+
+### Changed
+- Declare an explicit return type on all 208 exported functions in `backend.ts`, taken from the generated command contract. The web-preview branch of each function (the mock data the browser build returns) is now checked against the Rust types at compile time, so a mock can no longer drift from the real response. An ESLint rule (`explicit-module-boundary-types` on `src/backend.ts`) keeps new backend functions from skipping this.
+- Replace the remaining 22 casts of command results with one documented `completed()` helper in `src/backend/complete.ts`. Backend calls no longer use `as` casts.
+
+### Fixed
+- Make the web-preview Soulseek bootstrap mock include the `diagnostics` and `searchNetwork` fields the real response always has.
+
 ## [0.174.0] - 2026-10-07
 
 ### Changed

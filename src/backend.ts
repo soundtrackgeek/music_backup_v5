@@ -1,6 +1,7 @@
 import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { commands } from "./bindings";
+import { completed } from "./backend/complete";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import {
@@ -318,7 +319,7 @@ import type {
   MusicMapLocationDetails,
   MusicMapRefreshSummary,
   MusicMapResponse,
-  PerformanceProbeResponse,
+  PerformanceProbeResponse
 } from "./types";
 
 let mockSavedPlaylists: SavedPlaylist[] = [];
@@ -736,7 +737,7 @@ function emitMockImportProgress(progress: ImportProgress) {
 
 type RawExportResult = Omit<ExportResult, "pathCopied">;
 
-export async function copyTextToClipboard(value: string) {
+export async function copyTextToClipboard(value: string): Promise<boolean> {
   if (!value) return false;
   try {
     if (isTauriRuntime()) {
@@ -759,7 +760,7 @@ async function finalizeExport(result: RawExportResult): Promise<ExportResult> {
   };
 }
 
-export async function openExternalUrl(url: string) {
+export async function openExternalUrl(url: string): Promise<void> {
   const normalizedUrl = normalizeAllowedExternalUrl(url);
 
   if (!isTauriRuntime()) {
@@ -770,7 +771,7 @@ export async function openExternalUrl(url: string) {
   await openUrl(normalizedUrl);
 }
 
-export async function openResearchSourceUrl(url: string) {
+export async function openResearchSourceUrl(url: string): Promise<void> {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -791,7 +792,7 @@ export async function openResearchSourceUrl(url: string) {
   await openUrl(normalizedUrl);
 }
 
-export async function getLibraryStatus() {
+export async function getLibraryStatus(): Promise<LibraryStatus> {
   if (!isTauriRuntime()) {
     return mockStatus;
   }
@@ -799,7 +800,7 @@ export async function getLibraryStatus() {
   return commands.getLibraryStatus();
 }
 
-export async function runPerformanceProbe() {
+export async function runPerformanceProbe(): Promise<PerformanceProbeResponse> {
   if (!isTauriRuntime()) {
     const operations = [
       [
@@ -899,7 +900,7 @@ export async function runPerformanceProbe() {
   return commands.runPerformanceProbe();
 }
 
-export async function listImportRuns(limit: number) {
+export async function listImportRuns(limit: number): Promise<ImportRun[]> {
   if (!isTauriRuntime()) {
     return mockImportRuns.slice(0, limit) satisfies ImportRun[];
   }
@@ -1090,7 +1091,7 @@ const mockLibraryUpdates: LibraryUpdate[] = [
   },
 ];
 
-export async function listLibraryUpdates(request: LibraryUpdateRequest) {
+export async function listLibraryUpdates(request: LibraryUpdateRequest): Promise<LibraryUpdateResponse> {
   if (!isTauriRuntime()) {
     const normalizedQuery = request.query.trim().toLocaleLowerCase();
     const matchingContext = mockLibraryUpdates.filter((update) => {
@@ -1205,7 +1206,7 @@ function mockArtistUpdateSummary(
 
 export async function listLibraryUpdateArtists(
   request: LibraryUpdateRequest,
-) {
+): Promise<LibraryUpdateArtistResponse> {
   if (!isTauriRuntime()) {
     const normalizedQuery = request.query.trim().toLocaleLowerCase();
     const matchingContext = mockLibraryUpdates.filter((update) => {
@@ -1277,7 +1278,7 @@ export async function listLibraryUpdateArtists(
   return commands.listLibraryUpdateArtists(request);
 }
 
-export async function listDatabaseBackups() {
+export async function listDatabaseBackups(): Promise<DatabaseBackup[]> {
   if (!isTauriRuntime()) {
     return mockDatabaseBackups satisfies DatabaseBackup[];
   }
@@ -1285,7 +1286,7 @@ export async function listDatabaseBackups() {
   return commands.listDatabaseBackups();
 }
 
-export async function restoreDatabaseBackup(backupPath: string) {
+export async function restoreDatabaseBackup(backupPath: string): Promise<DatabaseRestoreSummary> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Start restore from the Tauri desktop app to access local SQLite backups.",
@@ -1295,7 +1296,7 @@ export async function restoreDatabaseBackup(backupPath: string) {
   return commands.restoreDatabaseBackup(backupPath);
 }
 
-export async function getStatistics() {
+export async function getStatistics(): Promise<StatisticsResponse> {
   if (!isTauriRuntime()) {
     return mockStatistics;
   }
@@ -1412,7 +1413,7 @@ function mockAlbumDebutTimeline(
 export async function getAlbumDebutTimeline(
   selectedYear: number | null = null,
   chartSource: TimelineChartSource = "billboard",
-) {
+): Promise<AlbumDebutTimelineResponse> {
   if (!isTauriRuntime()) {
     return mockAlbumDebutTimeline(selectedYear);
   }
@@ -1606,7 +1607,7 @@ function mockTrackDebutTimeline(
 export async function getTrackDebutTimeline(
   selectedYear: number | null = null,
   chartSource: TimelineChartSource = "billboard",
-) {
+): Promise<TrackDebutTimelineResponse> {
   if (!isTauriRuntime()) {
     return mockTrackDebutTimeline(selectedYear, chartSource);
   }
@@ -1614,7 +1615,7 @@ export async function getTrackDebutTimeline(
   return commands.getTrackDebutTimeline(selectedYear, chartSource);
 }
 
-export async function getMusicMap() {
+export async function getMusicMap(): Promise<MusicMapResponse> {
   if (!isTauriRuntime()) {
     return mockMusicMap;
   }
@@ -1622,7 +1623,7 @@ export async function getMusicMap() {
   return commands.getMusicMap();
 }
 
-export async function getMusicMapLocationDetails(locationKey: string) {
+export async function getMusicMapLocationDetails(locationKey: string): Promise<MusicMapLocationDetails> {
   if (!isTauriRuntime()) {
     return mockMusicMapDetails(locationKey);
   }
@@ -1630,7 +1631,7 @@ export async function getMusicMapLocationDetails(locationKey: string) {
   return commands.getMusicMapLocationDetails(locationKey);
 }
 
-export async function refreshMusicMapLocations() {
+export async function refreshMusicMapLocations(): Promise<MusicMapRefreshSummary> {
   if (!isTauriRuntime()) {
     return mockMusicMapRefresh;
   }
@@ -1638,7 +1639,7 @@ export async function refreshMusicMapLocations() {
   return commands.refreshMusicMapLocations();
 }
 
-export async function getYearProgress(request: YearProgressRequest) {
+export async function getYearProgress(request: YearProgressRequest): Promise<YearProgressStats[]> {
   if (!isTauriRuntime()) {
     const includedGenres = new Set(expandGenreFilterKeys(request.genres));
     const excludedGenres = new Set(
@@ -1698,7 +1699,7 @@ export async function getYearProgress(request: YearProgressRequest) {
   return commands.getYearProgress(request);
 }
 
-export async function getGenreProgress(request: GenreProgressRequest) {
+export async function getGenreProgress(request: GenreProgressRequest): Promise<GenreProgressStats[]> {
   if (!isTauriRuntime()) {
     const includedGenres = new Set(expandGenreFilterKeys(request.genres));
     const excludedGenres = new Set(
@@ -1774,7 +1775,7 @@ export async function getGenreProgress(request: GenreProgressRequest) {
   return commands.getGenreProgress(request);
 }
 
-export async function getDiscovery(options: { refreshDailyEdition?: boolean } = {}) {
+export async function getDiscovery(options: { refreshDailyEdition?: boolean } = {}): Promise<DiscoveryResponse> {
   if (!isTauriRuntime()) {
     if (!options.refreshDailyEdition) return mockDiscovery;
     return {
@@ -1809,7 +1810,7 @@ export async function getDiscovery(options: { refreshDailyEdition?: boolean } = 
   return commands.getDiscovery(options.refreshDailyEdition ?? false);
 }
 
-export async function getCatalogRevision() {
+export async function getCatalogRevision(): Promise<string> {
   if (!isTauriRuntime()) {
     const completedRuns = mockImportRuns.filter(
       (run) => run.status === "completed",
@@ -1831,7 +1832,7 @@ export async function getCatalogRevision() {
   return commands.getCatalogRevision();
 }
 
-export async function getDiscoveryDailyEdition(date: string) {
+export async function getDiscoveryDailyEdition(date: string): Promise<DiscoveryDailyEditionSnapshotResponse> {
   if (!isTauriRuntime()) {
     if (!mockDiscovery.dailyEditionArchive.availableDates.includes(date)) {
       throw new Error(`No saved Daily Edition is available for ${date}`);
@@ -1854,7 +1855,7 @@ export async function getDiscoveryDailyEdition(date: string) {
 
 let mockDiscoveryChartMatchesRebuilt = false;
 
-export async function getDiscoverySourceHealth(date: string) {
+export async function getDiscoverySourceHealth(date: string): Promise<DiscoverySourceHealthResponse> {
   if (!isTauriRuntime()) {
     const albumCount = mockStatus.albumCount;
     const now = new Date();
@@ -1938,7 +1939,7 @@ export async function getDiscoverySourceHealth(date: string) {
   return commands.getDiscoverySourceHealth(date);
 }
 
-export async function rebuildDiscoveryChartMatches(date: string) {
+export async function rebuildDiscoveryChartMatches(date: string): Promise<DiscoverySourceHealthResponse> {
   if (!isTauriRuntime()) {
     mockDiscoveryChartMatchesRebuilt = true;
     return getDiscoverySourceHealth(date);
@@ -1946,7 +1947,7 @@ export async function rebuildDiscoveryChartMatches(date: string) {
   return commands.rebuildDiscoveryChartMatches(date);
 }
 
-export async function getDiscoveryAnniversaries(anniversaryYears: number) {
+export async function getDiscoveryAnniversaries(anniversaryYears: number): Promise<DiscoveryAnniversaryStory[]> {
   if (!isTauriRuntime()) {
     const releaseYear = new Date().getFullYear() - anniversaryYears;
     return mockDiscovery.dailyEdition.anniversaries.map((story, index) => ({
@@ -1968,7 +1969,7 @@ export async function getDiscoveryAnniversaries(anniversaryYears: number) {
 
 export async function getDiscoveryChartSnapshot(
   request: DiscoveryChartSnapshotRequest,
-) {
+): Promise<DiscoveryChartSnapshot> {
   if (!isTauriRuntime()) {
     const sourceOptions = ["billboard", "official-uk", "vg-lista"] as const;
     const source = request.random
@@ -2019,7 +2020,7 @@ export async function getDiscoveryChartSnapshot(
 
 export async function getDiscoveryDeepCutSnapshot(
   request: DiscoveryDeepCutSnapshotRequest,
-) {
+): Promise<DiscoveryDeepCutSnapshot> {
   if (!isTauriRuntime()) {
     const base = mockDiscovery.dailyEdition.deepCutSnapshot;
     const stories = base.stories.filter((story) => {
@@ -2048,7 +2049,7 @@ export async function getDiscoveryDeepCutSnapshot(
 
 export async function getDiscoveryCompletionSnapshot(
   request: DiscoveryCompletionSnapshotRequest,
-) {
+): Promise<DiscoveryCompletionSnapshot> {
   if (!isTauriRuntime()) {
     const base = mockDiscovery.dailyEdition.completionSnapshot;
     const mode = request.mode ?? "artist";
@@ -2094,7 +2095,7 @@ export async function getDiscoveryCompletionSnapshot(
 
 export async function getDiscoveryRecommendationSnapshot(
   request: DiscoveryRecommendationSnapshotRequest,
-) {
+): Promise<DiscoveryRecommendationSnapshot> {
   if (!isTauriRuntime()) {
     const base = mockDiscovery.dailyEdition.recommendationSnapshot;
     const mode = request.mode ?? "played";
@@ -2519,13 +2520,13 @@ export async function getDiscoveryShelfExplorer(
   };
 }
 
-export async function getSettings() {
+export async function getSettings(): Promise<AppSettings> {
   if (!isTauriRuntime()) {
     return mockSettings;
   }
 
   const settings = normalizeSettings(
-    (await commands.getSettings()) as AppSettings,
+    completed(await commands.getSettings()),
   );
   cacheSettings(settings);
   return settings;
@@ -2621,7 +2622,7 @@ export async function syncMusicDoctor(): Promise<MusicDoctorSyncResult> {
   return commands.syncMusicDoctor();
 }
 
-export async function getAiKeyStatus() {
+export async function getAiKeyStatus(): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) {
     return {
       configured: false,
@@ -2633,7 +2634,7 @@ export async function getAiKeyStatus() {
   return commands.getAiKeyStatus();
 }
 
-export async function saveOpenAiApiKey(apiKey: string) {
+export async function saveOpenAiApiKey(apiKey: string): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) {
     throw new Error(
       "OpenAI keys can only be stored by the Tauri desktop app.",
@@ -2643,7 +2644,7 @@ export async function saveOpenAiApiKey(apiKey: string) {
   return commands.saveOpenaiApiKey(apiKey);
 }
 
-export async function deleteOpenAiApiKey() {
+export async function deleteOpenAiApiKey(): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) {
     throw new Error(
       "OpenAI keys can only be removed by the Tauri desktop app.",
@@ -2653,7 +2654,7 @@ export async function deleteOpenAiApiKey() {
   return commands.deleteOpenaiApiKey();
 }
 
-export async function testOpenAiConnection() {
+export async function testOpenAiConnection(): Promise<AiConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error("OpenAI connection tests require the Tauri desktop app.");
   }
@@ -2661,7 +2662,7 @@ export async function testOpenAiConnection() {
   return commands.testOpenaiConnection();
 }
 
-export async function getDeemixCredentialStatus() {
+export async function getDeemixCredentialStatus(): Promise<DeemixCredentialStatus> {
   if (!isTauriRuntime()) {
     return {
       configured: false,
@@ -2671,7 +2672,7 @@ export async function getDeemixCredentialStatus() {
   return commands.getDeemixCredentialStatus();
 }
 
-export async function saveDeemixArl(arl: string) {
+export async function saveDeemixArl(arl: string): Promise<DeemixConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Deemix credentials can only be stored by the Tauri desktop app.",
@@ -2680,7 +2681,7 @@ export async function saveDeemixArl(arl: string) {
   return commands.saveDeemixArl(arl);
 }
 
-export async function deleteDeemixArl() {
+export async function deleteDeemixArl(): Promise<DeemixCredentialStatus> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Deemix credentials can only be removed by the Tauri desktop app.",
@@ -2689,14 +2690,14 @@ export async function deleteDeemixArl() {
   return commands.deleteDeemixArl();
 }
 
-export async function testDeemixConnection() {
+export async function testDeemixConnection(): Promise<DeemixConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error("Deemix connection tests require the Tauri desktop app.");
   }
   return commands.testDeemixConnection();
 }
 
-export async function getDiscogsCredentialStatus() {
+export async function getDiscogsCredentialStatus(): Promise<DiscogsCredentialStatus> {
   if (!isTauriRuntime()) {
     return {
       configured: true,
@@ -2706,7 +2707,7 @@ export async function getDiscogsCredentialStatus() {
   return commands.getDiscogsCredentialStatus();
 }
 
-export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsRequest) {
+export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsRequest): Promise<DiscogsConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Discogs credentials can only be stored by the Tauri desktop app.",
@@ -2715,7 +2716,7 @@ export async function saveDiscogsCredentials(input: SaveDiscogsCredentialsReques
   return commands.saveDiscogsCredentials(input);
 }
 
-export async function deleteDiscogsCredentials() {
+export async function deleteDiscogsCredentials(): Promise<DiscogsCredentialStatus> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Discogs credentials can only be removed by the Tauri desktop app.",
@@ -2724,42 +2725,42 @@ export async function deleteDiscogsCredentials() {
   return commands.deleteDiscogsCredentials();
 }
 
-export async function testDiscogsConnection() {
+export async function testDiscogsConnection(): Promise<DiscogsConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error("Discogs connection tests require the Tauri desktop app.");
   }
   return commands.testDiscogsConnection();
 }
 
-export async function getLastFmCredentialStatus() {
+export async function getLastFmCredentialStatus(): Promise<LastFmCredentialStatus> {
   if (!isTauriRuntime()) {
     return { configured: false, source: "none" } satisfies LastFmCredentialStatus;
   }
   return commands.getLastfmCredentialStatus();
 }
 
-export async function saveLastFmApiKey(input: SaveLastFmApiKeyRequest) {
+export async function saveLastFmApiKey(input: SaveLastFmApiKeyRequest): Promise<LastFmConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be stored by the Tauri desktop app.");
   }
   return commands.saveLastfmApiKey(input);
 }
 
-export async function deleteLastFmApiKey() {
+export async function deleteLastFmApiKey(): Promise<LastFmCredentialStatus> {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm API keys can only be removed by the Tauri desktop app.");
   }
   return commands.deleteLastfmApiKey();
 }
 
-export async function testLastFmConnection() {
+export async function testLastFmConnection(): Promise<LastFmConnectionTest> {
   if (!isTauriRuntime()) {
     throw new Error("Last.fm connection tests require the Tauri desktop app.");
   }
   return commands.testLastfmConnection();
 }
 
-export async function refreshLastFmArtistImages(limit = 50) {
+export async function refreshLastFmArtistImages(limit = 50): Promise<LastFmArtistImageRefreshSummary> {
   if (!isTauriRuntime()) {
     return {
       requested: 0,
@@ -2776,7 +2777,7 @@ export async function refreshLastFmArtistImages(limit = 50) {
 export async function getLastFmArtistPopularity(
   artistId: string,
   forceRefresh = false,
-) {
+): Promise<LastFmArtistPopularity> {
   if (!isTauriRuntime()) {
     const artist = mockArtists.find((candidate) => candidate.id === artistId);
     const rows = mockRows.filter(
@@ -2823,13 +2824,13 @@ export async function getLastFmArtistPopularity(
     } satisfies LastFmArtistPopularity;
   }
   return commands.getLastfmArtistPopularity(artistId,
-    forceRefresh) as Promise<LastFmArtistPopularity>;
+    forceRefresh).then(completed);
 }
 
 export async function getLastFmArtistSimilarity(
   artistId: string,
   forceRefresh = false,
-) {
+): Promise<LastFmArtistSimilarity> {
   if (!isTauriRuntime()) {
     const artist = mockArtists.find((candidate) => candidate.id === artistId);
     const artistName = artist?.name ?? artistId;
@@ -2883,14 +2884,14 @@ export async function getLastFmArtistSimilarity(
     } satisfies LastFmArtistSimilarity;
   }
   return commands.getLastfmArtistSimilarity(artistId,
-    forceRefresh) as Promise<LastFmArtistSimilarity>;
+    forceRefresh).then(completed);
 }
 
 export async function getLastFmArtistConstellationBranch(
   rootArtistId: string,
   branchName: string,
   branchMbid: string | null,
-) {
+): Promise<LastFmArtistSimilarity> {
   if (!isTauriRuntime()) {
     const branch = mockArtists.find(
       (candidate) =>
@@ -2954,13 +2955,13 @@ export async function getLastFmArtistConstellationBranch(
   }
   return commands.getLastfmArtistConstellationBranch(rootArtistId,
       branchName,
-      branchMbid) as Promise<LastFmArtistSimilarity>;
+      branchMbid).then(completed);
 }
 
 export async function getArtistBiography(
   artistId: string,
   forceRefresh = false,
-) {
+): Promise<ArtistBiography> {
   if (!isTauriRuntime()) {
     const artist = mockArtists.find((candidate) => candidate.id === artistId);
     const artistName = artist?.name ?? artistId;
@@ -2984,7 +2985,7 @@ export async function getArtistBiography(
   return commands.getArtistBiography(artistId, forceRefresh);
 }
 
-export async function getAlbumReview(albumId: string, forceRefresh = false) {
+export async function getAlbumReview(albumId: string, forceRefresh = false): Promise<AlbumReview> {
   if (!isTauriRuntime()) {
     const album = mockRows.find((row) => row.albumId === albumId);
     const albumTitle = album?.album ?? "Untitled album";
@@ -3018,7 +3019,7 @@ export async function getAlbumReview(albumId: string, forceRefresh = false) {
 export async function getLastFmAlbumPopularity(
   artistId: string,
   albumId: string,
-) {
+): Promise<LastFmAlbumPopularity> {
   if (!isTauriRuntime()) {
     const rows = mockRows.filter(
       (row) => row.trackId != null && row.albumId === albumId,
@@ -3046,13 +3047,13 @@ export async function getLastFmAlbumPopularity(
     } satisfies LastFmAlbumPopularity;
   }
   return commands.getLastfmAlbumPopularity(artistId,
-    albumId) as Promise<LastFmAlbumPopularity>;
+    albumId).then(completed);
 }
 
 export async function getLastFmRelatedAlbums(
   albumId: string,
   forceRefresh = false,
-) {
+): Promise<LastFmRelatedAlbums> {
   if (!isTauriRuntime()) {
     const source = mockRows.find((row) => row.albumId === albumId);
     const localAlbums = Array.from(
@@ -3134,14 +3135,14 @@ export async function getLastFmRelatedAlbums(
     } satisfies LastFmRelatedAlbums;
   }
   return commands.getLastfmRelatedAlbums(albumId,
-    forceRefresh) as Promise<LastFmRelatedAlbums>;
+    forceRefresh).then(completed);
 }
 
-export async function getArtistImageUrl(artistId: string, size: ThumbnailSize = 300) {
+export async function getArtistImageUrl(artistId: string, size: ThumbnailSize = 300): Promise<string | null> {
   return artworkUrl("artist", artistId, size);
 }
 
-export async function selectDeemixDownloadDirectory(defaultPath?: string) {
+export async function selectDeemixDownloadDirectory(defaultPath?: string): Promise<string | null> {
   if (!isTauriRuntime()) {
     return null;
   }
@@ -3157,7 +3158,7 @@ const soulseekPreviewProfile: SoulseekConnectionProfile = {
   autoConnect: true,
 };
 
-export async function getSoulseekConnection() {
+export async function getSoulseekConnection(): Promise<SoulseekConnectionBootstrap> {
   if (!isTauriRuntime()) {
     return {
       profile: null,
@@ -3193,7 +3194,7 @@ export async function getSoulseekConnection() {
 export async function saveSoulseekConnection(
   profile: SoulseekConnectionProfile,
   password: string | null,
-) {
+): Promise<SoulseekConnectionBootstrap> {
   if (!isTauriRuntime()) {
     return {
       profile,
@@ -3226,7 +3227,7 @@ export async function saveSoulseekConnection(
   return commands.connectionSaveProfile({ profile, password });
 }
 
-export async function connectSoulseek() {
+export async function connectSoulseek(): Promise<SoulseekConnectionSnapshot> {
   if (!isTauriRuntime()) {
     return {
       state: "online",
@@ -3242,7 +3243,7 @@ export async function connectSoulseek() {
   return commands.connectionConnect();
 }
 
-export async function disconnectSoulseek() {
+export async function disconnectSoulseek(): Promise<SoulseekConnectionSnapshot> {
   if (!isTauriRuntime()) {
     return {
       state: "offline",
@@ -3258,17 +3259,17 @@ export async function disconnectSoulseek() {
   return commands.connectionDisconnect();
 }
 
-export async function resetSoulseekConnection() {
+export async function resetSoulseekConnection(): Promise<SoulseekConnectionBootstrap> {
   if (!isTauriRuntime()) return getSoulseekConnection();
   return commands.connectionReset();
 }
 
-export async function selectSoulseekDownloadDirectory(defaultPath?: string) {
+export async function selectSoulseekDownloadDirectory(defaultPath?: string): Promise<string | null> {
   if (!isTauriRuntime()) return null;
   return selectDirectory(defaultPath, "Choose Soulseek download folder");
 }
 
-export async function selectSoulseekShareDirectory() {
+export async function selectSoulseekShareDirectory(): Promise<string | null> {
   if (!isTauriRuntime()) return null;
   return selectDirectory(undefined, "Choose a music folder to share on Soulseek");
 }
@@ -3283,39 +3284,39 @@ const emptySoulseekShares = (): SoulseekLocalShares => ({
   lastScanAtMs: null,
 });
 
-export async function getSoulseekLocalShares() {
+export async function getSoulseekLocalShares(): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesSnapshot();
 }
 
-export async function addSoulseekLocalShare(path: string) {
+export async function addSoulseekLocalShare(path: string): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesAdd(path);
 }
 
-export async function removeSoulseekLocalShare(id: string) {
+export async function removeSoulseekLocalShare(id: string): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesRemove(id);
 }
 
-export async function setSoulseekLocalShareEnabled(id: string, enabled: boolean) {
+export async function setSoulseekLocalShareEnabled(id: string, enabled: boolean): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesSetEnabled(id, enabled);
 }
 
-export async function rescanSoulseekLocalShares() {
+export async function rescanSoulseekLocalShares(): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesRescan();
 }
 
-export async function setSoulseekUploadSlots(uploadSlots: number) {
+export async function setSoulseekUploadSlots(uploadSlots: number): Promise<SoulseekLocalShares> {
   if (!isTauriRuntime()) return emptySoulseekShares();
   return commands.localSharesSetUploadSlots(uploadSlots);
 }
 
 export async function searchSoulseekAlbum(
   input: SoulseekAlbumSearchRequest,
-) {
+): Promise<SoulseekAlbumSearchResponse> {
   const query = `${input.artist} ${input.title}`.trim();
   if (!isTauriRuntime()) {
     const folder = `Music\\${input.artist}\\${input.title}${input.year ? ` (${input.year})` : ""}`;
@@ -3458,12 +3459,12 @@ function publishMockSoulseekTransfers() {
   return snapshot;
 }
 
-export async function getSoulseekTransfers() {
+export async function getSoulseekTransfers(): Promise<SoulseekTransferQueue> {
   if (!isTauriRuntime()) return mockSoulseekTransferSnapshot();
   return commands.transfersSnapshot();
 }
 
-export async function clearCompletedSoulseekTransfers() {
+export async function clearCompletedSoulseekTransfers(): Promise<SoulseekTransferQueue> {
   if (!isTauriRuntime()) {
     const completedReleaseIds = new Set(
       mockSoulseekTransfers
@@ -3485,7 +3486,7 @@ export async function clearCompletedSoulseekTransfers() {
   return commands.transferClearCompleted();
 }
 
-export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest) {
+export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadRequest): Promise<SoulseekTransferQueue> {
   if (!isTauriRuntime()) {
     const now = Date.now();
     const releaseId = `preview-release-${now}-${++mockSoulseekReleaseSequence}`;
@@ -3550,7 +3551,7 @@ export async function enqueueSoulseekRelease(input: SoulseekReleaseDownloadReque
   return commands.transferEnqueueRelease(input);
 }
 
-export async function getSoulseekUploads() {
+export async function getSoulseekUploads(): Promise<SoulseekUploadQueue> {
   if (!isTauriRuntime()) {
     return {
       uploads: [],
@@ -3577,7 +3578,7 @@ const mockUsenetTransferHandlers = new Set<
   (queue: UsenetTransferQueue) => void
 >();
 
-export async function getUsenetBootstrap() {
+export async function getUsenetBootstrap(): Promise<UsenetBootstrap> {
   if (!isTauriRuntime()) {
     return {
       profile: mockUsenetProfile,
@@ -3590,7 +3591,7 @@ export async function getUsenetBootstrap() {
   return commands.usenetBootstrap();
 }
 
-export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
+export async function saveUsenetProfile(input: SaveUsenetProfileRequest): Promise<UsenetBootstrap> {
   if (!isTauriRuntime()) {
     Object.assign(mockUsenetProfile, input.profile);
     return {
@@ -3604,7 +3605,7 @@ export async function saveUsenetProfile(input: SaveUsenetProfileRequest) {
   return commands.usenetSaveProfile(input);
 }
 
-export async function resetUsenet() {
+export async function resetUsenet(): Promise<UsenetBootstrap> {
   if (!isTauriRuntime()) {
     return {
       profile: mockUsenetProfile,
@@ -3617,7 +3618,7 @@ export async function resetUsenet() {
   return commands.usenetReset();
 }
 
-export async function testUsenetConnections() {
+export async function testUsenetConnections(): Promise<UsenetConnectionTest> {
   if (!isTauriRuntime()) {
     return {
       prowlarrVersion: "preview",
@@ -3630,11 +3631,11 @@ export async function testUsenetConnections() {
   return commands.usenetTestConnections();
 }
 
-export async function selectUsenetDownloadDirectory(defaultPath?: string) {
+export async function selectUsenetDownloadDirectory(defaultPath?: string): Promise<string | null> {
   return selectDirectory(defaultPath, "Choose Usenet download folder");
 }
 
-export async function searchUsenet(input: UsenetSearchRequest) {
+export async function searchUsenet(input: UsenetSearchRequest): Promise<UsenetSearchResponse> {
   if (!isTauriRuntime()) {
     return {
       query: `${input.artist} ${input.title}`.trim(),
@@ -3645,12 +3646,12 @@ export async function searchUsenet(input: UsenetSearchRequest) {
   return commands.usenetSearch(input);
 }
 
-export async function getUsenetTransfers() {
+export async function getUsenetTransfers(): Promise<UsenetTransferQueue> {
   if (!isTauriRuntime()) return mockUsenetQueue;
   return commands.usenetTransfersSnapshot();
 }
 
-export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
+export async function enqueueUsenetDownload(input: UsenetDownloadRequest): Promise<UsenetTransferQueue> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();
     mockUsenetQueue = {
@@ -3681,7 +3682,7 @@ export async function enqueueUsenetDownload(input: UsenetDownloadRequest) {
   return commands.usenetEnqueueDownload(input);
 }
 
-export async function clearCompletedUsenetTransfers() {
+export async function clearCompletedUsenetTransfers(): Promise<UsenetTransferQueue> {
   if (!isTauriRuntime()) {
     mockUsenetQueue = { transfers: [], activeCount: 0 };
     mockUsenetTransferHandlers.forEach((handler) => handler(mockUsenetQueue));
@@ -3690,15 +3691,15 @@ export async function clearCompletedUsenetTransfers() {
   return commands.usenetClearCompleted();
 }
 
-export async function compileNaturalLanguageQuery(input: AiCompileRequest) {
+export async function compileNaturalLanguageQuery(input: AiCompileRequest): Promise<AiCompiledQuery> {
   if (!isTauriRuntime()) {
     throw new Error("Natural-language queries require the Tauri desktop app.");
   }
 
-  return commands.compileNaturalLanguageQuery(input) as Promise<AiCompiledQuery>;
+  return commands.compileNaturalLanguageQuery(input).then(completed);
 }
 
-export async function askCurrentView(input: AiCurrentViewQuestion) {
+export async function askCurrentView(input: AiCurrentViewQuestion): Promise<AiCurrentViewAnswer> {
   if (!isTauriRuntime()) {
     const preview = await searchLibrary({
       ...input.request,
@@ -3738,7 +3739,7 @@ export async function askCurrentView(input: AiCurrentViewQuestion) {
   return commands.askCurrentView(input);
 }
 
-export async function researchMusic(input: AiMusicResearchRequest) {
+export async function researchMusic(input: AiMusicResearchRequest): Promise<AiMusicResearchAnswer> {
   if (!isTauriRuntime()) {
     const context = input.context.selectedLabel
       ? `${input.context.selectedLabel}${input.context.selectedSubtitle ? ` — ${input.context.selectedSubtitle}` : ""}`
@@ -3775,7 +3776,7 @@ export async function researchMusic(input: AiMusicResearchRequest) {
   return commands.researchMusic(input);
 }
 
-export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
+export async function analyzeLibrary(input: AiLibraryAnalysisRequest): Promise<AiLibraryAnalysis> {
   if (!isTauriRuntime()) {
     const albumTotal = mockStatistics.overview.albumCount;
     const unrated = mockStatistics.ratingProgress.unratedAlbums;
@@ -3824,17 +3825,17 @@ export async function analyzeLibrary(input: AiLibraryAnalysisRequest) {
   return commands.analyzeLibrary(input);
 }
 
-export async function listAiSnapshots(kind?: AiSnapshotKind) {
+export async function listAiSnapshots(kind?: AiSnapshotKind): Promise<AiSnapshot[]> {
   if (!isTauriRuntime()) {
     return mockAiSnapshots.filter(
       (snapshot) => kind == null || snapshot.content.kind === kind,
     ) satisfies AiSnapshot[];
   }
 
-  return commands.listAiSnapshots(kind ?? null) as Promise<AiSnapshot[]>;
+  return commands.listAiSnapshots(kind ?? null).then(completed);
 }
 
-export async function saveAiSnapshot(input: SaveAiSnapshotRequest) {
+export async function saveAiSnapshot(input: SaveAiSnapshotRequest): Promise<AiSnapshot> {
   if (!isTauriRuntime()) {
     const nextId =
       mockAiSnapshots.reduce(
@@ -3855,10 +3856,10 @@ export async function saveAiSnapshot(input: SaveAiSnapshotRequest) {
     return saved;
   }
 
-  return commands.saveAiSnapshot(input) as Promise<AiSnapshot>;
+  return commands.saveAiSnapshot(input).then(completed);
 }
 
-export async function deleteAiSnapshot(id: number) {
+export async function deleteAiSnapshot(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     setMockAiSnapshots(
       mockAiSnapshots.filter((snapshot) => snapshot.id !== id),
@@ -3869,7 +3870,7 @@ export async function deleteAiSnapshot(id: number) {
   await commands.deleteAiSnapshot(id);
 }
 
-export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
+export async function exportAiMarkdown(input: AiMarkdownExportRequest): Promise<ExportResult> {
   if (!isTauriRuntime()) {
     return finalizeExport({
       path: `C:\\Music Library\\exports\\music-library-ai-${input.title
@@ -3887,7 +3888,7 @@ export async function exportAiMarkdown(input: AiMarkdownExportRequest) {
   );
 }
 
-export async function buildPlaylist(input: AiPlaylistBuildRequest) {
+export async function buildPlaylist(input: AiPlaylistBuildRequest): Promise<AiPlaylist> {
   if (!isTauriRuntime()) {
     const request = input.sourceRequest
       ? normalizeBrowseRequestForClient({
@@ -3950,17 +3951,17 @@ export async function buildPlaylist(input: AiPlaylistBuildRequest) {
     } satisfies AiPlaylist;
   }
 
-  return commands.buildPlaylist(input) as Promise<AiPlaylist>;
+  return commands.buildPlaylist(input).then(completed);
 }
 
-export async function listSavedPlaylists() {
+export async function listSavedPlaylists(): Promise<SavedPlaylist[]> {
   if (!isTauriRuntime()) {
     return mockSavedPlaylists;
   }
-  return commands.listSavedPlaylists() as Promise<SavedPlaylist[]>;
+  return commands.listSavedPlaylists().then(completed);
 }
 
-export async function savePlaylist(input: SavePlaylistRequest) {
+export async function savePlaylist(input: SavePlaylistRequest): Promise<SavedPlaylist> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();
     const existing = input.id == null
@@ -3989,10 +3990,10 @@ export async function savePlaylist(input: SavePlaylistRequest) {
     ];
     return saved;
   }
-  return commands.savePlaylist(input) as Promise<SavedPlaylist>;
+  return commands.savePlaylist(input).then(completed);
 }
 
-export async function deleteSavedPlaylist(id: number) {
+export async function deleteSavedPlaylist(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     mockSavedPlaylists = mockSavedPlaylists.filter(
       (playlist) => playlist.id !== id,
@@ -4007,17 +4008,17 @@ export async function getJevKeyStatus(): Promise<AiKeyStatus> {
   return commands.getJevKeyStatus();
 }
 
-export async function saveOpenRouterApiKey(apiKey: string) {
+export async function saveOpenRouterApiKey(apiKey: string): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
   return commands.saveOpenrouterApiKey(apiKey);
 }
 
-export async function deleteOpenRouterApiKey() {
+export async function deleteOpenRouterApiKey(): Promise<AiKeyStatus> {
   if (!isTauriRuntime()) throw new Error("Secure key storage requires the desktop app.");
   return commands.deleteOpenrouterApiKey();
 }
 
-export async function testJevConnection() {
+export async function testJevConnection(): Promise<AiConnectionTest> {
   if (!isTauriRuntime()) throw new Error("Jev connection testing requires the desktop app.");
   return commands.testJevConnection();
 }
@@ -4026,14 +4027,14 @@ export async function scoreMixtapeCandidates(input: {
   tracks: import("./types").AiPlaylistTrack[];
   briefs: [string, string];
   notes: Record<string, string>;
-}) {
+}): Promise<import("./mixtape").JevResult> {
   if (!isTauriRuntime()) throw new Error("Jev scoring requires the desktop app and an OpenRouter key in Settings → AI. Build locally to preview this workflow.");
   return commands.scoreMixtapeCandidates(input);
 }
 
 export async function setPlaylistAutomation(
   input: SetPlaylistAutomationRequest,
-) {
+): Promise<SavedPlaylist> {
   if (!isTauriRuntime()) {
     const index = mockSavedPlaylists.findIndex(
       (playlist) => playlist.id === input.id,
@@ -4057,10 +4058,10 @@ export async function setPlaylistAutomation(
     );
     return updated;
   }
-  return commands.setPlaylistAutomation(input) as Promise<SavedPlaylist>;
+  return commands.setPlaylistAutomation(input).then(completed);
 }
 
-export async function refreshSmartPlaylist(id: number) {
+export async function refreshSmartPlaylist(id: number): Promise<SmartPlaylistRefreshResult> {
   if (!isTauriRuntime()) {
     const playlist = mockSavedPlaylists.find((item) => item.id === id);
     if (!playlist) {
@@ -4086,7 +4087,7 @@ export async function refreshSmartPlaylist(id: number) {
       refreshedAt,
     } satisfies SmartPlaylistRefreshResult;
   }
-  return commands.refreshSmartPlaylist(id) as Promise<SmartPlaylistRefreshResult>;
+  return commands.refreshSmartPlaylist(id).then(completed);
 }
 
 const previewExternalCatalog: Record<
@@ -4159,7 +4160,7 @@ function previewDiscoveryYears(prompt: string) {
     : { year: 0, yearFrom: 0, yearTo: 0 };
 }
 
-export async function discoverOutsideLibrary(input: { prompt: string }) {
+export async function discoverOutsideLibrary(input: { prompt: string }): Promise<ExternalDiscoveryResponse> {
   if (!isTauriRuntime()) {
     const prompt = input.prompt.trim();
     const entity = previewDiscoveryEntity(prompt);
@@ -4218,15 +4219,15 @@ export async function discoverOutsideLibrary(input: { prompt: string }) {
         : [],
     } satisfies ExternalDiscoveryResponse;
   }
-  return commands.discoverOutsideLibrary(input) as Promise<ExternalDiscoveryResponse>;
+  return commands.discoverOutsideLibrary(input).then(completed);
 }
 
-export async function listSavedExternalDiscoveries() {
+export async function listSavedExternalDiscoveries(): Promise<SavedExternalDiscovery[]> {
   if (!isTauriRuntime()) return mockSavedExternalDiscoveries;
-  return commands.listSavedExternalDiscoveries() as Promise<SavedExternalDiscovery[]>;
+  return commands.listSavedExternalDiscoveries().then(completed);
 }
 
-export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest) {
+export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest): Promise<SavedExternalDiscovery> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();
     const existing = input.id == null
@@ -4252,10 +4253,10 @@ export async function saveExternalDiscovery(input: SaveExternalDiscoveryRequest)
     ];
     return saved;
   }
-  return commands.saveExternalDiscovery(input) as Promise<SavedExternalDiscovery>;
+  return commands.saveExternalDiscovery(input).then(completed);
 }
 
-export async function deleteSavedExternalDiscovery(id: number) {
+export async function deleteSavedExternalDiscovery(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     mockSavedExternalDiscoveries = mockSavedExternalDiscoveries.filter(
       (saved) => saved.id !== id,
@@ -4265,7 +4266,7 @@ export async function deleteSavedExternalDiscovery(id: number) {
   await commands.deleteSavedExternalDiscovery(id);
 }
 
-export async function listWishList() {
+export async function listWishList(): Promise<WishListResponse> {
   if (!isTauriRuntime()) {
     return {
       items: mockWishListItems,
@@ -4275,7 +4276,7 @@ export async function listWishList() {
   return commands.listWishList();
 }
 
-export async function getLibraryCompletion(input: LibraryCompletionRequest | null = null) {
+export async function getLibraryCompletion(input: LibraryCompletionRequest | null = null): Promise<LibraryCompletionResponse> {
   if (!isTauriRuntime()) {
     const decidedCandidates = mockLibraryCompletionCandidates.map((candidate) => {
       const decision = mockLibraryCompletionDecisions.get(candidate.id);
@@ -4398,7 +4399,7 @@ function advanceMockLibraryCompletionVerification() {
   };
 }
 
-export async function getLibraryCompletionVerificationStatus() {
+export async function getLibraryCompletionVerificationStatus(): Promise<LibraryCompletionVerificationStatus> {
   if (!isTauriRuntime()) {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionVerificationStatus;
@@ -4406,14 +4407,14 @@ export async function getLibraryCompletionVerificationStatus() {
   return commands.getLibraryCompletionVerificationStatus();
 }
 
-export async function getLibraryCompletionCoverUrl(candidateId: string, size: ThumbnailSize = 300) {
+export async function getLibraryCompletionCoverUrl(candidateId: string, size: ThumbnailSize = 300): Promise<string | null> {
   if (!isTauriRuntime()) {
     return mockLibraryCompletionCovers.get(candidateId)?.dataUrl ?? null;
   }
   return artworkUrl("completion", candidateId, size);
 }
 
-export async function enrichLibraryCompletionCover(candidateId: string) {
+export async function enrichLibraryCompletionCover(candidateId: string): Promise<LibraryCompletionCoverEnrichment> {
   if (!isTauriRuntime()) {
     const verification = mockLibraryCompletionVerifications.get(candidateId);
     if (!verification || verification.state !== "verified") {
@@ -4439,7 +4440,7 @@ export async function enrichLibraryCompletionCover(candidateId: string) {
 
 export async function startLibraryCompletionVerification(
   input: StartLibraryCompletionVerificationRequest,
-) {
+): Promise<LibraryCompletionVerificationStatus> {
   if (!isTauriRuntime()) {
     if (
       mockLibraryCompletionVerificationStatus.batch &&
@@ -4523,7 +4524,7 @@ export async function startLibraryCompletionVerification(
 
 export async function setLibraryCompletionVerificationState(
   input: SetLibraryCompletionVerificationStateRequest,
-) {
+): Promise<LibraryCompletionVerificationStatus> {
   if (!isTauriRuntime()) {
     const batch = mockLibraryCompletionVerificationStatus.batch;
     if (!batch || batch.id !== input.batchId || batch.state === "completed") {
@@ -4539,7 +4540,7 @@ export async function setLibraryCompletionVerificationState(
   return commands.setLibraryCompletionVerificationState(input);
 }
 
-export async function retryLibraryCompletionVerificationFailures(batchId: number) {
+export async function retryLibraryCompletionVerificationFailures(batchId: number): Promise<LibraryCompletionVerificationStatus> {
   if (!isTauriRuntime()) {
     const batch = mockLibraryCompletionVerificationStatus.batch;
     if (!batch || batch.id !== batchId || batch.failedCount === 0) {
@@ -4583,7 +4584,7 @@ export async function retryLibraryCompletionVerificationFailures(batchId: number
 
 export async function setLibraryCompletionDecision(
   input: SetLibraryCompletionDecisionRequest,
-) {
+): Promise<LibraryCompletionDecision> {
   if (!isTauriRuntime()) {
     if (input.status === "candidate") {
       mockLibraryCompletionDecisions.delete(input.candidateId);
@@ -4647,7 +4648,7 @@ export async function setLibraryCompletionDecision(
 
 export async function getLibraryCompletionArtists(
   input: LibraryCompletionArtistRequest | null = null,
-) {
+): Promise<LibraryCompletionArtistResponse> {
   if (!isTauriRuntime()) {
     const decidedCandidates = mockLibraryCompletionArtistCandidates.map((candidate) => {
       const verification = mockLibraryCompletionArtistVerifications.get(candidate.id);
@@ -4750,7 +4751,7 @@ function advanceMockLibraryCompletionArtistVerification() {
   };
 }
 
-export async function getLibraryCompletionArtistVerificationStatus() {
+export async function getLibraryCompletionArtistVerificationStatus(): Promise<LibraryCompletionArtistVerificationStatus> {
   if (!isTauriRuntime()) {
     scheduleMockCompletionProgress();
     return mockLibraryCompletionArtistVerificationStatus;
@@ -4760,7 +4761,7 @@ export async function getLibraryCompletionArtistVerificationStatus() {
 
 export async function startLibraryCompletionArtistVerification(
   input: StartLibraryCompletionArtistVerificationRequest,
-) {
+): Promise<LibraryCompletionArtistVerificationStatus> {
   if (!isTauriRuntime()) {
     const current = mockLibraryCompletionArtistVerificationStatus.batch;
     if (current && current.state !== "completed") {
@@ -4814,7 +4815,7 @@ export async function startLibraryCompletionArtistVerification(
 
 export async function setLibraryCompletionArtistVerificationState(
   input: SetLibraryCompletionArtistVerificationStateRequest,
-) {
+): Promise<LibraryCompletionArtistVerificationStatus> {
   if (!isTauriRuntime()) {
     const batch = mockLibraryCompletionArtistVerificationStatus.batch;
     if (!batch || batch.id !== input.batchId || batch.state === "completed") {
@@ -4830,7 +4831,7 @@ export async function setLibraryCompletionArtistVerificationState(
   return commands.setLibraryCompletionArtistVerificationState(input);
 }
 
-export async function retryLibraryCompletionArtistVerificationFailures(batchId: number) {
+export async function retryLibraryCompletionArtistVerificationFailures(batchId: number): Promise<LibraryCompletionArtistVerificationStatus> {
   if (!isTauriRuntime()) {
     const batch = mockLibraryCompletionArtistVerificationStatus.batch;
     if (!batch || batch.failedCount === 0) {
@@ -4844,7 +4845,7 @@ export async function retryLibraryCompletionArtistVerificationFailures(batchId: 
 
 export async function confirmLibraryCompletionArtistMatch(
   input: ConfirmLibraryCompletionArtistMatchRequest,
-) {
+): Promise<LibraryCompletionArtistCandidate> {
   if (!isTauriRuntime()) {
     const candidate = mockLibraryCompletionArtistCandidates.find(
       (value) => value.id === input.artistId,
@@ -4863,7 +4864,7 @@ export async function confirmLibraryCompletionArtistMatch(
 
 export async function setLibraryCompletionArtistDecision(
   input: SetLibraryCompletionArtistDecisionRequest,
-) {
+): Promise<LibraryCompletionArtistDecision> {
   if (!isTauriRuntime()) {
     if (input.status === "candidate") {
       mockLibraryCompletionArtistDecisions.delete(input.artistId);
@@ -4939,7 +4940,7 @@ export async function setLibraryCompletionArtistDecision(
 
 export async function searchWishListMusicBrainz(
   input: WishListMusicBrainzSearchRequest,
-) {
+): Promise<WishListMusicBrainzSearchResponse> {
   if (!isTauriRuntime()) {
     const title = input.query.trim();
     const isArtist = input.entity === "artist";
@@ -4992,7 +4993,7 @@ export async function searchWishListMusicBrainz(
 
 export async function addWishListMusicBrainzCandidate(
   candidate: WishListMusicBrainzCandidate,
-) {
+): Promise<AddWishListMusicBrainzCandidateResponse> {
   if (!isTauriRuntime()) {
     if (candidate.entity === "artist") {
       const complete = candidate.title.toLowerCase().includes("complete");
@@ -5064,7 +5065,7 @@ export async function addWishListMusicBrainzCandidate(
   return commands.addWishListMusicbrainzCandidate({ candidate });
 }
 
-export async function addWishListItem(input: AddWishListItemRequest) {
+export async function addWishListItem(input: AddWishListItemRequest): Promise<WishListItem> {
   if (!isTauriRuntime()) {
     const existing = mockWishListItems.find((item) =>
       input.musicbrainzId
@@ -5089,7 +5090,7 @@ export async function addWishListItem(input: AddWishListItemRequest) {
   return commands.addWishListItem(input);
 }
 
-export async function removeWishListItem(id: number) {
+export async function removeWishListItem(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     mockWishListItems = mockWishListItems.filter((item) => item.id !== id);
     return;
@@ -5097,7 +5098,7 @@ export async function removeWishListItem(id: number) {
   await commands.removeWishListItem(id);
 }
 
-export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
+export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest): Promise<DeemixAlbumSearchResponse> {
   if (!isTauriRuntime()) {
     return {
       query: `${input.artist} ${input.title}`.trim(),
@@ -5125,7 +5126,7 @@ export async function searchDeemixAlbums(input: DeemixAlbumSearchRequest) {
   return commands.searchDeemixAlbums(input);
 }
 
-export async function refreshWishListArtistAlbumSummary(wishListItemId: number) {
+export async function refreshWishListArtistAlbumSummary(wishListItemId: number): Promise<WishListArtistAlbumSummary> {
   if (!isTauriRuntime()) {
     const item = mockWishListItems.find(
       (entry) => entry.id === wishListItemId && entry.entity === "artist",
@@ -5145,7 +5146,7 @@ export async function refreshWishListArtistAlbumSummary(wishListItemId: number) 
   return commands.refreshWishListArtistAlbumSummary({ wishListItemId });
 }
 
-export async function discoverWishListArtistAlbums(wishListItemId: number) {
+export async function discoverWishListArtistAlbums(wishListItemId: number): Promise<WishListArtistAlbumDiscoveryResponse> {
   if (!isTauriRuntime()) {
     const item = mockWishListItems.find(
       (entry) => entry.id === wishListItemId && entry.entity === "artist",
@@ -5220,7 +5221,7 @@ export async function discoverWishListArtistAlbums(wishListItemId: number) {
 
 export async function preflightDeemixAlbumDownload(
   input: DeemixAlbumDownloadPreflightRequest,
-) {
+): Promise<DeemixAlbumDownloadPreflight> {
   if (!isTauriRuntime()) {
     const receipt = mockDeemixDownloads.get(input.albumId);
     return {
@@ -5243,7 +5244,7 @@ function emitMockDeemixDownloadProgress(
   }
 }
 
-export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
+export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest): Promise<DeemixAlbumDownloadSummary> {
   if (!isTauriRuntime()) {
     const steps: DeemixAlbumDownloadProgress[] = [
       {
@@ -5324,7 +5325,7 @@ export async function downloadDeemixAlbum(input: DeemixAlbumDownloadRequest) {
   return commands.downloadDeemixAlbum(input);
 }
 
-export async function exportPlaylist(input: ExportPlaylistRequest) {
+export async function exportPlaylist(input: ExportPlaylistRequest): Promise<ExportResult> {
   if (!isTauriRuntime()) {
     return finalizeExport({
       path: `Preview runtime / ${input.name.trim() || "playlist"}.m3u8`,
@@ -5339,7 +5340,7 @@ export async function exportPlaylist(input: ExportPlaylistRequest) {
   );
 }
 
-export async function getMusicBrainzCacheStatus(cachePath?: string) {
+export async function getMusicBrainzCacheStatus(cachePath?: string): Promise<MusicBrainzCacheStatus> {
   if (!isTauriRuntime()) {
     const nextCachePath = normalizeMusicBrainzCachePath(
       cachePath ?? mockSettings.musicBrainzCachePath,
@@ -5388,7 +5389,7 @@ function mockOriginPreview(
   };
 }
 
-export async function getMusicBrainzOriginCountryStatus() {
+export async function getMusicBrainzOriginCountryStatus(): Promise<MusicBrainzOriginCountryStatus> {
   if (!isTauriRuntime()) {
     return mockMusicBrainzOriginCountryStatus;
   }
@@ -5398,7 +5399,7 @@ export async function getMusicBrainzOriginCountryStatus() {
 
 export async function previewMusicBrainzOriginCountryImport(
   request: MusicBrainzOriginCountryImportRequest = {},
-) {
+): Promise<MusicBrainzOriginCountryPreview> {
   if (!isTauriRuntime()) {
     return mockOriginPreview(request);
   }
@@ -5408,7 +5409,7 @@ export async function previewMusicBrainzOriginCountryImport(
 
 export async function importMusicBrainzOriginCountries(
   request: MusicBrainzOriginCountryImportRequest = {},
-) {
+): Promise<MusicBrainzOriginCountryImportSummary> {
   if (!isTauriRuntime()) {
     const preview = mockOriginPreview(request);
     const eligibleRows = preview.rows.filter(
@@ -5518,7 +5519,7 @@ export async function importMusicBrainzOriginCountries(
   return commands.importMusicbrainzOriginCountries(request);
 }
 
-export async function cancelMusicBrainzOriginCountryImport() {
+export async function cancelMusicBrainzOriginCountryImport(): Promise<void> {
   if (!isTauriRuntime()) {
     return;
   }
@@ -5556,7 +5557,7 @@ function mockArtistInfoPreview(
   };
 }
 
-export async function getMusicBrainzArtistInfoStatus() {
+export async function getMusicBrainzArtistInfoStatus(): Promise<MusicBrainzArtistInfoStatus> {
   if (!isTauriRuntime()) {
     return mockMusicBrainzArtistInfoStatus;
   }
@@ -5566,7 +5567,7 @@ export async function getMusicBrainzArtistInfoStatus() {
 
 export async function previewMusicBrainzArtistInfoImport(
   request: MusicBrainzArtistInfoImportRequest = {},
-) {
+): Promise<MusicBrainzArtistInfoPreview> {
   if (!isTauriRuntime()) {
     return mockArtistInfoPreview(request);
   }
@@ -5576,7 +5577,7 @@ export async function previewMusicBrainzArtistInfoImport(
 
 export async function importMusicBrainzArtistInfos(
   request: MusicBrainzArtistInfoImportRequest = {},
-) {
+): Promise<MusicBrainzArtistInfoImportSummary> {
   if (!isTauriRuntime()) {
     const preview = mockArtistInfoPreview(request);
     const eligibleRows = preview.rows.filter(
@@ -5687,7 +5688,7 @@ export async function importMusicBrainzArtistInfos(
   return commands.importMusicbrainzArtistInfos(request);
 }
 
-export async function cancelMusicBrainzArtistInfoImport() {
+export async function cancelMusicBrainzArtistInfoImport(): Promise<void> {
   if (!isTauriRuntime()) {
     return;
   }
@@ -5698,7 +5699,7 @@ export async function cancelMusicBrainzArtistInfoImport() {
 export async function getMusicBrainzArtistDiscography(
   artistKey: string,
   artistName: string,
-) {
+): Promise<MusicBrainzArtistDiscographyResponse> {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(artistKey || artistName);
     const mockDiscography = mockMusicBrainzDiscographies[normalizedKey];
@@ -5740,7 +5741,7 @@ export async function refreshMusicBrainzArtistInfo(input: {
   artistKey: string;
   artistName: string;
   musicbrainzMbid: string | null;
-}) {
+}): Promise<MusicBrainzArtistRefreshResult> {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(
       input.artistKey || input.artistName,
@@ -5804,7 +5805,7 @@ export async function setMusicBrainzArtistOriginCountry(input: {
   musicbrainzMbid?: string | null;
   countryCode: string;
   countryName?: string | null;
-}) {
+}): Promise<MusicBrainzArtistOriginCountryUpdate> {
   if (!isTauriRuntime()) {
     const countryCode = canonicalCountryCode(input.countryCode);
     if (!/^[A-Z]{2}$/.test(countryCode)) {
@@ -5831,7 +5832,7 @@ export async function setMusicBrainzArtistLink(input: {
   action: "verify" | "ignore" | "unlink" | "set";
   musicbrainzMbid?: string | null;
   canonicalName?: string | null;
-}) {
+}): Promise<void> {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(
       input.artistKey || input.artistName,
@@ -5899,7 +5900,7 @@ export async function setMusicBrainzReleaseDecision(input: {
   releaseMbid: string;
   decision: "not-in-scope" | "ignored" | "clear" | "include";
   localAlbumId?: string | null;
-}) {
+}): Promise<void> {
   if (!isTauriRuntime()) {
     const normalizedKey = normalizeArtistKey(
       input.artistKey || input.artistName,
@@ -5927,7 +5928,7 @@ export async function setMusicBrainzReleaseDecision(input: {
 
 export async function syncMusicBrainzOverlay(
   options: { recordNoop?: boolean } = {},
-) {
+): Promise<MusicBrainzOverlaySyncResult> {
   if (!isTauriRuntime()) {
     const result = createMockMusicBrainzOverlaySyncResult();
     if (options.recordNoop !== false || result.changedCount > 0) {
@@ -5941,7 +5942,7 @@ export async function syncMusicBrainzOverlay(
   return commands.syncMusicbrainzOverlay(options.recordNoop ?? true);
 }
 
-export async function listMusicBrainzOverlaySyncLog(limit = 12) {
+export async function listMusicBrainzOverlaySyncLog(limit = 12): Promise<MusicBrainzOverlaySyncLogEntry[]> {
   if (!isTauriRuntime()) {
     return mockMusicBrainzOverlaySyncLog.slice(
       0,
@@ -6024,7 +6025,7 @@ function recomputeMockMusicBrainzDiscographyCounts(
   response.message = `Matched ${response.pureAlbumCount} scoped MusicBrainz albums against ${response.localAlbumCount} local albums; ${response.excludedCount} excluded by release decisions.`;
 }
 
-export async function saveSettings(settings: AppSettings) {
+export async function saveSettings(settings: AppSettings): Promise<AppSettings> {
   const normalizedSettings = normalizeSettings(settings);
   if (!isTauriRuntime()) {
     setMockSettings({
@@ -6036,13 +6037,13 @@ export async function saveSettings(settings: AppSettings) {
   }
 
   const saved = normalizeSettings(
-    (await commands.saveSettings(normalizedSettings)) as AppSettings,
+    completed(await commands.saveSettings(normalizedSettings)),
   );
   cacheSettings(saved);
   return saved;
 }
 
-export async function getImportPreview(sourcePath: string) {
+export async function getImportPreview(sourcePath: string): Promise<ImportPreview | null> {
   if (!isTauriRuntime()) {
     return mockPreparedImport?.sourcePath === sourcePath
       ? mockPreparedImport
@@ -6052,14 +6053,14 @@ export async function getImportPreview(sourcePath: string) {
   return commands.getImportPreview(sourcePath);
 }
 
-export async function selectTaggedAlbumFolder(defaultPath?: string) {
+export async function selectTaggedAlbumFolder(defaultPath?: string): Promise<string | null> {
   if (!isTauriRuntime()) {
     return null;
   }
   return selectDirectory(defaultPath, "Choose one complete tagged album folder");
 }
 
-export async function prepareImportPreview(sourcePath: string) {
+export async function prepareImportPreview(sourcePath: string): Promise<ImportPreview> {
   if (!isTauriRuntime()) {
     mockImportCancellationRequested = false;
     emitMockImportProgress({
@@ -6144,7 +6145,7 @@ export async function prepareImportPreview(sourcePath: string) {
   return commands.prepareImportPreview(sourcePath);
 }
 
-export async function cancelImportPreview() {
+export async function cancelImportPreview(): Promise<void> {
   if (!isTauriRuntime()) {
     mockImportCancellationRequested = true;
     if (mockPreparedImport) {
@@ -6161,7 +6162,7 @@ export async function cancelImportPreview() {
   await commands.cancelImportPreview();
 }
 
-export async function applyImportPreview(sessionId: number) {
+export async function applyImportPreview(sessionId: number): Promise<ImportSummary> {
   if (!isTauriRuntime()) {
     if (!mockPreparedImport || mockPreparedImport.sessionId !== sessionId) {
       throw new Error("Prepare the import delta before applying this import.");
@@ -6209,7 +6210,7 @@ export async function applyImportPreview(sessionId: number) {
   return commands.applyImportPreview(sessionId);
 }
 
-export async function rollbackImportRun(importRunId: number) {
+export async function rollbackImportRun(importRunId: number): Promise<DatabaseRestoreSummary> {
   if (!isTauriRuntime()) {
     const run = mockImportRuns.find((candidate) => candidate.id === importRunId);
     if (!run?.backupPath) {
@@ -6240,7 +6241,7 @@ export async function rollbackImportRun(importRunId: number) {
   return commands.rollbackImportRun(importRunId);
 }
 
-export async function importAlbumCovers(request: CoverImportRequest) {
+export async function importAlbumCovers(request: CoverImportRequest): Promise<CoverImportSummary> {
   if (!isTauriRuntime()) {
     throw new Error(
       "Start cover import from the Tauri desktop app to access local files and SQLite.",
@@ -6250,7 +6251,7 @@ export async function importAlbumCovers(request: CoverImportRequest) {
   return commands.importAlbumCovers(request);
 }
 
-export async function importBillboardCharts(sourcePath: string) {
+export async function importBillboardCharts(sourcePath: string): Promise<BillboardImportSummary> {
   if (!isTauriRuntime()) {
     const matchedAlbums = mockRows.filter(
       (row) => row.trackId === null && row.billboardRank != null,
@@ -6268,7 +6269,7 @@ export async function importBillboardCharts(sourcePath: string) {
   return commands.importBillboardCharts(sourcePath);
 }
 
-export async function importBillboardSingles(sourcePath: string) {
+export async function importBillboardSingles(sourcePath: string): Promise<BillboardSinglesImportSummary> {
   if (!isTauriRuntime()) {
     const matchedTracks = mockRows.filter(
       (row) => row.trackId !== null && row.billboardSingleRank != null,
@@ -6290,7 +6291,7 @@ export async function importBillboardSingles(sourcePath: string) {
   return commands.importBillboardSingles(sourcePath);
 }
 
-export async function importVgListaAlbums(sourcePath: string) {
+export async function importVgListaAlbums(sourcePath: string): Promise<VgListaImportSummary> {
   if (!isTauriRuntime()) {
     const matchedItems = mockRows.filter(
       (row) => row.trackId === null && row.vgListaRank != null,
@@ -6308,7 +6309,7 @@ export async function importVgListaAlbums(sourcePath: string) {
   return commands.importVgListaAlbums(sourcePath);
 }
 
-export async function importVgListaSingles(sourcePath: string) {
+export async function importVgListaSingles(sourcePath: string): Promise<VgListaImportSummary> {
   if (!isTauriRuntime()) {
     const matchedItems = mockRows.filter(
       (row) => row.trackId !== null && row.vgListaRank != null,
@@ -6326,7 +6327,7 @@ export async function importVgListaSingles(sourcePath: string) {
   return commands.importVgListaSingles(sourcePath);
 }
 
-export async function importOfficialUkAlbums(sourcePath: string) {
+export async function importOfficialUkAlbums(sourcePath: string): Promise<OfficialUkImportSummary> {
   if (!isTauriRuntime()) {
     const matchedItems = mockRows.filter(
       (row) => row.trackId === null && row.officialUkRank != null,
@@ -6344,7 +6345,7 @@ export async function importOfficialUkAlbums(sourcePath: string) {
   return commands.importOfficialUkAlbums(sourcePath);
 }
 
-export async function importOfficialUkSingles(sourcePath: string) {
+export async function importOfficialUkSingles(sourcePath: string): Promise<OfficialUkImportSummary> {
   if (!isTauriRuntime()) {
     const matchedItems = mockRows.filter(
       (row) => row.trackId !== null && row.officialUkRank != null,
@@ -6362,7 +6363,7 @@ export async function importOfficialUkSingles(sourcePath: string) {
   return commands.importOfficialUkSingles(sourcePath);
 }
 
-export async function importTiISkuddetSingles(sourcePath: string) {
+export async function importTiISkuddetSingles(sourcePath: string): Promise<TiISkuddetImportSummary> {
   if (!isTauriRuntime()) {
     const matchedTracks = mockRows.filter(
       (row) => row.trackId !== null && row.tiISkuddetRank != null,
@@ -6381,7 +6382,7 @@ export async function importTiISkuddetSingles(sourcePath: string) {
   return commands.importTiISkuddetSingles(sourcePath);
 }
 
-export async function importNorsktoppenSingles(sourcePath: string) {
+export async function importNorsktoppenSingles(sourcePath: string): Promise<NorsktoppenImportSummary> {
   if (!isTauriRuntime()) {
     const matchedTracks = mockRows.filter(
       (row) => row.trackId !== null && row.norsktoppenRank != null,
@@ -6400,15 +6401,15 @@ export async function importNorsktoppenSingles(sourcePath: string) {
   return commands.importNorsktoppenSingles(sourcePath);
 }
 
-export async function getAlbumCoverUrl(albumId: string, size: ThumbnailSize = 300) {
+export async function getAlbumCoverUrl(albumId: string, size: ThumbnailSize = 300): Promise<string | null> {
   return artworkUrl("album", albumId, size);
 }
 
-export function clearCoverImageCache() {
+export function clearCoverImageCache(): void {
   invalidateArtwork();
 }
 
-export async function searchLibrary(request: BrowseRequest) {
+export async function searchLibrary(request: BrowseRequest): Promise<BrowseResponse> {
   if (!isTauriRuntime()) {
     const isTracks = request.view === "tracks";
     const albumIds = new Set(request.filters.albumIds);
@@ -6644,7 +6645,7 @@ export async function searchLibrary(request: BrowseRequest) {
   return commands.searchLibrary(request);
 }
 
-export async function listArtists(request: ArtistListRequest) {
+export async function listArtists(request: ArtistListRequest): Promise<ArtistListResponse> {
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
     const filtered = mockArtists.filter((artist) =>
@@ -6667,7 +6668,7 @@ export async function listArtists(request: ArtistListRequest) {
   return commands.listArtists(request);
 }
 
-export async function getArtistTrackHighlights(artistId: string) {
+export async function getArtistTrackHighlights(artistId: string): Promise<ArtistTrackHighlights> {
   if (!isTauriRuntime()) {
     const artist = mockArtists.find((candidate) => candidate.id === artistId);
     const rows = mockRows.filter(
@@ -6746,7 +6747,7 @@ export async function getArtistTrackHighlights(artistId: string) {
   return commands.getArtistTrackHighlights(artistId);
 }
 
-export async function listGenres(request: GenreListRequest) {
+export async function listGenres(request: GenreListRequest): Promise<GenreListResponse> {
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
     const filtered = mockGenres.filter((genre) =>
@@ -6971,7 +6972,7 @@ function mockGenreTimeline(request: GenreTimelineRequest): GenreTimelineResponse
   };
 }
 
-export async function getGenreTimeline(request: GenreTimelineRequest) {
+export async function getGenreTimeline(request: GenreTimelineRequest): Promise<GenreTimelineResponse> {
   if (!isTauriRuntime()) {
     return mockGenreTimeline(request);
   }
@@ -7069,12 +7070,12 @@ function mockArtistTimeline(request: ArtistTimelineRequest): ArtistTimelineRespo
   };
 }
 
-export async function getArtistTimeline(request: ArtistTimelineRequest) {
+export async function getArtistTimeline(request: ArtistTimelineRequest): Promise<ArtistTimelineResponse> {
   if (!isTauriRuntime()) return mockArtistTimeline(request);
   return commands.getArtistTimeline(request);
 }
 
-export async function listGenreSuggestions() {
+export async function listGenreSuggestions(): Promise<string[]> {
   if (!isTauriRuntime()) {
     return mockGenres.map((genre) => genre.name);
   }
@@ -7082,7 +7083,7 @@ export async function listGenreSuggestions() {
   return commands.listGenreSuggestions();
 }
 
-export async function listMusicTools() {
+export async function listMusicTools(): Promise<MusicToolSummary[]> {
   if (!isTauriRuntime()) {
     return mockMusicTools;
   }
@@ -7090,7 +7091,7 @@ export async function listMusicTools() {
   return commands.listMusicTools();
 }
 
-export async function listMusicToolIssues(request: MusicToolIssueRequest) {
+export async function listMusicToolIssues(request: MusicToolIssueRequest): Promise<MusicToolIssueResponse> {
   if (!isTauriRuntime()) {
     const simulateSlowProgress =
       request.toolId === "artists-without-musicbrainz-data" &&
@@ -7164,7 +7165,7 @@ export async function listMusicToolIssues(request: MusicToolIssueRequest) {
   return commands.listMusicToolIssues(request);
 }
 
-export async function fixMusicToolIssues(input: MusicToolFixRequest) {
+export async function fixMusicToolIssues(input: MusicToolFixRequest): Promise<MusicToolFixSummary> {
   if (!isTauriRuntime()) {
     const requestedIds = new Set(input.issueIds);
     const fixableRows = mockMusicToolIssues.filter(
@@ -7362,7 +7363,7 @@ function matchesIsoDateRange(
   return (minimum == null || value >= minimum) && (maximum == null || value <= maximum);
 }
 
-export async function listMusicToolFixHistory(toolId?: string) {
+export async function listMusicToolFixHistory(toolId?: string): Promise<MusicToolFixHistoryEntry[]> {
   if (!isTauriRuntime()) {
     return mockMusicToolFixHistory.filter(
       (entry) => !toolId || entry.toolId === toolId,
@@ -7372,7 +7373,7 @@ export async function listMusicToolFixHistory(toolId?: string) {
   return commands.listMusicToolFixHistory(toolId ?? null);
 }
 
-export async function undoMusicToolFix(runId: number) {
+export async function undoMusicToolFix(runId: number): Promise<MusicToolUndoSummary> {
   if (!isTauriRuntime()) {
     const index = mockMusicToolFixHistory.findIndex(
       (entry) => entry.id === runId,
@@ -7434,17 +7435,17 @@ export async function undoMusicToolFix(runId: number) {
   return commands.undoMusicToolFix(runId);
 }
 
-export async function listSavedSearches() {
+export async function listSavedSearches(): Promise<SavedSearch[]> {
   if (!isTauriRuntime()) {
     return normalizeSavedSearchesForClient(mockSavedSearches);
   }
 
   return normalizeSavedSearchesForClient(
-    (await commands.listSavedSearches()) as SavedSearch[],
+    completed(await commands.listSavedSearches()),
   );
 }
 
-export async function saveSearch(name: string, request: BrowseRequest) {
+export async function saveSearch(name: string, request: BrowseRequest): Promise<SavedSearch> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();
     const saved = {
@@ -7460,11 +7461,11 @@ export async function saveSearch(name: string, request: BrowseRequest) {
   }
 
   return normalizeSavedSearchForClient(
-    (await commands.saveSearch({ name, request })) as SavedSearch,
+    completed(await commands.saveSearch({ name, request })),
   );
 }
 
-export async function deleteSavedSearch(id: number) {
+export async function deleteSavedSearch(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     setMockSavedSearches(
       mockSavedSearches.filter((search) => search.id !== id),
@@ -7475,17 +7476,17 @@ export async function deleteSavedSearch(id: number) {
   await commands.deleteSavedSearch(id);
 }
 
-export async function listSavedCharts() {
+export async function listSavedCharts(): Promise<SavedChart[]> {
   if (!isTauriRuntime()) {
     return normalizeSavedChartsForClient(mockSavedCharts);
   }
 
   return normalizeSavedChartsForClient(
-    (await commands.listSavedCharts()) as SavedChart[],
+    completed(await commands.listSavedCharts()),
   );
 }
 
-export async function saveChart(name: string, config: ChartConfig) {
+export async function saveChart(name: string, config: ChartConfig): Promise<SavedChart> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();
     const saved = {
@@ -7500,11 +7501,11 @@ export async function saveChart(name: string, config: ChartConfig) {
   }
 
   return normalizeSavedChartForClient(
-    (await commands.saveChart({ name, config })) as SavedChart,
+    completed(await commands.saveChart({ name, config })),
   );
 }
 
-export async function deleteSavedChart(id: number) {
+export async function deleteSavedChart(id: number): Promise<void> {
   if (!isTauriRuntime()) {
     setMockSavedCharts(mockSavedCharts.filter((chart) => chart.id !== id));
     return;
@@ -7518,7 +7519,7 @@ export async function exportSearch(
   format: string,
   includeCalculated: boolean,
   exportColumns: string[] = [],
-) {
+): Promise<ExportResult> {
   if (!isTauriRuntime()) {
     return finalizeExport({
       path: `Preview runtime export.${format}`,
@@ -7537,7 +7538,7 @@ export async function exportSearch(
 export async function exportMusicToolIssues(
   request: MusicToolIssueRequest,
   format: string,
-) {
+): Promise<ExportResult> {
   if (!isTauriRuntime()) {
     const normalizedSearch = request.searchText.trim().toLowerCase();
     const rowCount = mockMusicToolIssues.filter((issue) => {
@@ -7577,7 +7578,7 @@ export async function exportMusicToolIssues(
 export async function exportMusicBrainzArtistReleases(
   request: Omit<MusicBrainzArtistExportRequest, "format">,
   format: string,
-) {
+): Promise<ExportResult> {
   const visibleRows = request.rows.filter((row) => row.status !== "excluded");
 
   if (!isTauriRuntime()) {
@@ -7595,7 +7596,7 @@ export async function exportMusicBrainzArtistReleases(
 
 export async function listenToImportProgress(
   handler: (progress: ImportProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockImportProgressHandlers.add(handler);
     return (() => mockImportProgressHandlers.delete(handler)) satisfies UnlistenFn;
@@ -7608,7 +7609,7 @@ export async function listenToImportProgress(
 
 export async function listenToDeemixDownloadProgress(
   handler: (progress: DeemixAlbumDownloadProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockDeemixDownloadProgressHandlers.add(handler);
     return (() => {
@@ -7626,7 +7627,7 @@ export async function listenToDeemixDownloadProgress(
 
 export async function listenToSoulseekConnection(
   handler: (snapshot: SoulseekConnectionSnapshot) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
   return listen<SoulseekConnectionSnapshot>("music-library://soulseek-connection", (event) => {
     handler(event.payload);
@@ -7635,7 +7636,7 @@ export async function listenToSoulseekConnection(
 
 export async function listenToSoulseekTransfers(
   handler: (snapshot: SoulseekTransferQueue) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockSoulseekTransferHandlers.add(handler);
     return (() => mockSoulseekTransferHandlers.delete(handler)) satisfies UnlistenFn;
@@ -7647,7 +7648,7 @@ export async function listenToSoulseekTransfers(
 
 export async function listenToSoulseekLocalShares(
   handler: (snapshot: SoulseekLocalShares) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
   return listen<SoulseekLocalShares>("music-library://soulseek-local-shares", (event) => {
     handler(event.payload);
@@ -7656,7 +7657,7 @@ export async function listenToSoulseekLocalShares(
 
 export async function listenToSoulseekUploads(
   handler: (snapshot: SoulseekUploadQueue) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return (() => undefined) satisfies UnlistenFn;
   return listen<SoulseekUploadQueue>("music-library://soulseek-uploads", (event) => {
     handler(event.payload);
@@ -7677,7 +7678,7 @@ export async function listenToUsenetTransfers(
 
 export async function listenToCoverImportProgress(
   handler: (progress: CoverImportProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     return (() => undefined) satisfies UnlistenFn;
   }
@@ -7689,7 +7690,7 @@ export async function listenToCoverImportProgress(
 
 export async function listenToMusicBrainzOriginCountryImportProgress(
   handler: (progress: MusicBrainzOriginCountryImportProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockOriginProgressHandlers.add(handler);
     return (() => {
@@ -7707,7 +7708,7 @@ export async function listenToMusicBrainzOriginCountryImportProgress(
 
 export async function listenToMusicBrainzArtistInfoImportProgress(
   handler: (progress: MusicBrainzArtistInfoImportProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockArtistInfoProgressHandlers.add(handler);
     return (() => {
@@ -7725,7 +7726,7 @@ export async function listenToMusicBrainzArtistInfoImportProgress(
 
 export async function listenToMusicToolProgress(
   handler: (progress: MusicToolProgress) => void,
-) {
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockMusicToolProgressHandlers.add(handler);
     return (() => {
@@ -8182,22 +8183,22 @@ function musicToolIssueSortValue(issue: MusicToolIssueRow, field: string) {
 }
 
 
-export async function listenToCatalogRevision(handler: (revision: string) => void) {
+export async function listenToCatalogRevision(handler: (revision: string) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
   return listen<string>("catalog-revision-changed", (event) => handler(event.payload));
 }
 
-export async function acknowledgeCatalogRevision(revision: string) {
+export async function acknowledgeCatalogRevision(revision: string): Promise<void> {
   if (!isTauriRuntime()) return;
   await commands.acknowledgeCatalogRevision(revision);
 }
 
-export async function listenToMusicDoctorSync(handler: (result: MusicDoctorSyncResult) => void) {
+export async function listenToMusicDoctorSync(handler: (result: MusicDoctorSyncResult) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
   return listen<MusicDoctorSyncResult>("music-doctor-sync-completed", (event) => handler(event.payload));
 }
 
-export async function listenToMusicBrainzOverlaySync(handler: (result: MusicBrainzOverlaySyncResult) => void) {
+export async function listenToMusicBrainzOverlaySync(handler: (result: MusicBrainzOverlaySyncResult) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) return () => undefined;
   return listen<MusicBrainzOverlaySyncResult>("musicbrainz-overlay-sync-completed", (event) => handler(event.payload));
 }
@@ -8226,7 +8227,7 @@ function scheduleMockCompletionProgress() {
   }, 1_500);
 }
 
-export async function listenToLibraryCompletionVerification(handler: (status: LibraryCompletionVerificationStatus) => void) {
+export async function listenToLibraryCompletionVerification(handler: (status: LibraryCompletionVerificationStatus) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockCompletionHandlers.add(handler);
     scheduleMockCompletionProgress();
@@ -8235,7 +8236,7 @@ export async function listenToLibraryCompletionVerification(handler: (status: Li
   return listen<LibraryCompletionVerificationStatus>("library-completion-verification-progress", (event) => handler(event.payload));
 }
 
-export async function listenToArtistCompletionVerification(handler: (status: LibraryCompletionArtistVerificationStatus) => void) {
+export async function listenToArtistCompletionVerification(handler: (status: LibraryCompletionArtistVerificationStatus) => void): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
     mockArtistCompletionHandlers.add(handler);
     scheduleMockCompletionProgress();
