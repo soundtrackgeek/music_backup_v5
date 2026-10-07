@@ -38,7 +38,7 @@ pub(crate) struct SongIndex {
     performers: Candidates,
 }
 impl SongIndex {
-    /// `credits` are the library track's chart_identity::main_performers.
+    /// `credits` are the library track's identity::credit_keys.
     pub(crate) fn insert(
         &mut self,
         id: usize,
@@ -79,7 +79,7 @@ impl SongIndex {
         }
     }
 
-    /// `credits` are the chart entry's chart_identity::main_performers, lead first.
+    /// `credits` are the chart entry's identity::credit_keys, lead first.
     pub(crate) fn resolve(
         &self,
         artists: &[String],
@@ -222,8 +222,8 @@ mod tests {
     }
     #[test]
     fn collaborations_match_by_lead_performer_only_as_a_last_resort() {
-        let credits = |value: &str| crate::chart_identity::main_performers(value);
-        let key = |value: &str| vec![crate::chart_identity::artist_group_key(value)];
+        let credits = |value: &str| crate::identity::credit_keys(value);
+        let key = |value: &str| vec![crate::identity::loose_artist_key(value)];
         let mut index = SongIndex::default();
         for (id, artist, title) in [
             (1, "John Lennon & Yoko Ono", "woman"),

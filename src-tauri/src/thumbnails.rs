@@ -77,7 +77,7 @@ impl ArtworkRequest {
         Ok(Self {
             kind: kind.into(),
             id: if kind == "artist" {
-                crate::db::normalize_artist_text(id)
+                crate::identity::artist_text_key(id)
             } else {
                 id.into()
             },
@@ -131,7 +131,7 @@ impl ThumbnailService {
             _ => unreachable!(),
         };
         let id = if request.kind == "artist" {
-            crate::db::normalize_artist_text(&request.id)
+            crate::identity::artist_text_key(&request.id)
         } else {
             request.id.clone()
         };

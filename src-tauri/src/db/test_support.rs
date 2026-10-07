@@ -160,7 +160,7 @@ pub(super) fn insert_test_artist_info(
     end_year: Option<i32>,
     ended: bool,
 ) {
-    let artist_key = normalize_artist_key(artist);
+    let artist_key = identity::artist_key(artist);
     let mbid = format!("mbid-{artist_key}");
     let begin_date = begin_year.map(|year| year.to_string());
     let end_date = end_year.map(|year| year.to_string());

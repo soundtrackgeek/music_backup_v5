@@ -1564,7 +1564,7 @@ fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
 }
 
 fn local_origin_artists(conn: &Connection) -> Result<Vec<OriginLocalArtist>> {
-    let artist_key_sql = db::artist_key_sql("album_artist_display");
+    let artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
@@ -1805,7 +1805,7 @@ fn selected_origin_artist_keys(request: &MusicBrainzOriginCountryImportRequest) 
     request
         .artist_keys
         .iter()
-        .map(|artist_key| normalize_local_artist_text(artist_key))
+        .map(|artist_key| crate::identity::artist_text_key(artist_key))
         .filter(|artist_key| !artist_key.is_empty())
         .collect()
 }
@@ -1814,7 +1814,7 @@ fn selected_artist_info_keys(request: &MusicBrainzArtistInfoImportRequest) -> Ha
     request
         .artist_keys
         .iter()
-        .map(|artist_key| normalize_local_artist_text(artist_key))
+        .map(|artist_key| crate::identity::artist_text_key(artist_key))
         .filter(|artist_key| !artist_key.is_empty())
         .collect()
 }
@@ -3625,7 +3625,7 @@ fn find_artist_match(
         );
     }
 
-    let normalized_artist_name = musicbrainz_text_key(artist_name);
+    let normalized_artist_name = crate::identity::loose_key(artist_name);
     if normalized_artist_name.is_empty() {
         return Ok(None);
     }
@@ -3648,7 +3648,7 @@ fn find_artist_match(
         .context("Could not read MusicBrainz artist cache names")?;
 
     for (name, mbid) in rows {
-        if musicbrainz_text_key(&name) == normalized_artist_name {
+        if crate::identity::loose_key(&name) == normalized_artist_name {
             return artist_match_from_mbid(
                 cache_conn,
                 mbid,
@@ -3764,11 +3764,11 @@ fn same_mbid_artist_candidate_seeds(
     artist_name: &str,
     artist_match: &ArtistMatch,
 ) -> Result<Vec<ArtistCandidateSeed>> {
-    let target_key = musicbrainz_text_key(artist_name);
+    let target_key = crate::identity::loose_key(artist_name);
     let matched_name_key = artist_match
         .matched_name
         .as_deref()
-        .map(musicbrainz_text_key);
+        .map(crate::identity::loose_key);
     let mut stmt = cache_conn
         .prepare(
             "
@@ -3788,7 +3788,7 @@ fn same_mbid_artist_candidate_seeds(
     let seeds = names
         .into_iter()
         .filter_map(|name| {
-            let name_key = musicbrainz_text_key(&name);
+            let name_key = crate::identity::loose_key(&name);
             if matched_name_key.as_deref() == Some(name_key.as_str()) {
                 return None;
             }
@@ -3809,7 +3809,7 @@ fn fuzzy_artist_candidate_seeds(
     artist_name: &str,
     excluded_mbid: Option<&str>,
 ) -> Result<Vec<ArtistCandidateSeed>> {
-    let target_key = musicbrainz_text_key(artist_name);
+    let target_key = crate::identity::loose_key(artist_name);
     if target_key.is_empty() {
         return Ok(Vec::new());
     }
@@ -3820,7 +3820,7 @@ fn fuzzy_artist_candidate_seeds(
             continue;
         }
 
-        let entry_key = musicbrainz_text_key(&entry.name);
+        let entry_key = crate::identity::loose_key(&entry.name);
         let score = artist_name_similarity_from_keys(&target_key, &entry_key);
         if score < FUZZY_ARTIST_CANDIDATE_THRESHOLD {
             continue;
@@ -4639,7 +4639,7 @@ fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<Stri
 }
 
 fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalAlbum>> {
-    let album_artist_key_sql = db::artist_key_sql("album_artist_display");
+    let album_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
     let sql = format!(
         "
             SELECT id, COALESCE(album, 'Untitled'), year
@@ -4667,7 +4667,7 @@ fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalA
 fn local_albums_by_title(local_albums: Vec<LocalAlbum>) -> HashMap<String, Vec<LocalAlbum>> {
     let mut by_title: HashMap<String, Vec<LocalAlbum>> = HashMap::new();
     for album in local_albums {
-        let title_key = musicbrainz_text_key(&album.title);
+        let title_key = crate::identity::loose_key(&album.title);
         if !title_key.is_empty() {
             by_title.entry(title_key).or_default().push(album);
         }
@@ -4706,7 +4706,7 @@ fn release_row_with_local_match(
         };
     }
 
-    let title_key = musicbrainz_text_key(&release.title);
+    let title_key = crate::identity::loose_key(&release.title);
     let local_album = local_by_title
         .get(&title_key)
         .and_then(|albums| best_local_album_match(albums, release.year));
@@ -4979,36 +4979,12 @@ fn normalize_display_name(artist_name: &str, artist_key: &str) -> String {
 }
 
 fn normalize_local_artist_key(artist_key: &str, artist_name: &str) -> String {
-    let trimmed_key = normalize_local_artist_text(artist_key);
-    if !trimmed_key.is_empty() {
-        trimmed_key
+    let trimmed_key = crate::identity::artist_text_key(artist_key);
+    if trimmed_key.is_empty() {
+        crate::identity::artist_key(artist_name)
     } else {
-        let name_key = normalize_local_artist_text(artist_name);
-        if name_key.is_empty() {
-            "unknown".to_string()
-        } else {
-            name_key
-        }
+        trimmed_key
     }
-}
-
-fn normalize_local_artist_text(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
-            _ => character,
-        })
-        .collect::<String>()
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn musicbrainz_text_key(value: &str) -> String {
-    crate::chart_identity::text_key(value)
 }
 
 fn empty_status(

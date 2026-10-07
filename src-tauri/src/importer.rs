@@ -4274,8 +4274,9 @@ fn album_history_match_key(
     album: &Option<String>,
     year: Option<i32>,
 ) -> Option<String> {
-    let artist = normalize_artist_text(album_artist_display.as_deref().unwrap_or_default());
-    let title = normalize_text(album.as_deref().unwrap_or_default());
+    let artist =
+        crate::identity::artist_text_key(album_artist_display.as_deref().unwrap_or_default());
+    let title = crate::identity::display_key(album.as_deref().unwrap_or_default());
     if artist.is_empty() || title.is_empty() {
         return None;
     }
@@ -4863,7 +4864,7 @@ impl TrackRow {
         let time_raw = clean_field(record.get(headers.time));
 
         let canonical_genre = canonical_genre(&genre);
-        let genre_normalized = normalize_text(&canonical_genre);
+        let genre_normalized = crate::identity::display_key(&canonical_genre);
         let normalized_rating = normalize_track_rating(&rating_raw);
         let track_rating_value = parse_track_rating(&rating_raw);
         let album_rating = parse_album_rating(&album_rating_raw);
@@ -4969,7 +4970,7 @@ impl AlbumAggregate {
                 empty_to_none(&track.album_artist_display).map(str::to_string);
         }
         if let Some(display_artist) = empty_to_none(&track.display_artist) {
-            let display_artist_key = normalize_artist_key(display_artist);
+            let display_artist_key = crate::identity::artist_key(display_artist);
             match &self.single_display_artist_key {
                 Some(existing_key) if existing_key != &display_artist_key => {
                     self.has_multiple_display_artists = true;
@@ -5279,38 +5280,6 @@ fn canonical_genre(genre: &str) -> String {
         .to_string()
 }
 
-fn normalize_text(value: &str) -> String {
-    value
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn normalize_artist_text(value: &str) -> String {
-    normalize_text(&normalize_artist_dashes(value))
-}
-
-fn normalize_artist_key(value: &str) -> String {
-    let normalized = normalize_artist_text(value);
-    if normalized.is_empty() {
-        "unknown".to_string()
-    } else {
-        normalized
-    }
-}
-
-fn normalize_artist_dashes(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
-            _ => character,
-        })
-        .collect()
-}
-
 fn parse_whole_number(value: &str) -> Option<i32> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -5425,10 +5394,10 @@ fn album_identity(
 
     format!(
         "fallback:{}::{}::{}::{}",
-        normalize_artist_text(album_artist),
-        normalize_text(album),
+        crate::identity::artist_text_key(album_artist),
+        crate::identity::display_key(album),
         year.map(|value| value.to_string()).unwrap_or_default(),
-        normalize_text(&path_root(file_path))
+        crate::identity::display_key(&path_root(file_path))
     )
 }
 

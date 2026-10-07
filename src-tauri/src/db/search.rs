@@ -946,7 +946,7 @@ pub(super) fn add_artist_key_condition(
 ) {
     let normalized = artist_keys
         .iter()
-        .map(|artist_key| normalize_artist_key(artist_key))
+        .map(|artist_key| identity::artist_key(artist_key))
         .filter(|artist_key| !artist_key.is_empty())
         .collect::<Vec<_>>();
 
@@ -1204,7 +1204,7 @@ pub(super) fn add_text_list_condition(
 pub(super) fn expanded_genre_filter_values(items: &[String]) -> Vec<String> {
     let mut normalized = Vec::new();
     for item in items {
-        let value = normalize_text(item);
+        let value = identity::display_key(item);
         if value.is_empty() {
             continue;
         }
@@ -1731,15 +1731,6 @@ pub(super) fn escape_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-pub(super) fn normalize_text(value: &str) -> String {
-    value
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 pub(super) fn normalize_country_code(value: &str) -> String {
     let normalized = value.trim().to_uppercase();
     if normalized == "UK" {
@@ -1747,48 +1738,6 @@ pub(super) fn normalize_country_code(value: &str) -> String {
     } else {
         normalized
     }
-}
-
-pub(crate) fn normalize_artist_text(value: &str) -> String {
-    normalize_text(&normalize_artist_dashes(value))
-}
-
-pub(super) fn normalize_artist_key(value: &str) -> String {
-    let normalized = normalize_artist_text(value);
-    if normalized.is_empty() {
-        "unknown".to_string()
-    } else {
-        normalized
-    }
-}
-
-pub(super) fn musicbrainz_text_key(value: &str) -> String {
-    crate::chart_identity::text_key(value)
-}
-
-pub(super) fn normalize_artist_dashes(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
-            _ => character,
-        })
-        .collect()
-}
-
-pub(crate) fn artist_key_sql(field: &str) -> String {
-    format!(
-        "COALESCE(NULLIF(TRIM(unicode_lower({})), ''), 'unknown')",
-        normalized_artist_sql(field)
-    )
-}
-
-pub(super) fn normalized_artist_sql(field: &str) -> String {
-    [8208, 8209, 8210, 8211, 8212, 8722]
-        .iter()
-        .fold(format!("COALESCE({field}, '')"), |expression, codepoint| {
-            format!("REPLACE({expression}, char({codepoint}), '-')")
-        })
 }
 
 #[cfg(test)]
@@ -1836,8 +1785,8 @@ mod tests {
             .iter()
             .map(|item| {
                 (
-                    normalize_artist_key(&item.artist),
-                    normalize_text(&item.album),
+                    identity::artist_key(&item.artist),
+                    identity::display_key(&item.album),
                 )
             })
             .collect::<HashSet<_>>();

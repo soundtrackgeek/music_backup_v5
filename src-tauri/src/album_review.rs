@@ -6,7 +6,6 @@ use std::cmp::Reverse;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
-use unicode_normalization::UnicodeNormalization;
 use url::Url;
 
 const MUSICBRAINZ_RELEASE_GROUP_API: &str = "https://musicbrainz.org/ws/2/release-group/";
@@ -148,23 +147,6 @@ fn valid_uuid(value: &str) -> bool {
             })
 }
 
-fn normalized_text(value: &str) -> String {
-    value
-        .nfkc()
-        .flat_map(char::to_lowercase)
-        .map(|character| {
-            if character.is_alphanumeric() {
-                character
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn lucene_phrase(value: &str) -> String {
     value.trim().replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -201,13 +183,13 @@ fn artist_credit_matches(
             .iter()
             .any(|credit| credit.artist.id.eq_ignore_ascii_case(mbid));
     }
-    let artist = normalized_text(&identity.album_artist);
+    let artist = crate::identity::loose_key(&identity.album_artist);
     candidate.artist_credit.iter().any(|credit| {
-        normalized_text(&credit.artist.name) == artist
+        crate::identity::loose_key(&credit.artist.name) == artist
             || credit
                 .name
                 .as_deref()
-                .is_some_and(|name| normalized_text(name) == artist)
+                .is_some_and(|name| crate::identity::loose_key(name) == artist)
     })
 }
 
@@ -215,14 +197,14 @@ fn best_release_group(
     response: &MusicBrainzReleaseGroupSearchResponse,
     identity: &AlbumReviewIdentity,
 ) -> Option<String> {
-    let title = normalized_text(&identity.album_title);
+    let title = crate::identity::loose_key(&identity.album_title);
     let mut candidates = response
         .release_groups
         .iter()
         .filter(|candidate| {
             valid_uuid(&candidate.id)
                 && candidate.score >= 95
-                && normalized_text(&candidate.title) == title
+                && crate::identity::loose_key(&candidate.title) == title
                 && artist_credit_matches(candidate, identity)
         })
         .collect::<Vec<_>>();

@@ -286,8 +286,8 @@ pub(super) fn import_billboard_charts(
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         for (album_id, artist, album) in album_rows {
-            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
-            let album_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
+            let album_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
             if artist_key.is_empty() || album_key.is_empty() {
                 continue;
             }
@@ -647,8 +647,8 @@ pub(super) fn import_vg_lista_albums(
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         for (album_id, artist, album) in album_rows {
-            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
-            let title_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
+            let title_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
             if artist_key.is_empty() || title_key.is_empty() {
                 continue;
             }
@@ -938,8 +938,8 @@ pub(super) fn import_official_uk_albums(
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         for (album_id, artist, album) in album_rows {
-            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
-            let title_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
+            let title_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
             if artist_key.is_empty() || title_key.is_empty() {
                 continue;
             }
@@ -1507,8 +1507,8 @@ pub(super) fn read_vg_lista_chart_file(path: &Path) -> Result<Vec<VgListaChartEn
             .unwrap_or_default()
             .trim()
             .to_string();
-        let artist_key = billboard_text_key(&artist);
-        let title_key = billboard_text_key(&title);
+        let artist_key = crate::identity::loose_key(&artist);
+        let title_key = crate::identity::loose_key(&title);
         if artist_key.is_empty() || title_key.is_empty() {
             continue;
         }
@@ -1607,8 +1607,8 @@ pub(super) fn read_official_uk_chart_file(path: &Path) -> Result<Vec<OfficialUkC
             .unwrap_or_default()
             .trim()
             .to_string();
-        let artist_key = billboard_text_key(&artist);
-        let title_key = billboard_text_key(&title);
+        let artist_key = crate::identity::loose_key(&artist);
+        let title_key = crate::identity::loose_key(&title);
         if artist_key.is_empty() || title_key.is_empty() {
             continue;
         }
@@ -1719,8 +1719,8 @@ pub(super) fn read_ti_i_skuddet_chart_file(
             .unwrap_or_default()
             .trim()
             .to_string();
-        let artist_key = billboard_text_key(&artist);
-        let title_key = billboard_text_key(&title);
+        let artist_key = crate::identity::loose_key(&artist);
+        let title_key = crate::identity::loose_key(&title);
         if artist_key.is_empty() || title_key.is_empty() {
             skipped_rows += 1;
             continue;
@@ -1826,8 +1826,8 @@ pub(super) fn read_norsktoppen_chart_file(
             .unwrap_or_default()
             .trim()
             .to_string();
-        let artist_key = billboard_text_key(&artist);
-        let title_key = billboard_text_key(&title);
+        let artist_key = crate::identity::loose_key(&artist);
+        let title_key = crate::identity::loose_key(&title);
         if artist_key.is_empty() || title_key.is_empty() {
             skipped_rows += 1;
             continue;
@@ -1998,8 +1998,8 @@ pub(super) fn read_billboard_chart_file(
             .unwrap_or_default()
             .trim()
             .to_string();
-        let artist_key = billboard_text_key(&artist);
-        let album_key = billboard_text_key(&album);
+        let artist_key = crate::identity::loose_key(&artist);
+        let album_key = crate::identity::loose_key(&album);
         let first_appearance = record
             .get(first_appearance_index)
             .unwrap_or_default()
@@ -2162,8 +2162,8 @@ pub(super) fn read_billboard_single_chart_file(
             .unwrap_or_default()
             .trim();
         let display_artist = billboard_single_display_artist(&artist, &featured);
-        let artist_key = billboard_text_key(&display_artist);
-        let title_key = billboard_text_key(&title);
+        let artist_key = crate::identity::loose_key(&display_artist);
+        let title_key = crate::identity::loose_key(&title);
         let album_key = billboard_single_source_album_key(&album, label_number);
         let date_entered_raw = date_entered_index
             .and_then(|index| record.get(index))
@@ -2398,7 +2398,7 @@ pub(super) fn billboard_single_display_artist(artist: &str, featured: &str) -> S
 
 pub(super) fn billboard_single_source_album_key(album: &str, label_number: &str) -> String {
     let album = album.trim();
-    let raw_key = billboard_text_key(album);
+    let raw_key = crate::identity::loose_key(album);
     if raw_key.is_empty()
         || matches!(
             raw_key.as_str(),
@@ -2424,15 +2424,15 @@ pub(super) fn billboard_single_source_album_key(album: &str, label_number: &str)
         })
         .unwrap_or(album);
 
-    billboard_text_key(cleaned)
+    crate::identity::loose_key(cleaned)
 }
 
 pub(super) fn billboard_single_catalog_label_matches(
     album_suffix: &str,
     label_number: &str,
 ) -> bool {
-    let suffix_key = billboard_text_key(album_suffix);
-    let label_key = billboard_text_key(label_number);
+    let suffix_key = crate::identity::loose_key(album_suffix);
+    let label_key = crate::identity::loose_key(label_number);
     if suffix_key.is_empty() || label_key.is_empty() {
         return false;
     }
@@ -2571,10 +2571,6 @@ pub(super) fn nonempty_str(value: &str) -> Option<&str> {
     } else {
         Some(trimmed)
     }
-}
-
-pub(super) fn billboard_text_key(value: &str) -> String {
-    crate::chart_identity::text_key(value)
 }
 
 #[cfg(test)]

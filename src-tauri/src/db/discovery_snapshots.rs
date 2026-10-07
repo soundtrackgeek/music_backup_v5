@@ -498,7 +498,7 @@ pub(super) fn discovery_artist_completion_snapshot_with_scope(
     })? {
         let (artist_id, album_id, album, genre_id, genre_label, score, cover_path) = row?;
         let local = local_by_artist.entry(artist_id).or_default();
-        local.titles.insert(normalize_text(&album));
+        local.titles.insert(identity::display_key(&album));
         if let Some(genre_id) = genre_id {
             let genre = local
                 .genres
@@ -600,7 +600,7 @@ pub(super) fn discovery_artist_completion_snapshot_with_scope(
         let missing = relevant
             .iter()
             .filter(|(release_mbid, title, _, _)| {
-                !local.titles.contains(&normalize_text(title))
+                !local.titles.contains(&identity::display_key(title))
                     && !matches!(
                         decisions
                             .get(&(candidate.artist_id.clone(), release_mbid.clone()))
@@ -1088,7 +1088,7 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
             let album: String = row.get(1)?;
             Ok(CandidateAlbum {
                 album_id: row.get(0)?,
-                album_key: normalize_text(&album),
+                album_key: identity::display_key(&album),
                 album,
                 artist: row.get(2)?,
                 artist_key: row.get(3)?,
@@ -1165,7 +1165,7 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                 .and_then(|mbid| candidates_by_mbid.get(&mbid.to_lowercase()).copied())
                 .or_else(|| {
                     candidates_by_identity
-                        .get(&(normalize_artist_key(&artist), normalize_text(&album)))
+                        .get(&(identity::artist_key(&artist), identity::display_key(&album)))
                         .copied()
                 });
             let Some(candidate_index) = candidate_index else {
@@ -1197,7 +1197,7 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
             Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
         })? {
             let (similar_artist, _) = row?;
-            let similar_key = normalize_artist_key(&similar_artist);
+            let similar_key = identity::artist_key(&similar_artist);
             let Some(album_indexes) = candidates_by_artist.get(&similar_key) else {
                 continue;
             };

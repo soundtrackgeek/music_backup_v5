@@ -379,7 +379,7 @@ pub(super) fn prepare_missing_musicbrainz_artist_tool_with_progress(
             )
             .context("Could not prepare local MusicBrainz artist temp insert")?;
         for artist in local_artists {
-            let musicbrainz_name_key = musicbrainz_text_key(&artist.display_artist);
+            let musicbrainz_name_key = crate::identity::loose_key(&artist.display_artist);
             stmt.execute(params![
                 artist.artist_key,
                 artist.display_artist,
@@ -415,7 +415,7 @@ pub(super) fn prepare_missing_musicbrainz_artist_tool_with_progress(
             )
             .context("Could not prepare local MusicBrainz album temp insert")?;
         for album in local_albums {
-            let title_key = musicbrainz_text_key(&album.title);
+            let title_key = crate::identity::loose_key(&album.title);
             stmt.execute(params![
                 album.artist_key,
                 album.album_id,
@@ -448,8 +448,8 @@ pub(super) fn prepare_missing_musicbrainz_artist_tool_with_progress(
             )
             .context("Could not prepare MusicBrainz cache artist temp insert")?;
         for artist in cache_artists {
-            let local_name_key = normalize_artist_key(&artist.name);
-            let musicbrainz_name_key = musicbrainz_text_key(&artist.name);
+            let local_name_key = identity::artist_key(&artist.name);
+            let musicbrainz_name_key = crate::identity::loose_key(&artist.name);
             let normalized_mbid = artist.mbid.to_lowercase();
             stmt.execute(params![
                 artist.name,
@@ -964,7 +964,7 @@ pub(super) fn insert_musicbrainz_tool_release_groups(
         else {
             continue;
         };
-        let title_key = musicbrainz_text_key(&release_group.title);
+        let title_key = crate::identity::loose_key(&release_group.title);
         let normalized_artist_mbid = release_group.artist_mbid.to_lowercase();
         stmt.execute(params![
             normalized_artist_mbid,

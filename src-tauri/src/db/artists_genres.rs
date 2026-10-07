@@ -82,11 +82,11 @@ pub(super) fn append_published_artist_histories(
     let mut artist_keys = HashSet::<String>::new();
     let mut performers = HashSet::<String>::new();
     for (index, track) in local.iter().enumerate() {
-        let artist = billboard_text_key(&track.display_artist);
+        let artist = crate::identity::loose_key(&track.display_artist);
         artist_keys.extend(billboard_single_artist_key_variants(&artist));
-        let credits = crate::chart_identity::main_performers(&track.display_artist);
+        let credits = crate::identity::credit_keys(&track.display_artist);
         performers.extend(credits.iter().cloned());
-        let title = billboard_text_key(&track.title);
+        let title = crate::identity::loose_key(&track.title);
         song_matches.insert(
             index,
             &billboard_single_artist_key_variants(&artist),
@@ -108,8 +108,8 @@ pub(super) fn append_published_artist_histories(
          WHERE e.artist = ?1 AND e.position > 0",
     )?;
     for credit in credits {
-        let artist = billboard_text_key(&credit);
-        let credit_performers = crate::chart_identity::main_performers(&credit);
+        let artist = crate::identity::loose_key(&credit);
+        let credit_performers = crate::identity::credit_keys(&credit);
         if !billboard_single_artist_key_variants(&artist)
             .iter()
             .any(|key| artist_keys.contains(key))
@@ -129,7 +129,7 @@ pub(super) fn append_published_artist_histories(
         })?;
         for row in rows {
             let (chart, title, week, peak) = row?;
-            let full = billboard_text_key(&title);
+            let full = crate::identity::loose_key(&title);
             let matched = song_matches
                 .resolve(
                     &billboard_single_artist_key_variants(&artist),
@@ -155,15 +155,15 @@ pub(super) fn append_published_artist_histories(
     for ((index, chart), (first, last, weeks, peak)) in histories {
         let local_track = &local[index];
         let identity = billboard_match_key(
-            &billboard_text_key(&local_track.display_artist),
-            &billboard_text_key(&local_track.title),
+            &crate::identity::loose_key(&local_track.display_artist),
+            &crate::identity::loose_key(&local_track.title),
         );
         let target = chart_tracks
             .iter()
             .position(|track| {
                 billboard_match_key(
-                    &billboard_text_key(&track.display_artist),
-                    &billboard_text_key(&track.title),
+                    &crate::identity::loose_key(&track.display_artist),
+                    &crate::identity::loose_key(&track.title),
                 ) == identity
             })
             .unwrap_or_else(|| {
@@ -185,7 +185,7 @@ pub(super) fn artist_track_highlights(
     conn: &Connection,
     artist_id: &str,
 ) -> Result<ArtistTrackHighlights> {
-    let artist_id = normalize_artist_key(artist_id);
+    let artist_id = identity::artist_key(artist_id);
     let album_artist_key = artist_key_sql("album_artist_display");
     let track_artist_key =
         artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
@@ -381,8 +381,8 @@ pub(super) fn artist_track_highlights(
     ) in chart_rows
     {
         let song_key = billboard_match_key(
-            &billboard_text_key(&display_artist),
-            &billboard_text_key(&title),
+            &crate::identity::loose_key(&display_artist),
+            &crate::identity::loose_key(&title),
         );
         let track_index = match song_indexes.get(&song_key).copied() {
             Some(index) => index,
@@ -626,8 +626,8 @@ pub(super) fn artist_search_where(search_text: &str) -> (String, Vec<Value>) {
         return (String::new(), Vec::new());
     }
 
-    let normalized = normalize_artist_text(search_text);
-    let artist_text_sql = normalized_artist_sql("album_artist_display");
+    let normalized = identity::artist_text_key(search_text);
+    let artist_text_sql = identity::fold_dashes_sql("album_artist_display");
     (
         format!(
             "WHERE unicode_lower(COALESCE(NULLIF(TRIM({artist_text_sql}), ''), 'Unknown Artist')) LIKE ? ESCAPE '\\'"
@@ -1019,7 +1019,7 @@ pub(super) fn artist_timeline(
     let requested_artists = request
         .artists
         .iter()
-        .map(|artist| normalize_artist_text(artist))
+        .map(|artist| identity::artist_text_key(artist))
         .filter(|artist| !artist.is_empty())
         .collect::<HashSet<_>>();
     if !requested_artists.is_empty() {

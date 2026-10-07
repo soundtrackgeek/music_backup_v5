@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
-use unicode_normalization::UnicodeNormalization;
 use url::Url;
 
 const MUSICBRAINZ_ARTIST_API: &str = "https://musicbrainz.org/ws/2/artist/";
@@ -198,16 +197,6 @@ fn relation_targets(
     (wikidata_id, wikipedia_target)
 }
 
-fn normalize_artist_name(value: &str) -> String {
-    value
-        .nfkc()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn musicbrainz_artist_name_query(artist_name: &str) -> String {
     let escaped = artist_name
         .trim()
@@ -220,11 +209,11 @@ fn exact_musicbrainz_artist_mbid(
     response: &MusicBrainzArtistSearchResponse,
     artist_name: &str,
 ) -> Option<String> {
-    let artist_key = normalize_artist_name(artist_name);
+    let artist_key = crate::identity::strict_key(artist_name);
     let mut matches = response.artists.iter().filter(|artist| {
         artist.score == 100
             && valid_mbid(&artist.id)
-            && normalize_artist_name(&artist.name) == artist_key
+            && crate::identity::strict_key(&artist.name) == artist_key
     });
     let first = matches.next()?;
     matches.next().is_none().then(|| first.id.clone())

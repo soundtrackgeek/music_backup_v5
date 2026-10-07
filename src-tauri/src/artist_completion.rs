@@ -330,7 +330,7 @@ fn load_owned_artist_keys(conn: &Connection) -> Result<HashSet<String>> {
     let rows = statement.query_map([], |row| row.get::<_, Option<String>>(0))?;
     let mut keys = HashSet::new();
     for value in rows {
-        let key = wishlist::normalize_key(value?.as_deref().unwrap_or_default());
+        let key = crate::identity::loose_key(value?.as_deref().unwrap_or_default());
         if !key.is_empty() && key != "unknown" {
             keys.insert(key);
         }
@@ -399,7 +399,7 @@ fn load_wish_list_artists(conn: &Connection) -> Result<HashMap<String, i64>> {
         conn.prepare("SELECT id, title FROM wish_list_items WHERE entity = 'artist'")?;
     let rows = statement.query_map([], |row| {
         Ok((
-            wishlist::normalize_key(&row.get::<_, String>(1)?),
+            crate::identity::loose_key(&row.get::<_, String>(1)?),
             row.get::<_, i64>(0)?,
         ))
     })?;
@@ -474,22 +474,9 @@ fn status_order(value: &str) -> usize {
 
 fn ignored_artist(artist: &str) -> bool {
     matches!(
-        wishlist::normalize_key(artist).as_str(),
+        crate::identity::loose_key(artist).as_str(),
         "various" | "various artists" | "v a" | "unknown"
     )
-}
-
-fn normalized_chart_artist_name(artist: &str) -> String {
-    let artist = artist.trim();
-    let suffix_start = artist.len().saturating_sub(4);
-    if artist
-        .get(suffix_start..)
-        .is_some_and(|suffix| suffix.eq_ignore_ascii_case("[no]"))
-    {
-        artist[..suffix_start].trim_end().to_string()
-    } else {
-        artist.to_string()
-    }
 }
 
 fn normalize_request(
@@ -587,8 +574,8 @@ fn get_for_connection(
     let mut artists = HashMap::<String, ArtistAggregate>::new();
 
     for mut row in load_source_rows(conn)? {
-        row.artist = normalized_chart_artist_name(&row.artist);
-        let artist_id = wishlist::normalize_key(&row.artist);
+        row.artist = crate::identity::strip_chart_country_suffix(&row.artist).to_string();
+        let artist_id = crate::identity::loose_key(&row.artist);
         if artist_id.is_empty() || ignored_artist(&row.artist) {
             continue;
         }
@@ -1235,7 +1222,7 @@ fn musicbrainz_result(
             .candidates
             .into_iter()
             .filter(|candidate| {
-                wishlist::normalize_key(&candidate.title) == wishlist::normalize_key(artist)
+                crate::identity::loose_key(&candidate.title) == crate::identity::loose_key(artist)
             })
             .collect::<Vec<_>>();
         if exact.is_empty() {

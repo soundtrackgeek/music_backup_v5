@@ -316,7 +316,7 @@ pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     Ok(count == 6)
 }
 
-/// Bump when chart_identity keys change so stored archive keys are rebuilt.
+/// Bump when identity loose keys change so stored archive keys are rebuilt.
 const IDENTITY_KEY_VERSION: i64 = 1;
 
 fn identity_keys_current(conn: &Connection) -> Result<bool> {
@@ -364,7 +364,7 @@ impl IdentityKeys {
         if let Some(key) = self.artists.get(artist) {
             return key.clone();
         }
-        let key = crate::chart_identity::artist_group_key(artist);
+        let key = crate::identity::loose_artist_key(artist);
         self.artists.insert(artist.to_string(), key.clone());
         key
     }
@@ -373,7 +373,7 @@ impl IdentityKeys {
         if let Some(key) = self.titles.get(title) {
             return key.clone();
         }
-        let key = crate::chart_identity::text_key(title);
+        let key = crate::identity::loose_key(title);
         self.titles.insert(title.to_string(), key.clone());
         key
     }
@@ -392,12 +392,12 @@ fn refresh_identity_keys(conn: &mut Connection) -> Result<()> {
         (
             "published_artist_identity",
             "artist",
-            crate::chart_identity::artist_group_key,
+            crate::identity::loose_artist_key,
         ),
         (
             "published_title_identity",
             "title",
-            crate::chart_identity::text_key,
+            crate::identity::loose_key,
         ),
     ];
     for (function, column, key) in identities {
@@ -1766,8 +1766,8 @@ pub fn song_history(conn: &Connection, chart: &str, artist: &str, title: &str) -
          WHERE b.chart = ?1 AND e.artist_group_key = ?2 AND e.title_key = ?3
          GROUP BY e.week_ending ORDER BY e.week_ending"
     )?;
-    let artist = crate::chart_identity::artist_group_key(artist);
-    let title = crate::chart_identity::text_key(title);
+    let artist = crate::identity::loose_artist_key(artist);
+    let title = crate::identity::loose_key(title);
     let rows = statement.query_map(params![chart, artist, title], |row| Ok(PublishedSongWeek {
         week_ending: row.get(0)?, position: row.get(1)?, entry_status: row.get(2)?, entry_date: row.get(3)?,
     }))?.collect::<rusqlite::Result<Vec<_>>>()?;

@@ -8,7 +8,7 @@
 | --- | --- |
 | `lifecycle`, `settings`, `backups` | Connection pool, settings persistence, backup and restore |
 | `migrations`, `schema` | The migration ladder and the idempotent `ensure_*` schema steps it runs |
-| `search` | Browse/search SQL, filter building, key normalization |
+| `search` | Browse/search SQL and filter building |
 | `stats`, `timelines` | Statistics, library profile, rating history, chart debut timelines |
 | `artists_genres` | Artist and genre summaries, timelines, highlights |
 | `chart_imports`, `chart_reconcile` | Billboard, VG-lista, Official UK, Ti i skuddet, and Norsktoppen CSV imports and chart-to-library matching |
@@ -19,6 +19,8 @@
 | `inspection` | Bounded current-view and research inspection for Luna |
 | `exports` | CSV/XLSX/Markdown export writers |
 | `diagnostics` | Library status and the Performance Proof probe |
+
+Name keys (catalog artist keys, chart and Wish List keys, title keys) are not part of `db`; they live in `src-tauri/src/identity/`, described in [Name identity](#name-identity).
 
 Items shared between feature modules are `pub(super)`, which keeps them visible inside `db` and nowhere else. A feature module starts with `use super::*;` to reach the shared imports and its siblings.
 
@@ -43,3 +45,25 @@ To change the schema:
 4. Add an upgrade test that rewinds a migrated database to the previous version and checks the new schema appears.
 
 Never edit or reorder a released step.
+
+## Name identity
+
+`src-tauri/src/identity/` holds every rule that decides whether two names are the same. Each matching feature calls one named level instead of its own copy:
+
+| Level | Folds | Used by |
+| --- | --- | --- |
+| `display_key` | case, whitespace | genres, import history, folder sync |
+| `artist_key` (SQL: `artist_key_sql`) | + typographic dashes; empty is `unknown` | Artists, artist filters, MusicBrainz overlay, portraits |
+| `strict_key` | + NFKC, typographic apostrophes | Last.fm caches, biographies |
+| `loose_key` | + accents, Nordic letters, `&`/`and`, punctuation | charts, Wish List, Artist Completion, Discogs, Discovery, Deemix, album reviews |
+| `loose_artist_key` | + leading "The", "and" | chart artist grouping |
+| `credit_keys` | splits co-leads, drops "feat."/"with"/"x" guests | chart and artist credit matching |
+| `edition_title_key` | + reissue decorations ("Remastered", "Deluxe Edition") | "already owned" album checks |
+
+Three of these are stored, which makes them data contracts:
+
+- `artist_key_sql` is the expression behind `idx_albums_artist_key`. SQLite only uses an expression index when a query repeats the expression verbatim, so a test pins its text. It may only call built-in functions and `unicode_lower`, because older builds keep writing to a newer database synced from another PC.
+- `loose_key`, `loose_artist_key`, and `credit_keys` are stored in chart tables and copied in Aurora (as `chart_identity`). Keep both copies byte-identical.
+- `loose_key` is also stored in `wish_list_items.identity_key` and the Artist Completion tables. Schema 61 rebuilt those keys when they moved from the old Wish List copy to `loose_key`.
+
+`identity/golden_corpus.csv` lists tricky names (`Hall & Oates`, `Sigur Rós`, `Røyksopp`, `AC/DC`, `P!nk`, `feat.`/`ft.`/`with`, `[NO]` suffixes, reissue titles) with the expected result per level, including known limitations. `identity/tests.rs` runs it, compares `artist_key_sql` with `artist_key` in SQLite, and runs property tests (idempotence, looser levels never splitting what stricter levels join). The frontend's `recommendationIdentityKey` mirrors `loose_key` and runs the same corpus. Add a corpus row with every matching fix.

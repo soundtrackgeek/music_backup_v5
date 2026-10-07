@@ -4,7 +4,6 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use zeroize::Zeroizing;
 
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.deemix";
@@ -222,28 +221,6 @@ fn flexible_bool(value: Option<&Value>) -> bool {
     }
 }
 
-fn normalize_match_key(value: &str) -> String {
-    let mut normalized = String::new();
-    let mut pending_space = false;
-    for character in value
-        .replace('&', " and ")
-        .nfkd()
-        .filter(|character| !is_combining_mark(*character))
-        .flat_map(char::to_lowercase)
-    {
-        if character.is_alphanumeric() {
-            if pending_space && !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push(character);
-            pending_space = false;
-        } else {
-            pending_space = true;
-        }
-    }
-    normalized
-}
-
 fn match_score(
     requested_title: &str,
     requested_artist: &str,
@@ -252,10 +229,10 @@ fn match_score(
     artist: &str,
     year: Option<i32>,
 ) -> (u8, String) {
-    let requested_title = normalize_match_key(requested_title);
-    let requested_artist = normalize_match_key(requested_artist);
-    let title = normalize_match_key(title);
-    let artist = normalize_match_key(artist);
+    let requested_title = crate::identity::loose_key(requested_title);
+    let requested_artist = crate::identity::loose_key(requested_artist);
+    let title = crate::identity::loose_key(title);
+    let artist = crate::identity::loose_key(artist);
     let title_exact = !requested_title.is_empty() && requested_title == title;
     let artist_exact = !requested_artist.is_empty() && requested_artist == artist;
     let mut score = 0u8;

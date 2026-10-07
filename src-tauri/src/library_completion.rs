@@ -1588,8 +1588,10 @@ fn verify_with_musicbrainz(item: &VerificationQueueItem) -> VerificationResult {
         .candidates
         .into_iter()
         .filter(|candidate| {
-            wishlist::normalize_key(&candidate.artist) == wishlist::normalize_key(&item.artist)
-                && wishlist::normalize_key(&candidate.title) == wishlist::normalize_key(&item.title)
+            crate::identity::loose_key(&candidate.artist)
+                == crate::identity::loose_key(&item.artist)
+                && crate::identity::loose_key(&candidate.title)
+                    == crate::identity::loose_key(&item.title)
         })
         .collect::<Vec<_>>();
     if exact_matches.is_empty() {

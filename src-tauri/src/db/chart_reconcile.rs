@@ -78,8 +78,8 @@ pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
              (artist_key, album_key, album_id) VALUES (?1, ?2, ?3)",
         )?;
         for (album_id, artist, album) in albums {
-            let artist_key = billboard_text_key(artist.as_deref().unwrap_or_default());
-            let album_key = billboard_text_key(album.as_deref().unwrap_or_default());
+            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
+            let album_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
             if artist_key.is_empty() || album_key.is_empty() {
                 continue;
             }
@@ -201,27 +201,27 @@ pub(super) fn load_track_chart_reconciliation_rows(
             Ok(TrackChartReconciliationRow {
                 title: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 track_id: row.get(0)?,
-                album_key: billboard_text_key(
+                album_key: crate::identity::loose_key(
                     row.get::<_, Option<String>>(1)?
                         .as_deref()
                         .unwrap_or_default(),
                 ),
-                display_artist_key: billboard_text_key(
+                display_artist_key: crate::identity::loose_key(
                     row.get::<_, Option<String>>(2)?
                         .as_deref()
                         .unwrap_or_default(),
                 ),
-                main_performers: crate::chart_identity::main_performers(
+                main_performers: crate::identity::credit_keys(
                     row.get::<_, Option<String>>(2)?
                         .as_deref()
                         .unwrap_or_default(),
                 ),
-                title_key: billboard_text_key(
+                title_key: crate::identity::loose_key(
                     row.get::<_, Option<String>>(3)?
                         .as_deref()
                         .unwrap_or_default(),
                 ),
-                album_artist_key: billboard_text_key(
+                album_artist_key: crate::identity::loose_key(
                     row.get::<_, Option<String>>(4)?
                         .as_deref()
                         .unwrap_or_default(),
@@ -252,14 +252,14 @@ pub(super) fn load_billboard_single_reconciliation_entries(
         .query_map([], |row| {
             let artist = row.get::<_, String>(1)?;
             let artist_key = row.get::<_, String>(2)?;
-            let source_artist_key = billboard_text_key(&artist);
+            let source_artist_key = crate::identity::loose_key(&artist);
             let mut match_artist_keys = vec![artist_key];
             push_unique(&mut match_artist_keys, source_artist_key.clone());
             Ok(StoredTrackChartEntry {
                 title: row.get(12)?,
                 entry_id: row.get(0)?,
                 match_artist_keys,
-                main_performers: crate::chart_identity::main_performers(&row.get::<_, String>(13)?),
+                main_performers: crate::identity::credit_keys(&row.get::<_, String>(13)?),
                 source_artist_key,
                 title_key: row.get(3)?,
                 source_album_key: row.get(4)?,
@@ -328,7 +328,7 @@ pub(super) fn load_weekly_track_chart_reconciliation_entries(
                     title,
                     entry_id,
                     match_artist_keys: vec![artist_key.clone()],
-                    main_performers: crate::chart_identity::main_performers(&artist),
+                    main_performers: crate::identity::credit_keys(&artist),
                     source_artist_key: artist_key,
                     title_key,
                     source_album_key: String::new(),
@@ -348,7 +348,7 @@ pub(super) fn load_weekly_track_chart_reconciliation_entries(
 
 pub(super) fn chart_parenthetical_key(title: &str) -> Option<String> {
     crate::chart_song_match::without_parentheses(title)
-        .map(|base| billboard_text_key(&base))
+        .map(|base| crate::identity::loose_key(&base))
         .filter(|base| !base.is_empty())
 }
 
@@ -895,9 +895,9 @@ mod tests {
         let entry = |artist: &str| StoredTrackChartEntry {
             title: "WOMAN".into(),
             entry_id: 1,
-            match_artist_keys: vec![billboard_text_key(artist)],
-            main_performers: crate::chart_identity::main_performers(artist),
-            source_artist_key: billboard_text_key(artist),
+            match_artist_keys: vec![crate::identity::loose_key(artist)],
+            main_performers: crate::identity::credit_keys(artist),
+            source_artist_key: crate::identity::loose_key(artist),
             title_key: "woman".into(),
             source_album_key: String::new(),
             rank: 1,
@@ -946,7 +946,7 @@ mod tests {
             .remove(0);
         other.track_id = 99999;
         other.title = "Song (Remix)".into();
-        other.title_key = billboard_text_key(&other.title);
+        other.title_key = crate::identity::loose_key(&other.title);
         tracks.push(other);
         assert!(matching_chart_entries_by_track(&tracks, &entries).is_empty());
         entries[0].title = "Song (Live)".into();

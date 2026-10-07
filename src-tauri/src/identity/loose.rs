@@ -1,9 +1,14 @@
-//! Chart identity keys shared by Music Library and Aurora (keep copies aligned).
+//! Loose level: names as printed by different sources.
+//!
+//! These rules are shared with Aurora, which keeps a copy under its old names
+//! (`chart_identity::text_key`, `artist_group_key`, `main_performers`). Keep
+//! both copies byte-identical.
 use unicode_normalization::UnicodeNormalization;
 
-/// Fold case, accents, punctuation, and `&`. Stored chart keys depend on this
+/// Fold case, accents, Nordic and ligature letters, punctuation, and `&`.
+/// Stored chart, Wish List, and Artist Completion keys depend on this
 /// contract; changing it requires rebuilding every stored key in the catalog.
-pub(crate) fn text_key(value: &str) -> String {
+pub(crate) fn loose_key(value: &str) -> String {
     let lowercased = value.replace('&', " and ").to_lowercase();
     let folded = lowercased
         .nfd()
@@ -32,8 +37,8 @@ pub(crate) fn text_key(value: &str) -> String {
 /// Group printed spellings of one artist credit. Archives print the same duo
 /// with "&", "and", "/" or "+", and bands with or without a leading "The".
 /// Different names (ELO vs Electric Light Orchestra) need explicit aliases.
-pub(crate) fn artist_group_key(value: &str) -> String {
-    let key = text_key(value);
+pub(crate) fn loose_artist_key(value: &str) -> String {
+    let key = loose_key(value);
     let mut words = key
         .split(' ')
         .filter(|word| *word != "and")
@@ -52,7 +57,7 @@ pub(crate) fn artist_group_key(value: &str) -> String {
 /// Ono", "DAVE/ TEMS"), so matching compares performers. Guests after "feat.",
 /// "with", "vs" or "x", or in parentheses, are left out: remakes often feature
 /// the original artist ("N-Trance feat. Rod Stewart", "Kygo x Tina Turner").
-pub(crate) fn main_performers(value: &str) -> Vec<String> {
+pub(crate) fn credit_keys(value: &str) -> Vec<String> {
     const GUEST_JOINS: [&str; 8] = [
         "with",
         "feat",
@@ -83,7 +88,7 @@ pub(crate) fn main_performers(value: &str) -> Vec<String> {
             let guest_join = GUEST_JOINS.contains(&join.as_str());
             // A trailing word belongs to the name: "Lil Nas X", "Rodney O".
             if (guest_join || join == "and") && index + 1 < words.len() {
-                push_main_performer(&words[start..index], guest, &mut performers);
+                push_credit_key(&words[start..index], guest, &mut performers);
                 start = index + 1;
                 if guest_join {
                     guest = true;
@@ -91,7 +96,7 @@ pub(crate) fn main_performers(value: &str) -> Vec<String> {
                 }
             }
         }
-        push_main_performer(&words[start..], guest, &mut performers);
+        push_credit_key(&words[start..], guest, &mut performers);
         segment.clear();
         match character {
             '(' | '[' => depth += 1,
@@ -102,10 +107,25 @@ pub(crate) fn main_performers(value: &str) -> Vec<String> {
     performers
 }
 
-fn push_main_performer(words: &[&str], guest: bool, performers: &mut Vec<String>) {
-    let performer = artist_group_key(&words.join(" "));
+fn push_credit_key(words: &[&str], guest: bool, performers: &mut Vec<String>) {
+    let performer = loose_artist_key(&words.join(" "));
     if !guest && !performer.is_empty() && !performers.contains(&performer) {
         performers.push(performer);
+    }
+}
+
+/// Remove the ` [NO]` marker VG-lista and Norsktoppen print after Norwegian
+/// artists ("a-ha [NO]"). Other bracketed text is part of the name.
+pub(crate) fn strip_chart_country_suffix(artist: &str) -> &str {
+    let artist = artist.trim();
+    let suffix_start = artist.len().saturating_sub(4);
+    if artist
+        .get(suffix_start..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case("[no]"))
+    {
+        artist[..suffix_start].trim_end()
+    } else {
+        artist
     }
 }
 
@@ -114,7 +134,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn main_performers_keep_co_leads_and_drop_guests() {
+    fn credit_keys_keep_co_leads_and_drop_guests() {
         for (value, expected) in [
             ("John Lennon & Yoko Ono", &["john lennon", "yoko ono"][..]),
             (
@@ -145,12 +165,12 @@ mod tests {
             ),
             ("  ", &[]),
         ] {
-            assert_eq!(main_performers(value), expected, "{value}");
+            assert_eq!(credit_keys(value), expected, "{value}");
         }
     }
 
     #[test]
-    fn text_keys_fold_case_accents_punctuation_and_ampersands() {
+    fn loose_keys_fold_case_accents_punctuation_and_ampersands() {
         for (value, expected) in [
             ("  BÉYONCÉ & JAY-Z  ", "beyonce and jay z"),
             ("Æ Œ Ø Ð Þ Ł ß", "ae oe o d th l ss"),
@@ -158,12 +178,12 @@ mod tests {
             ("P!nk", "p nk"),
             ("", ""),
         ] {
-            assert_eq!(text_key(value), expected, "{value}");
+            assert_eq!(loose_key(value), expected, "{value}");
         }
     }
 
     #[test]
-    fn artist_group_keys_merge_printed_credit_variants_only() {
+    fn loose_artist_keys_merge_printed_credit_variants_only() {
         for spellings in [
             &[
                 "Daryl Hall & John Oates",
@@ -176,9 +196,9 @@ mod tests {
             &["Queen & David Bowie", "Queen + David Bowie"],
             &["Beyoncé", "BEYONCE"],
         ] {
-            let expected = artist_group_key(spellings[0]);
+            let expected = loose_artist_key(spellings[0]);
             for spelling in spellings {
-                assert_eq!(artist_group_key(spelling), expected, "{spelling}");
+                assert_eq!(loose_artist_key(spelling), expected, "{spelling}");
             }
         }
         for (left, right) in [
@@ -190,10 +210,10 @@ mod tests {
             ("P!nk", "P!nk featuring Nate Ruess"),
             ("Pink", "P!nk"),
         ] {
-            assert_ne!(artist_group_key(left), artist_group_key(right));
+            assert_ne!(loose_artist_key(left), loose_artist_key(right));
         }
-        assert_eq!(artist_group_key("The The"), "the");
-        assert_eq!(artist_group_key("And"), "and");
-        assert_eq!(artist_group_key(""), "");
+        assert_eq!(loose_artist_key("The The"), "the");
+        assert_eq!(loose_artist_key("And"), "and");
+        assert_eq!(loose_artist_key(""), "");
     }
 }

@@ -9,7 +9,6 @@ use serde_json::Value;
 use std::collections::HashSet;
 #[cfg(not(test))]
 use tauri::AppHandle;
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 const MUSICBRAINZ_ARTIST_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/artist";
 const MUSICBRAINZ_RELEASE_GROUP_SEARCH_URL: &str = "https://musicbrainz.org/ws/2/release-group";
@@ -255,11 +254,15 @@ impl OwnedLibrary {
         Ok(match item.entity.as_str() {
             "artist" => {
                 self.artist_mbids.contains(&item.id)
-                    || self.artist_names.contains(&normalize_key(&item.title))
+                    || self
+                        .artist_names
+                        .contains(&crate::identity::loose_key(&item.title))
             }
             "album" => {
                 self.release_group_mbids.contains(&item.id)
-                    || self.albums.contains(&pair_key(&item.artist, &item.title))
+                    || self
+                        .albums
+                        .contains(&owned_album_key(&item.artist, &item.title))
             }
             "song" => song_is_owned(conn, &item.artist, &item.title)?,
             _ => false,
@@ -284,9 +287,11 @@ fn load_owned_library(conn: &Connection) -> Result<OwnedLibrary> {
             let artist = artist.unwrap_or_default();
             let album = album.unwrap_or_default();
             if !artist.trim().is_empty() {
-                owned.artist_names.insert(normalize_key(&artist));
+                owned
+                    .artist_names
+                    .insert(crate::identity::loose_key(&artist));
             }
-            owned.albums.insert(pair_key(&artist, &album));
+            owned.albums.insert(owned_album_key(&artist, &album));
         }
     }
     {
@@ -295,7 +300,7 @@ fn load_owned_library(conn: &Connection) -> Result<OwnedLibrary> {
         )?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
-            owned.artist_names.insert(normalize_key(&row?));
+            owned.artist_names.insert(crate::identity::loose_key(&row?));
         }
     }
     if table_exists(conn, "musicbrainz_artist_links")? {
@@ -387,30 +392,21 @@ fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
         .is_some())
 }
 
-fn normalize_key(value: &str) -> String {
-    let expanded = value.replace('&', " and ");
-    let mut normalized = String::new();
-    let mut pending_space = false;
-    for ch in expanded
-        .nfkd()
-        .filter(|ch| !is_combining_mark(*ch))
-        .flat_map(char::to_lowercase)
-    {
-        if ch.is_alphanumeric() {
-            if pending_space && !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push(ch);
-            pending_space = false;
-        } else {
-            pending_space = true;
-        }
-    }
-    normalized
+fn pair_key(artist: &str, title: &str) -> String {
+    format!(
+        "{}\u{1f}{}",
+        crate::identity::loose_key(artist),
+        crate::identity::loose_key(title)
+    )
 }
 
-fn pair_key(artist: &str, title: &str) -> String {
-    format!("{}\u{1f}{}", normalize_key(artist), normalize_key(title))
+/// Owned albums match across reissues ("Rumours (Expanded Edition)").
+fn owned_album_key(artist: &str, title: &str) -> String {
+    format!(
+        "{}\u{1f}{}",
+        crate::identity::loose_key(artist),
+        crate::identity::edition_title_key(title)
+    )
 }
 
 fn fetch_catalog_candidates(plan: &AiExternalDiscoveryPlan) -> Result<Vec<ExternalDiscoveryItem>> {

@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 #[cfg(not(test))]
 use tauri::AppHandle;
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 #[cfg(not(test))]
 use url::Url;
 
@@ -472,30 +471,22 @@ fn default_source() -> String {
     "MusicBrainz".to_string()
 }
 
-pub(crate) fn normalize_key(value: &str) -> String {
-    let expanded = value.replace('&', " and ");
-    let mut normalized = String::new();
-    let mut pending_space = false;
-    for character in expanded
-        .nfkd()
-        .filter(|character| !is_combining_mark(*character))
-        .flat_map(char::to_lowercase)
-    {
-        if character.is_alphanumeric() {
-            if pending_space && !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push(character);
-            pending_space = false;
-        } else {
-            pending_space = true;
-        }
-    }
-    normalized
+fn album_key(artist: &str, title: &str) -> String {
+    format!(
+        "{}\u{1f}{}",
+        crate::identity::loose_key(artist),
+        crate::identity::loose_key(title)
+    )
 }
 
-fn album_key(artist: &str, title: &str) -> String {
-    format!("{}\u{1f}{}", normalize_key(artist), normalize_key(title))
+/// Matches library albums across reissues, so a wish for "OK Computer" is
+/// owned by "OK Computer (Remastered)".
+fn owned_album_key(artist: &str, title: &str) -> String {
+    format!(
+        "{}\u{1f}{}",
+        crate::identity::loose_key(artist),
+        crate::identity::edition_title_key(title)
+    )
 }
 
 fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
@@ -522,8 +513,8 @@ fn load_owned_library(conn: &Connection) -> Result<OwnedLibrary> {
     })?;
     for album in albums {
         let (artist, title) = album?;
-        owned.artists.insert(normalize_key(&artist));
-        owned.albums.insert(album_key(&artist, &title));
+        owned.artists.insert(crate::identity::loose_key(&artist));
+        owned.albums.insert(owned_album_key(&artist, &title));
     }
     drop(album_statement);
 
@@ -546,11 +537,13 @@ impl OwnedLibrary {
                 item.musicbrainz_id
                     .as_deref()
                     .is_some_and(|id| self.album_ids.contains(&id.to_lowercase()))
-                    || self.albums.contains(&album_key(&item.artist, &item.title))
+                    || self
+                        .albums
+                        .contains(&owned_album_key(&item.artist, &item.title))
             }
-            "artist" if item.source.starts_with(LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX) => {
-                self.artists.contains(&normalize_key(&item.title))
-            }
+            "artist" if item.source.starts_with(LASTFM_SIMILAR_ARTIST_SOURCE_PREFIX) => self
+                .artists
+                .contains(&crate::identity::loose_key(&item.title)),
             _ => false,
         }
     }
@@ -654,7 +647,9 @@ fn album_is_in_library(
     album: &crate::musicbrainz::WishListOfficialAlbum,
 ) -> bool {
     owned.album_ids.contains(&album.release_mbid.to_lowercase())
-        || owned.albums.contains(&album_key(artist, &album.title))
+        || owned
+            .albums
+            .contains(&owned_album_key(artist, &album.title))
 }
 
 fn build_artist_album_summary(
@@ -806,20 +801,34 @@ fn validate_request(input: &mut AddWishListItemRequest) -> Result<()> {
 }
 
 fn identity_key(input: &AddWishListItemRequest) -> String {
-    if let Some(musicbrainz_id) = &input.musicbrainz_id {
-        return format!("{}\u{1f}mbid\u{1f}{}", input.entity, musicbrainz_id);
-    }
-    format!(
-        "{}\u{1f}name\u{1f}{}",
-        input.entity,
-        album_key(&input.artist, &input.title)
+    stored_identity_key(
+        &input.entity,
+        &input.artist,
+        &input.title,
+        input.musicbrainz_id.as_deref(),
     )
+}
+
+/// The `wish_list_items.identity_key` contract. Name-based keys use
+/// `identity::loose_key`; the schema 61 migration rebuilds them with this.
+pub(crate) fn stored_identity_key(
+    entity: &str,
+    artist: &str,
+    title: &str,
+    musicbrainz_id: Option<&str>,
+) -> String {
+    if let Some(musicbrainz_id) = musicbrainz_id {
+        return format!("{entity}\u{1f}mbid\u{1f}{musicbrainz_id}");
+    }
+    format!("{entity}\u{1f}name\u{1f}{}", album_key(artist, title))
 }
 
 fn same_named_identity(item: &WishListItem, input: &AddWishListItemRequest) -> bool {
     item.entity == input.entity
-        && normalize_key(&item.title) == normalize_key(&input.title)
-        && (input.entity == "artist" || normalize_key(&item.artist) == normalize_key(&input.artist))
+        && crate::identity::loose_key(&item.title) == crate::identity::loose_key(&input.title)
+        && (input.entity == "artist"
+            || crate::identity::loose_key(&item.artist)
+                == crate::identity::loose_key(&input.artist))
 }
 
 fn existing_item_id(conn: &Connection, input: &AddWishListItemRequest) -> Result<Option<i64>> {

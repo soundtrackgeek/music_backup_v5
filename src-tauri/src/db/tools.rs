@@ -2015,7 +2015,7 @@ pub(super) fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
         "conflicting-album-artists" => {
             let album_artist_key_sql = format!(
                 "NULLIF(TRIM(LOWER({})), '')",
-                normalized_artist_sql("album_artist_display")
+                identity::fold_dashes_sql("album_artist_display")
             );
             Ok(format!(
                 "

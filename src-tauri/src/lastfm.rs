@@ -16,7 +16,6 @@ use std::io::Read as _;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
-use unicode_normalization::UnicodeNormalization;
 use url::Url;
 use zeroize::Zeroizing;
 
@@ -540,37 +539,6 @@ fn parse_lastfm_count(value: &str) -> i64 {
     value.trim().parse::<i64>().unwrap_or(0).max(0)
 }
 
-fn normalize_track_key(value: &str) -> String {
-    value
-        .nfkc()
-        .flat_map(char::to_lowercase)
-        .map(|character| match character {
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
-            '\u{2018}' | '\u{2019}' => '\'',
-            other => other,
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn loose_track_key(value: &str) -> String {
-    normalize_track_key(value)
-        .chars()
-        .map(|character| {
-            if character.is_alphanumeric() {
-                character
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn nonempty(value: &str) -> Option<String> {
     let value = value.trim();
     (!value.is_empty()).then(|| value.to_string())
@@ -601,8 +569,8 @@ fn similarity_cache_matches_identity(
     record: &LastFmArtistSimilarityCacheRecord,
     identity: &LastFmArtistIdentity,
 ) -> bool {
-    normalize_artist_name_key(&record.artist_name)
-        == normalize_artist_name_key(&identity.artist_name)
+    crate::identity::strict_key(&record.artist_name)
+        == crate::identity::strict_key(&identity.artist_name)
         && identity
             .musicbrainz_mbid
             .as_deref()
@@ -652,20 +620,6 @@ fn parse_match_score(value: &serde_json::Value) -> f64 {
         .clamp(0.0, 1.0)
 }
 
-fn normalize_artist_name_key(value: &str) -> String {
-    value
-        .nfkc()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn normalize_album_name_key(value: &str) -> String {
-    normalize_track_key(value)
-}
-
 fn parse_json_number(value: &serde_json::Value) -> f64 {
     value
         .as_f64()
@@ -674,7 +628,7 @@ fn parse_json_number(value: &serde_json::Value) -> f64 {
 }
 
 fn meaningful_album_tag(value: &str) -> bool {
-    let key = normalize_album_name_key(value);
+    let key = crate::identity::strict_key(value);
     !key.is_empty()
         && ![
             "album i own",
@@ -849,7 +803,7 @@ fn fetch_artist_similarity_once(
     )?)?;
     let response_artist = nonempty(&response.payload.similarartists.attr.artist)
         .unwrap_or_else(|| identity.artist_name.clone());
-    let source_artist_key = normalize_artist_name_key(&response_artist);
+    let source_artist_key = crate::identity::strict_key(&response_artist);
     let source_mbid = identity
         .musicbrainz_mbid
         .as_deref()
@@ -863,7 +817,7 @@ fn fetch_artist_similarity_once(
         .into_iter()
         .filter_map(|artist| {
             let artist_name = nonempty(&artist.name)?;
-            let artist_name_key = normalize_artist_name_key(&artist_name);
+            let artist_name_key = crate::identity::strict_key(&artist_name);
             let artist_mbid = nonempty(&artist.mbid);
             if artist_name_key.is_empty()
                 || artist_name_key == source_artist_key
@@ -979,7 +933,7 @@ fn constellation_branch_identity(
     branch_name: &str,
     branch_mbid: Option<&str>,
 ) -> Result<LastFmArtistIdentity> {
-    let branch_key = normalize_artist_name_key(branch_name);
+    let branch_key = crate::identity::strict_key(branch_name);
     if branch_key.is_empty() || branch_key == root.artist_key {
         bail!("Choose a direct Similar Artists result to expand.")
     }
@@ -988,7 +942,7 @@ fn constellation_branch_identity(
         .iter()
         .filter(|artist| artist.rank <= CONSTELLATION_FIRST_HOP_LIMIT)
         .find(|artist| {
-            normalize_artist_name_key(&artist.similar_artist_name) == branch_key
+            crate::identity::strict_key(&artist.similar_artist_name) == branch_key
                 && requested_mbid.as_deref().is_none_or(|requested| {
                     artist
                         .similar_artist_mbid
@@ -1034,7 +988,7 @@ fn related_artist_similarity_records(
     force_refresh: bool,
 ) -> Result<Vec<LastFmSimilarArtistCacheRecord>> {
     let artist_identity = LastFmArtistIdentity {
-        artist_key: normalize_artist_name_key(&identity.album_artist),
+        artist_key: crate::identity::strict_key(&identity.album_artist),
         artist_name: identity.album_artist.clone(),
         musicbrainz_mbid: identity.artist_mbid.clone(),
     };
@@ -1083,7 +1037,7 @@ fn fetch_related_albums(
         .into_iter()
         .filter_map(|tag| {
             let name = nonempty(&tag.name)?;
-            let key = normalize_album_name_key(&name);
+            let key = crate::identity::strict_key(&name);
             if !meaningful_album_tag(&name) || !seen_tags.insert(key) {
                 return None;
             }
@@ -1135,14 +1089,14 @@ fn fetch_related_albums(
         .iter()
         .map(|artist| {
             (
-                normalize_artist_name_key(&artist.similar_artist_name),
+                crate::identity::strict_key(&artist.similar_artist_name),
                 artist.match_score,
             )
         })
         .collect::<HashMap<_, _>>();
 
-    let source_artist_key = normalize_artist_name_key(&identity.album_artist);
-    let source_album_key = normalize_album_name_key(&identity.album_title);
+    let source_artist_key = crate::identity::strict_key(&identity.album_artist);
+    let source_album_key = crate::identity::strict_key(&identity.album_title);
     let mut candidates = HashMap::<String, RelatedAlbumCandidate>::new();
     let mut expires_at = top_tags_response.expires_at.clone();
     let mut cacheable = top_tags_response.cacheable;
@@ -1163,8 +1117,8 @@ fn fetch_related_albums(
             let Some(artist_name) = nonempty(&album.artist.name) else {
                 continue;
             };
-            let artist_key = normalize_artist_name_key(&artist_name);
-            let album_key = normalize_album_name_key(&album_title);
+            let artist_key = crate::identity::strict_key(&artist_name);
+            let album_key = crate::identity::strict_key(&album_title);
             if artist_key.is_empty()
                 || album_key.is_empty()
                 || (artist_key == source_artist_key && album_key == source_album_key)
@@ -1214,7 +1168,7 @@ fn fetch_related_albums(
             .and_then(|mbid| similarity_by_mbid.get(&mbid.to_lowercase()).copied())
             .or_else(|| {
                 similarity_by_name
-                    .get(&normalize_artist_name_key(&candidate.artist_name))
+                    .get(&crate::identity::strict_key(&candidate.artist_name))
                     .copied()
             });
         candidate.artist_similarity = similarity;
@@ -1303,7 +1257,7 @@ fn fetch_artist_top_tracks_once(
         .enumerate()
         .filter_map(|(index, track)| {
             let track_name = nonempty(&track.name)?;
-            let track_key = normalize_track_key(&track_name);
+            let track_key = crate::identity::strict_key(&track_name);
             if track_key.is_empty() || !seen.insert(track_key.clone()) {
                 return None;
             }
@@ -1604,10 +1558,10 @@ fn related_albums_snapshot(
 ) -> Result<RelatedAlbumsSnapshot> {
     let cached_status = db::lastfm_album_relationships_cache_for_app(app, &identity.album_id)?
         .filter(|status| {
-            normalize_artist_name_key(&status.album_artist)
-                == normalize_artist_name_key(&identity.album_artist)
-                && normalize_album_name_key(&status.album_title)
-                    == normalize_album_name_key(&identity.album_title)
+            crate::identity::strict_key(&status.album_artist)
+                == crate::identity::strict_key(&identity.album_artist)
+                && crate::identity::strict_key(&status.album_title)
+                    == crate::identity::strict_key(&identity.album_title)
         });
     let cached_albums = db::lastfm_related_album_cache_for_app(app, &identity.album_id)?;
     if !force_refresh
@@ -1782,14 +1736,14 @@ fn matching_record<'a>(
     records: &'a [LastFmTrackPopularityCacheRecord],
     title: &str,
 ) -> Option<&'a LastFmTrackPopularityCacheRecord> {
-    let exact = normalize_track_key(title);
+    let exact = crate::identity::strict_key(title);
     if let Some(record) = records.iter().find(|record| record.track_key == exact) {
         return Some(record);
     }
-    let loose = loose_track_key(title);
+    let loose = crate::identity::loose_key(title);
     let mut matches = records
         .iter()
-        .filter(|record| loose_track_key(&record.track_name) == loose);
+        .filter(|record| crate::identity::loose_key(&record.track_name) == loose);
     let first = matches.next()?;
     matches.next().is_none().then_some(first)
 }
@@ -1801,13 +1755,14 @@ fn matching_local_track<'a>(
 ) -> Option<&'a LastFmLocalTrackCandidate> {
     if let Some(track) = tracks.iter().find(|track| {
         !used_track_ids.contains(&track.track_id)
-            && normalize_track_key(&track.title) == record.track_key
+            && crate::identity::strict_key(&track.title) == record.track_key
     }) {
         return Some(track);
     }
-    let loose = loose_track_key(&record.track_name);
+    let loose = crate::identity::loose_key(&record.track_name);
     tracks.iter().find(|track| {
-        !used_track_ids.contains(&track.track_id) && loose_track_key(&track.title) == loose
+        !used_track_ids.contains(&track.track_id)
+            && crate::identity::loose_key(&track.title) == loose
     })
 }
 
@@ -1983,7 +1938,7 @@ fn fetch_track_info(
             return Ok((
                 LastFmTrackPopularityCacheRecord {
                     artist_key: identity.artist_key.clone(),
-                    track_key: normalize_track_key(&local.title),
+                    track_key: crate::identity::strict_key(&local.title),
                     artist_name: artist_name.to_string(),
                     track_name: local.title.clone(),
                     musicbrainz_recording_mbid: None,
@@ -2006,7 +1961,7 @@ fn fetch_track_info(
     Ok((
         LastFmTrackPopularityCacheRecord {
             artist_key: identity.artist_key.clone(),
-            track_key: normalize_track_key(&local.title),
+            track_key: crate::identity::strict_key(&local.title),
             artist_name: artist_name.to_string(),
             track_name: nonempty(&track.name).unwrap_or_else(|| local.title.clone()),
             musicbrainz_recording_mbid: nonempty(&track.mbid),
@@ -2166,7 +2121,7 @@ pub fn album_popularity(
     let mut provider_failed = false;
     let mut checked_titles = HashSet::new();
     for local in &local_tracks {
-        let title_key = normalize_track_key(&local.title);
+        let title_key = crate::identity::strict_key(&local.title);
         if !checked_titles.insert(title_key) {
             continue;
         }
@@ -2404,12 +2359,15 @@ mod tests {
     #[test]
     fn normalizes_common_track_title_variants_for_cache_matching() {
         assert_eq!(
-            normalize_track_key("  Sabotage\u{2014}Live  "),
+            crate::identity::strict_key("  Sabotage\u{2014}Live  "),
             "sabotage-live"
         );
-        assert_eq!(normalize_track_key("The New Style"), "the new style");
         assert_eq!(
-            loose_track_key("Fight for Your Right!"),
+            crate::identity::strict_key("The New Style"),
+            "the new style"
+        );
+        assert_eq!(
+            crate::identity::loose_key("Fight for Your Right!"),
             "fight for your right"
         );
     }
@@ -2685,7 +2643,7 @@ mod tests {
             .iter()
             .map(|track| LastFmTrackPopularityCacheRecord {
                 artist_key: identity.artist_key.clone(),
-                track_key: normalize_track_key(&track.title),
+                track_key: crate::identity::strict_key(&track.title),
                 artist_name: "Kiss".to_string(),
                 track_name: track.title.clone(),
                 musicbrainz_recording_mbid: None,

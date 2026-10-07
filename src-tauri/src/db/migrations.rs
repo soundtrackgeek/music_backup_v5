@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 60;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 61;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -149,6 +149,12 @@ const MIGRATIONS: &[Migration] = &[
         up: remove_plex_sync_schema,
         verify: Some(phase_sixty_schema_exists),
     },
+    Migration {
+        version: 61,
+        description: "Wish List and Artist Completion keys use identity::loose_key",
+        up: rebuild_loose_identity_keys,
+        verify: None,
+    },
 ];
 
 fn chart_album_match_state(conn: &Connection) -> Result<()> {
@@ -243,6 +249,68 @@ pub(super) fn phase_sixty_schema_exists(conn: &Connection) -> Result<bool> {
         && !super::schema_column_exists(conn, "playlist_automations", "plex_sync_enabled")?
         && !super::schema_table_exists(conn, "plex_track_cache")?
         && !super::schema_table_exists(conn, "plex_sync_state")?)
+}
+
+/// Wish List and Artist Completion keys used to be a copy of the loose rules
+/// without Nordic and ligature letters ("Røyksopp" stayed "røyksopp"). Rebuild
+/// them with `identity::loose_key`. A row whose new key is already taken keeps
+/// its old key, so nothing is deleted.
+pub(super) fn rebuild_loose_identity_keys(conn: &Connection) -> Result<()> {
+    if super::schema_table_exists(conn, "wish_list_items")? {
+        let rows = conn
+            .prepare("SELECT id, entity, artist, title, identity_key FROM wish_list_items")?
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("Could not read Wish List identities")?;
+        for (id, entity, artist, title, old_key) in rows {
+            if !old_key.starts_with(&format!("{entity}\u{1f}name\u{1f}")) {
+                continue;
+            }
+            let new_key = crate::wishlist::stored_identity_key(&entity, &artist, &title, None);
+            if new_key != old_key {
+                conn.execute(
+                    "UPDATE OR IGNORE wish_list_items SET identity_key = ?1 WHERE id = ?2",
+                    params![new_key, id],
+                )
+                .context("Could not rebuild a Wish List identity")?;
+            }
+        }
+    }
+
+    for table in [
+        "library_completion_artist_verifications",
+        "library_completion_artist_decisions",
+        "library_completion_artist_verification_items",
+    ] {
+        if !super::schema_table_exists(conn, table)? {
+            continue;
+        }
+        let keys = conn
+            .prepare(&format!("SELECT DISTINCT artist_key FROM {table}"))?
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .with_context(|| format!("Could not read {table} keys"))?;
+        let mut update = conn.prepare(&format!(
+            "UPDATE OR IGNORE {table} SET artist_key = ?1 WHERE artist_key = ?2"
+        ))?;
+        for old_key in keys {
+            let new_key = crate::identity::loose_key(&old_key);
+            if new_key != old_key {
+                update
+                    .execute(params![new_key, old_key])
+                    .with_context(|| format!("Could not rebuild {table} keys"))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn migrate_half_star_ratings(conn: &Connection) -> Result<()> {
@@ -727,6 +795,65 @@ mod tests {
     use super::*;
     use crate::db::test_support::*;
     use crate::db::*;
+
+    #[test]
+    fn schema_sixty_one_rebuilds_loose_identity_keys_without_dropping_rows() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        configure(&conn).expect("configure database");
+        migrate(&conn).expect("initial migration");
+        conn.execute_batch(
+            "
+            INSERT INTO wish_list_items (entity, title, artist, source, identity_key, created_at)
+            VALUES
+                ('album', 'Melody A.M.', 'Røyksopp', 'Manual',
+                 'album' || char(31) || 'name' || char(31) || 'røyksopp' || char(31) || 'melody a m', 'now'),
+                ('artist', 'Ståle Æsøy', '', 'Manual',
+                 'artist' || char(31) || 'name' || char(31) || char(31) || 'stale æsøy', 'now'),
+                ('album', 'Kept', 'Kept', 'Manual',
+                 'album' || char(31) || 'mbid' || char(31) || 'Røyksopp-id', 'now');
+            INSERT INTO library_completion_artist_decisions (artist_key, status, artist, updated_at)
+            VALUES ('sigur rós', 'wanted', 'Sigur Rós', 'now'),
+                   ('bjørn eidsvåg', 'wanted', 'Bjørn Eidsvåg', 'old'),
+                   ('bjorn eidsvag', 'notForMe', 'Bjorn Eidsvag', 'new');
+            PRAGMA user_version = 60;
+            ",
+        )
+        .expect("seed schema sixty keys");
+
+        migrate(&conn).expect("migrate loose identity keys");
+
+        let identities = conn
+            .prepare("SELECT identity_key FROM wish_list_items ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            identities,
+            [
+                "album\u{1f}name\u{1f}royksopp\u{1f}melody a m",
+                "artist\u{1f}name\u{1f}\u{1f}stale aesoy",
+                "album\u{1f}mbid\u{1f}Røyksopp-id",
+            ]
+        );
+        let decisions = conn
+            .prepare("SELECT artist_key, updated_at FROM library_completion_artist_decisions ORDER BY updated_at")
+            .unwrap()
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            decisions,
+            [
+                ("bjorn eidsvag".to_string(), "new".to_string()),
+                ("sigur ros".to_string(), "now".to_string()),
+                ("bjørn eidsvåg".to_string(), "old".to_string()),
+            ],
+            "a colliding row keeps its old key instead of being deleted"
+        );
+    }
 
     #[test]
     fn canonicalizes_existing_uk_artist_origins_to_gb() {

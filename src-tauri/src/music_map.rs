@@ -355,7 +355,7 @@ fn load_located_artists_with_filter(
     conn: &Connection,
     location_key: Option<&str>,
 ) -> Result<Vec<LocatedArtist>> {
-    let artist_key = db::artist_key_sql("a.album_artist_display");
+    let artist_key = crate::identity::artist_key_sql("a.album_artist_display");
     let location_filter = match location_key {
         None => "",
         Some(key) if key.starts_with("area:") => "WHERE area_location.location_key = ?1",
@@ -533,7 +533,7 @@ fn representative_album(
     conn: &Connection,
     artist_key: &str,
 ) -> Result<Option<(String, String, Option<String>)>> {
-    let key_sql = db::artist_key_sql("a.album_artist_display");
+    let key_sql = crate::identity::artist_key_sql("a.album_artist_display");
     conn.query_row(
         &format!(
             "

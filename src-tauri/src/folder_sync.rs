@@ -1703,11 +1703,11 @@ fn validate_single_album(tracks: &[ScannedTrack]) -> Result<()> {
     let first = tracks
         .first()
         .ok_or_else(|| anyhow!("The selected folder does not contain any MP3 files"))?;
-    let album = normalized_text(&first.album);
-    let album_artist = normalized_text(&first.album_artist);
+    let album = crate::identity::display_key(&first.album);
+    let album_artist = crate::identity::display_key(&first.album_artist);
     if tracks.iter().any(|track| {
-        normalized_text(&track.album) != album
-            || normalized_text(&track.album_artist) != album_artist
+        crate::identity::display_key(&track.album) != album
+            || crate::identity::display_key(&track.album_artist) != album_artist
     }) {
         bail!(
             "The selected folder contains more than one album or album artist. Select one complete album folder"
@@ -1726,17 +1726,17 @@ fn ensure_replacement_identity_matches(
         .first()
         .ok_or_else(|| anyhow!("A prepared replacement contains no tracks"))?;
     let expected = (
-        normalized_text(&first.album_artist),
-        normalized_text(&first.album),
-        normalized_text(&first.year),
+        crate::identity::display_key(&first.album_artist),
+        crate::identity::display_key(&first.album),
+        crate::identity::display_key(&first.year),
     );
     let existing = existing_records
         .iter()
         .map(|record| {
             (
-                normalized_text(&record[15]),
-                normalized_text(&record[3]),
-                normalized_text(&record[10]),
+                crate::identity::display_key(&record[15]),
+                crate::identity::display_key(&record[3]),
+                crate::identity::display_key(&record[10]),
             )
         })
         .collect::<BTreeSet<_>>();
@@ -1785,8 +1785,8 @@ fn matching_track_count(scan: &FolderScan, existing_records: &[[String; 17]]) ->
 fn track_match_key(artist: &str, title: &str, disc: &str, track: &str) -> String {
     format!(
         "{}\0{}\0{}\0{}",
-        normalized_text(artist),
-        normalized_text(title),
+        crate::identity::display_key(artist),
+        crate::identity::display_key(title),
         disc.trim().trim_start_matches('0'),
         track.trim().trim_start_matches('0')
     )
@@ -1920,14 +1920,6 @@ fn display_path(path: &Path) -> String {
     } else {
         value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
     }
-}
-
-fn normalized_text(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
 }
 
 fn nonempty(value: &str) -> Option<&str> {

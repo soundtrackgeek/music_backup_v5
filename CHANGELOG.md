@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.177.0] - 2026-10-07
+
+### Added
+- One name identity module, `src-tauri/src/identity/`, with named and documented levels: `display_key`, `artist_key` (and its SQL twin), `strict_key`, `loose_key`, `loose_artist_key`, `credit_keys`, and `edition_title_key`. Every matching feature now calls one of them instead of its own copy; 26 copied or wrapper normalizers are gone, and `chart_identity.rs` moved in as `identity/loose.rs`.
+- A golden corpus (`identity/golden_corpus.csv`, 83 rows across 8 levels) of tricky names such as `Hall & Oates`, `KISS`, `Sigur Rós`, `AC/DC`, `P!nk`, `Røyksopp`, `feat.`/`ft.`/`with`, `[NO]` chart suffixes, and reissue titles, including known limitations. One Rust test file runs it, checks the SQL artist key against the Rust one, and runs property tests (idempotence; looser levels never split names that stricter levels join). The frontend Wish List check runs the same corpus.
+
+### Changed
+- The Wish List, Library and Artist Completion, outside-library Discovery, Discogs, Deemix, and album reviews now use the chart name rules, which also fold Nordic and ligature letters: `Røyksopp`, `Röyksopp`, and `Royksopp` are one artist everywhere, and `Ágætis byrjun` matches `Agaetis byrjun`. Schema 61 rebuilds the stored Wish List and Artist Completion keys once; an entry whose new key is already taken keeps its old key, so nothing is removed.
+- Wish List "in library" and outside-library Discovery owned-album checks ignore reissue decorations, so `OK Computer (Remastered)` or `Rumours (Expanded Edition)` in the library owns the plain title. Live, demo, remix, and new-mix versions stay separate.
+- Last.fm artist and album keys and biography lookups use one strict key, which also unifies typographic dashes and apostrophes; the Last.fm loose track fallback and album review matching also fold accents and `&`.
+
+### Fixed
+- The web Wish List check for similar artists and related albums used `toLocaleLowerCase` and stripped only basic combining accents; it now mirrors the backend loose key exactly.
+
 ## [0.176.0] - 2026-10-07
 
 ### Added

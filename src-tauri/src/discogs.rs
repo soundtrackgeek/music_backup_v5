@@ -1,7 +1,6 @@
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use url::Url;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -317,28 +316,6 @@ pub fn test_connection() -> Result<DiscogsConnectionTest> {
     connection_test_with(&credentials)
 }
 
-fn normalize_key(value: &str) -> String {
-    let mut normalized = String::new();
-    let mut pending_space = false;
-    for character in value
-        .replace('&', " and ")
-        .nfkd()
-        .filter(|character| !is_combining_mark(*character))
-        .flat_map(char::to_lowercase)
-    {
-        if character.is_alphanumeric() {
-            if pending_space && !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push(character);
-            pending_space = false;
-        } else {
-            pending_space = !normalized.is_empty();
-        }
-    }
-    normalized
-}
-
 fn strip_discogs_artist_suffix(value: &str) -> &str {
     let Some(open) = value.rfind(" (") else {
         return value;
@@ -367,22 +344,24 @@ fn exact_search_result(result: &SearchResult, artist: &str, title: &str) -> bool
     let Some((result_artist, result_title)) = result.title.split_once(" - ") else {
         return false;
     };
-    normalize_key(strip_discogs_artist_suffix(result_artist)) == normalize_key(artist)
-        && normalize_key(result_title) == normalize_key(title)
+    crate::identity::loose_key(strip_discogs_artist_suffix(result_artist))
+        == crate::identity::loose_key(artist)
+        && crate::identity::loose_key(result_title) == crate::identity::loose_key(title)
 }
 
 fn exact_artist_search_result(result: &SearchResult, artist: &str) -> bool {
     let Some((result_artist, _)) = result.title.split_once(" - ") else {
         return false;
     };
-    normalize_key(strip_discogs_artist_suffix(result_artist)) == normalize_key(artist)
+    crate::identity::loose_key(strip_discogs_artist_suffix(result_artist))
+        == crate::identity::loose_key(artist)
 }
 
 fn search_result_looks_like_studio_album(result: &SearchResult) -> bool {
     let labels = result
         .format
         .iter()
-        .map(|value| normalize_key(value))
+        .map(|value| crate::identity::loose_key(value))
         .collect::<Vec<_>>();
     labels.iter().any(|label| label == "album")
         && ![
@@ -407,7 +386,7 @@ fn album_classification(formats: &[DiscogsFormat], search_formats: &[String]) ->
                 .chain(format.descriptions.iter().map(String::as_str))
         })
         .chain(search_formats.iter().map(String::as_str))
-        .map(normalize_key)
+        .map(crate::identity::loose_key)
         .collect::<Vec<_>>();
     if !labels.iter().any(|label| label == "album") {
         bail!("Discogs did not classify the key release as an Album.")
@@ -491,8 +470,8 @@ pub(crate) fn verify_album(
     )?
     .payload;
     let master_artist = joined_artist(&master.artists);
-    if normalize_key(&master_artist) != normalize_key(artist)
-        || normalize_key(&master.title) != normalize_key(title)
+    if crate::identity::loose_key(&master_artist) != crate::identity::loose_key(artist)
+        || crate::identity::loose_key(&master.title) != crate::identity::loose_key(title)
     {
         return Ok(DiscogsAlbumVerification {
             outcome: "ambiguous".to_string(),
@@ -515,8 +494,8 @@ pub(crate) fn verify_album(
     )?
     .payload;
     let release_artist = joined_artist(&release.artists);
-    if normalize_key(&release_artist) != normalize_key(artist)
-        || normalize_key(&release.title) != normalize_key(title)
+    if crate::identity::loose_key(&release_artist) != crate::identity::loose_key(artist)
+        || crate::identity::loose_key(&release.title) != crate::identity::loose_key(title)
     {
         return Ok(DiscogsAlbumVerification {
             outcome: "ambiguous".to_string(),
@@ -609,7 +588,7 @@ pub(crate) fn verify_artist_has_studio_album(artist: &str) -> Result<DiscogsArti
         )?
         .payload;
         let master_artist = joined_artist(&master.artists);
-        if normalize_key(&master_artist) != normalize_key(artist) {
+        if crate::identity::loose_key(&master_artist) != crate::identity::loose_key(artist) {
             continue;
         }
         let Some(main_release) = master.main_release else {
@@ -623,8 +602,9 @@ pub(crate) fn verify_artist_has_studio_album(artist: &str) -> Result<DiscogsArti
         )?
         .payload;
         let release_artist = joined_artist(&release.artists);
-        if normalize_key(&release_artist) != normalize_key(artist)
-            || normalize_key(&release.title) != normalize_key(&master.title)
+        if crate::identity::loose_key(&release_artist) != crate::identity::loose_key(artist)
+            || crate::identity::loose_key(&release.title)
+                != crate::identity::loose_key(&master.title)
             || !release.status.eq_ignore_ascii_case("accepted")
             || album_classification(&release.formats, &search_result.format).is_err()
         {

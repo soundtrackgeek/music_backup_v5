@@ -230,9 +230,11 @@ Migrate one domain at a time (AI first, since its types are strict already). Gen
 
 ---
 
-### 10. One identity and normalization module
+### 10. One identity and normalization module - DONE
 
-**Current state**
+**Implemented in 0.177.0 (2026-10-07):** `src-tauri/src/identity/` defines named levels: `display_key`, `artist_key` with its SQL twin `artist_key_sql`, `strict_key`, `loose_key`, `loose_artist_key`, `credit_keys`, and `edition_title_key` (the proposed `title_key`, renamed because chart tables already store plain loose keys in `title_key` columns). The module replaces 26 copied or wrapper normalizers: `normalize_key` in Wish List, Discogs, outside-library Discovery, and Deemix; the catalog artist key copies in `db/search`, `importer`, and `musicbrainz`; the Last.fm, biography, album review, folder sync, and `[NO]` suffix copies; and the `billboard_text_key`/`musicbrainz_text_key` wrappers. `chart_identity.rs` moved in as `identity/loose.rs`. The Wish List family now folds `ø`/`æ`/`ß` like charts do, and schema 61 rebuilds the stored Wish List and Artist Completion keys (a colliding row keeps its old key). Owned-album checks ignore reissue decorations. `golden_corpus.csv` has 83 rows across 8 levels, run by one Rust test file and by a frontend test for the TypeScript mirror. Property tests check idempotence and level ordering; they found that `loose_artist_key` is not idempotent for "The The X", which is kept because Aurora shares the rule. Keys were not moved into new stored columns: `idx_albums_artist_key` already indexes the catalog key expression, and new columns or SQL functions would break older builds that write to the synced database. The remaining SQL/Rust difference (SQL keeps doubled and non-ASCII whitespace) is pinned by a test. See [Backend architecture: Name identity](backend-architecture.md#name-identity).
+
+**Original state**
 - `normalize_key` is copy-pasted in [`discogs.rs:343`](../src-tauri/src/discogs.rs#L343), [`external_discovery.rs:395`](../src-tauri/src/external_discovery.rs#L395), and [`wishlist.rs:502`](../src-tauri/src/wishlist.rs#L502). These versions fold diacritics with NFKD and turn `&` into `and`.
 - `db.rs` ([`24574-24600`](../src-tauri/src/db.rs#L24574)) and `importer.rs` ([`5281-5294`](../src-tauri/src/importer.rs#L5281)) define a **different** `normalize_artist_key`: lowercase plus whitespace only, with no diacritic folding and no `&`.
 - `chart_identity.rs` adds a third set of rules.

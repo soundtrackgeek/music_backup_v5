@@ -225,9 +225,9 @@ pub(super) fn timeline_track_priority(
     track: &TrackDebutTimelineTrack,
 ) -> (bool, bool, i32, bool, bool, i32, std::cmp::Reverse<i64>) {
     let album_artist_key =
-        billboard_text_key(track.album_artist_display.as_deref().unwrap_or_default());
+        crate::identity::loose_key(track.album_artist_display.as_deref().unwrap_or_default());
     let display_artist_key =
-        billboard_text_key(track.display_artist.as_deref().unwrap_or_default());
+        crate::identity::loose_key(track.display_artist.as_deref().unwrap_or_default());
     (
         billboard_single_album_artist_matches(&album_artist_key, &display_artist_key),
         !billboard_single_is_compilation_artist(&album_artist_key),
@@ -373,8 +373,8 @@ pub(super) fn track_debut_timeline_for_source(
     let raw_tracks = track_rows.collect::<rusqlite::Result<Vec<_>>>()?;
     let mut canonical_tracks: HashMap<String, TrackDebutTimelineTrack> = HashMap::new();
     for track in raw_tracks {
-        let artist_key = billboard_text_key(track.display_artist.as_deref().unwrap_or_default());
-        let title_key = billboard_text_key(track.title.as_deref().unwrap_or_default());
+        let artist_key = crate::identity::loose_key(track.display_artist.as_deref().unwrap_or_default());
+        let title_key = crate::identity::loose_key(track.title.as_deref().unwrap_or_default());
         let identity_key = format!(
             "{}\u{1f}{}\u{1f}{}",
             remove_artist_connector_tokens(&artist_key),
@@ -394,8 +394,8 @@ pub(super) fn track_debut_timeline_for_source(
         left.billboard_single_debut_date
             .cmp(&right.billboard_single_debut_date)
             .then_with(|| {
-                billboard_text_key(left.title.as_deref().unwrap_or_default()).cmp(
-                    &billboard_text_key(right.title.as_deref().unwrap_or_default()),
+                crate::identity::loose_key(left.title.as_deref().unwrap_or_default()).cmp(
+                    &crate::identity::loose_key(right.title.as_deref().unwrap_or_default()),
                 )
             })
             .then(left.track_id.cmp(&right.track_id))

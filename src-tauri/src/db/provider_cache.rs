@@ -753,7 +753,7 @@ pub(super) fn lastfm_similar_local_artists(
     candidates
         .iter()
         .map(|(mbid, name)| {
-            let artist_key = normalize_artist_key(name);
+            let artist_key = identity::artist_key(name);
             stmt.query_row(params![mbid, artist_key], |row| {
                 Ok(LastFmSimilarLocalArtist {
                     artist_id: row.get(0)?,
@@ -888,8 +888,8 @@ pub(super) fn lastfm_related_local_albums(
     candidates
         .iter()
         .map(|(mbid, artist, album)| {
-            let artist_key = normalize_artist_key(artist);
-            let album_key = normalize_text(album);
+            let artist_key = identity::artist_key(artist);
+            let album_key = identity::display_key(album);
             let rows = stmt
                 .query_map(params![mbid, artist_key], |row| {
                     Ok((
@@ -906,7 +906,7 @@ pub(super) fn lastfm_related_local_albums(
                 })?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(rows.into_iter().find_map(|(local, mbid_match)| {
-                (mbid_match || normalize_text(&local.album_title) == album_key).then_some(local)
+                (mbid_match || identity::display_key(&local.album_title) == album_key).then_some(local)
             }))
         })
         .collect::<Result<Vec<_>>>()

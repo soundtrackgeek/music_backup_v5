@@ -388,7 +388,7 @@ pub(super) fn discovery_mixer(
             let album = row.get::<_, String>(1)?;
             Ok(DiscoveryMixerCandidateData {
                 album_id: row.get(0)?,
-                album_key: normalize_text(&album),
+                album_key: identity::display_key(&album),
                 album,
                 artist: row.get(2)?,
                 artist_key: row.get(3)?,
@@ -516,7 +516,7 @@ pub(super) fn discovery_mixer(
                     .copied()
                     .or_else(|| {
                         candidates_by_identity
-                            .get(&(normalize_artist_key(&artist), normalize_text(&album)))
+                            .get(&(identity::artist_key(&artist), identity::display_key(&album)))
                             .copied()
                     });
                 let Some(candidate_index) = candidate_index else {
@@ -562,7 +562,7 @@ pub(super) fn discovery_mixer(
                 .as_deref()
                 .and_then(|mbid| artist_key_by_mbid.get(&mbid.to_lowercase()))
                 .cloned()
-                .unwrap_or_else(|| normalize_artist_key(&similar_artist));
+                .unwrap_or_else(|| identity::artist_key(&similar_artist));
             let Some(album_indexes) = candidates_by_artist.get(&similar_key) else {
                 continue;
             };

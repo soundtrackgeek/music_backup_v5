@@ -199,7 +199,7 @@ pub(crate) fn list_artists_for_connection(
     let limit = request.limit.clamp(1, 200);
     let offset = request.offset;
     let summary = library_update_summary(conn, &query, date_from.as_deref())?;
-    let artist_key_sql = db::artist_key_sql("album_artist_display");
+    let artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
 
     let filtered_cte = format!(
         "
@@ -328,8 +328,8 @@ pub(crate) fn list_artists_for_connection(
     let new_artists = if change_kind.as_deref().is_some_and(|kind| kind != "new") {
         Vec::new()
     } else {
-        let update_artist_key_sql = db::artist_key_sql("album_artist_display");
-        let album_artist_key_sql = db::artist_key_sql("album_artist_display");
+        let update_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
+        let album_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
         let new_artists_sql = format!(
             "
             WITH update_history AS (

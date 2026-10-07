@@ -9,6 +9,7 @@ use crate::ai::{
     SetPlaylistAutomationRequest, SmartPlaylistRefreshResult, ViewInspectionItem,
     ViewInspectionRequest, ViewInspectionResult,
 };
+use crate::identity::{self, artist_key_sql};
 #[cfg(test)]
 use crate::models::AppSettings;
 use crate::models::{

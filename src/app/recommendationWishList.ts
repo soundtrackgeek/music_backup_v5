@@ -10,14 +10,27 @@ const MAX_SOURCE_LENGTH = 80;
 const MUSICBRAINZ_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const LOOSE_LETTERS: Record<string, string> = {
+  \u00e6: "ae",
+  \u0153: "oe",
+  \u00f8: "o",
+  \u00f0: "d",
+  \u00fe: "th",
+  \u0142: "l",
+  \u00df: "ss",
+};
+
+/** Mirrors Rust `identity::loose_key`; both run `golden_corpus.csv`. */
 export function recommendationIdentityKey(value: string) {
   return value
     .replace(/&/g, " and ")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[\u00e6\u0153\u00f8\u00f0\u00fe\u0142\u00df]/g, (letter) => LOOSE_LETTERS[letter])
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .join(" ");
 }
 
 function sameMusicBrainzId(left: string | null, right: string | null) {
