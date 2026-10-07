@@ -518,6 +518,10 @@ fn run_at(
             std::thread::sleep(Duration::from_secs(1));
             continue;
         }
+        if waiting || reported.elapsed() >= Duration::from_secs(2) {
+            report(completed, total, &format!("Analyzing {filename}"));
+            reported = Instant::now();
+        }
         waiting = false;
         let outcome = analyze_one(dir, &directory, &filename, stop);
         if stop() {
@@ -1004,12 +1008,8 @@ mod tests {
         assert!(run_at(
             dir.path(),
             request.clone(),
-            &|| stop.load(Ordering::SeqCst),
-            &|n, _, _| {
-                if n == 1 {
-                    stop.store(true, Ordering::SeqCst);
-                }
-            },
+            &|| w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id='resume-test' AND state='done'", [], |r| r.get::<_, i64>(0)).unwrap() == 1,
+            &|_, _, _| {},
             &|| Some(301),
             &|| 23
         )
@@ -1025,6 +1025,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result["total"], 3);
+        assert_eq!(result["failedCount"], 0);
+        assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+    }
+
+    #[test]
+    fn disabling_schedule_reports_active_work_before_advancing_a_checkpoint() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        let restricted = SonicSchedule {
+            idle_only: true,
+            idle_minutes: 5,
+            start_hour: Some(22),
+            end_hour: Some(8),
+        };
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&restricted).unwrap()],
+        )
+        .unwrap();
+        let saw_wait = std::cell::Cell::new(false);
+        let saw_active = std::cell::Cell::new(false);
+        let result = run_at(
+            dir.path(),
+            AnalyzeRequest { scope: "all".into(), album_id: None, batch_id: Some("schedule-change".into()) },
+            &|| false,
+            &|completed, _, message| {
+                if message.contains("Waiting") {
+                    saw_wait.set(true);
+                    let unrestricted = SonicSchedule { idle_only: false, idle_minutes: 5, start_hour: None, end_hour: None };
+                    w.execute("UPDATE sonic_settings SET value=?1 WHERE id=1", [serde_json::to_string(&unrestricted).unwrap()]).unwrap();
+                } else if completed == 0 && message.starts_with("Analyzing ") {
+                    assert!(saw_wait.get());
+                    assert_eq!(w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id='schedule-change' AND state='done'", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+                    saw_active.set(true);
+                }
+            },
+            &|| Some(0),
+            &|| 12,
+        ).unwrap();
+        assert!(saw_wait.get());
+        assert!(
+            saw_active.get(),
+            "Activity must stop saying Waiting before the first file is analyzed"
+        );
         assert_eq!(result["failedCount"], 0);
         assert_eq!(status_at(dir.path()).unwrap().pending, 0);
     }

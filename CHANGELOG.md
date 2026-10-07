@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.178.2] - 2026-10-07
+
+### Fixed
+- Starting album, favorites, or library audio analysis now saves the idle/time-window settings shown on screen before queueing the job. A failed settings save prevents queueing; schedule controls stay locked while saving, and Save schedule still applies changes to an existing job.
+- Activity Center changes from Waiting to Analyzing before processing the next file when the saved schedule permits work.
+
 ## [0.178.1] - 2026-10-07
 
 ### Fixed

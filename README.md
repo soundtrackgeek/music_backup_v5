@@ -1,5 +1,9 @@
 # Music Library
 
+Music Library 0.178.2 automatically saves the visible idle/hour settings when
+starting audio analysis. Use **Save schedule** to apply changes to a running
+batch; Activity Center shows **Analyzing** as soon as its waiting period ends.
+
 Music Library 0.178.1 fixes universal macOS installer builds by preparing the
 Apple Silicon and Intel audio analyzers alongside the combined universal binary.
 

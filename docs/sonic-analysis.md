@@ -12,8 +12,12 @@ Windows defaults to starting new files only after five minutes without keyboard
 or mouse input. Save a different threshold (1–120 minutes) or disable idle-only
 analysis. Optionally restrict work to local hours, for example 22:00–08:00;
 midnight-spanning windows are supported and the ending hour is exclusive.
-Both conditions must be satisfied when both are enabled. Settings are durable
-and a running job checks them before its next file. A file already being
+Both conditions must be satisfied when both are enabled. Starting album,
+favorites, or library analysis saves the settings shown on screen before
+queueing the job. Use **Save schedule** to apply changes to an existing job.
+If saving fails, analysis is not queued. Settings are durable and a running job
+checks them before its next file; Activity Center changes from **Waiting** to
+**Analyzing** before processing that file. A file already being
 analyzed can finish when you return to the computer.
 
 Keep Music Library running (minimized is fine) and the computer awake. This
