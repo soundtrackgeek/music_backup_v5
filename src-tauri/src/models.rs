@@ -1548,20 +1548,35 @@ pub struct DiscoverySourceHealthItem {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryShelfExplorerRequest {
     pub shelf: String,
+    #[serde(default)]
     pub date: Option<String>,
+    #[serde(default)]
     pub anniversary_years: Option<i32>,
+    #[serde(default)]
     pub event_type: Option<String>,
+    #[serde(default)]
     pub source: Option<String>,
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub week: Option<i32>,
+    #[serde(default)]
     pub decade: Option<i32>,
+    #[serde(default)]
     pub genre: Option<String>,
+    #[serde(default)]
     pub mode: Option<String>,
+    #[serde(default)]
     pub connection: Option<String>,
+    #[serde(default)]
     pub query: Option<String>,
+    #[serde(default)]
     pub sort: Option<String>,
+    #[serde(default)]
     pub seed: Option<i64>,
+    #[serde(default)]
     pub limit: Option<i64>,
+    #[serde(default)]
     pub offset: Option<i64>,
 }
 
@@ -1603,6 +1618,7 @@ pub struct DiscoveryShelfExplorerResponse {
 #[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRecommendationSnapshotRequest {
+    #[serde(default)]
     pub mode: Option<String>,
 }
 
@@ -1620,9 +1636,13 @@ pub struct DiscoveryRecommendationSnapshot {
 #[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryCompletionSnapshotRequest {
+    #[serde(default)]
     pub mode: Option<String>,
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub decade: Option<i32>,
+    #[serde(default)]
     pub genre: Option<String>,
 }
 
@@ -1643,8 +1663,11 @@ pub struct DiscoveryCompletionSnapshot {
 #[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryDeepCutSnapshotRequest {
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub decade: Option<i32>,
+    #[serde(default)]
     pub genre: Option<String>,
 }
 
@@ -1670,8 +1693,11 @@ pub struct DiscoveryDeepCutGenre {
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryChartSnapshotRequest {
+    #[serde(default)]
     pub source: Option<String>,
+    #[serde(default)]
     pub year: Option<i32>,
+    #[serde(default)]
     pub week: Option<i32>,
     #[serde(default)]
     pub random: bool,
@@ -1836,8 +1862,11 @@ pub struct DiscoveryMixerSeedOption {
 #[derive(Debug, Clone, Deserialize, Default, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerSeedSearchRequest {
+    #[serde(default)]
     pub query: Option<String>,
+    #[serde(default)]
     pub kind: Option<String>,
+    #[serde(default)]
     pub limit: Option<i64>,
 }
 
@@ -1852,7 +1881,9 @@ pub struct DiscoveryMixerSeedInput {
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryMixerRequest {
     pub seeds: Vec<DiscoveryMixerSeedInput>,
+    #[serde(default)]
     pub explore_percent: Option<i64>,
+    #[serde(default)]
     pub limit: Option<i64>,
 }
 

@@ -1137,7 +1137,7 @@ export async function listLibraryUpdates(request: LibraryUpdateRequest) {
     } satisfies LibraryUpdateResponse;
   }
 
-  return invoke<LibraryUpdateResponse>("list_library_updates", { request });
+  return commands.listLibraryUpdates(request) as Promise<LibraryUpdateResponse>;
 }
 
 const mockNewArtistKeys = new Set([normalizeArtistKey("Thorleifs")]);
@@ -1275,9 +1275,7 @@ export async function listLibraryUpdateArtists(
     } satisfies LibraryUpdateArtistResponse;
   }
 
-  return invoke<LibraryUpdateArtistResponse>("list_library_update_artists", {
-    request,
-  });
+  return commands.listLibraryUpdateArtists(request) as Promise<LibraryUpdateArtistResponse>;
 }
 
 export async function listDatabaseBackups() {
@@ -1305,7 +1303,7 @@ export async function getStatistics() {
     return mockStatistics;
   }
 
-  return invoke<StatisticsResponse>("get_statistics");
+  return commands.getStatistics() as Promise<StatisticsResponse>;
 }
 
 function mockAlbumDebutTimeline(
@@ -1422,10 +1420,7 @@ export async function getAlbumDebutTimeline(
     return mockAlbumDebutTimeline(selectedYear);
   }
 
-  return invoke<AlbumDebutTimelineResponse>("get_album_debut_timeline", {
-    selectedYear,
-    chartSource,
-  });
+  return commands.getAlbumDebutTimeline(selectedYear, chartSource) as Promise<AlbumDebutTimelineResponse>;
 }
 
 function mockIsoWeekStartDate(year: number, week: number) {
@@ -1619,10 +1614,7 @@ export async function getTrackDebutTimeline(
     return mockTrackDebutTimeline(selectedYear, chartSource);
   }
 
-  return invoke<TrackDebutTimelineResponse>("get_track_debut_timeline", {
-    selectedYear,
-    chartSource,
-  });
+  return commands.getTrackDebutTimeline(selectedYear, chartSource) as Promise<TrackDebutTimelineResponse>;
 }
 
 export async function getMusicMap() {
@@ -1630,7 +1622,7 @@ export async function getMusicMap() {
     return mockMusicMap;
   }
 
-  return invoke<MusicMapResponse>("get_music_map");
+  return commands.getMusicMap() as Promise<MusicMapResponse>;
 }
 
 export async function getMusicMapLocationDetails(locationKey: string) {
@@ -1638,9 +1630,7 @@ export async function getMusicMapLocationDetails(locationKey: string) {
     return mockMusicMapDetails(locationKey);
   }
 
-  return invoke<MusicMapLocationDetails>("get_music_map_location_details", {
-    locationKey,
-  });
+  return commands.getMusicMapLocationDetails(locationKey) as Promise<MusicMapLocationDetails>;
 }
 
 export async function refreshMusicMapLocations() {
@@ -1648,7 +1638,7 @@ export async function refreshMusicMapLocations() {
     return mockMusicMapRefresh;
   }
 
-  return invoke<MusicMapRefreshSummary>("refresh_music_map_locations");
+  return commands.refreshMusicMapLocations() as Promise<MusicMapRefreshSummary>;
 }
 
 export async function getYearProgress(request: YearProgressRequest) {
@@ -1708,7 +1698,7 @@ export async function getYearProgress(request: YearProgressRequest) {
       );
   }
 
-  return invoke<YearProgressStats[]>("get_year_progress", { request });
+  return commands.getYearProgress(request) as Promise<YearProgressStats[]>;
 }
 
 export async function getGenreProgress(request: GenreProgressRequest) {
@@ -1784,7 +1774,7 @@ export async function getGenreProgress(request: GenreProgressRequest) {
       );
   }
 
-  return invoke<GenreProgressStats[]>("get_genre_progress", { request });
+  return commands.getGenreProgress(request) as Promise<GenreProgressStats[]>;
 }
 
 export async function getDiscovery(options: { refreshDailyEdition?: boolean } = {}) {
@@ -1819,9 +1809,7 @@ export async function getDiscovery(options: { refreshDailyEdition?: boolean } = 
     } satisfies DiscoveryResponse;
   }
 
-  return invoke<DiscoveryResponse>("get_discovery", {
-    refreshDailyEdition: options.refreshDailyEdition ?? false,
-  });
+  return commands.getDiscovery(options.refreshDailyEdition ?? false) as Promise<DiscoveryResponse>;
 }
 
 export async function getCatalogRevision() {
@@ -1864,10 +1852,7 @@ export async function getDiscoveryDailyEdition(date: string) {
     } satisfies DiscoveryDailyEditionSnapshotResponse;
   }
 
-  return invoke<DiscoveryDailyEditionSnapshotResponse>(
-    "get_discovery_daily_edition",
-    { date },
-  );
+  return commands.getDiscoveryDailyEdition(date) as Promise<DiscoveryDailyEditionSnapshotResponse>;
 }
 
 let mockDiscoveryChartMatchesRebuilt = false;
@@ -1953,7 +1938,7 @@ export async function getDiscoverySourceHealth(date: string) {
       sources,
     } satisfies DiscoverySourceHealthResponse;
   }
-  return invoke<DiscoverySourceHealthResponse>("get_discovery_source_health", { date });
+  return commands.getDiscoverySourceHealth(date) as Promise<DiscoverySourceHealthResponse>;
 }
 
 export async function rebuildDiscoveryChartMatches(date: string) {
@@ -1961,7 +1946,7 @@ export async function rebuildDiscoveryChartMatches(date: string) {
     mockDiscoveryChartMatchesRebuilt = true;
     return getDiscoverySourceHealth(date);
   }
-  return invoke<DiscoverySourceHealthResponse>("rebuild_discovery_chart_matches", { date });
+  return commands.rebuildDiscoveryChartMatches(date) as Promise<DiscoverySourceHealthResponse>;
 }
 
 export async function getDiscoveryAnniversaries(anniversaryYears: number) {
@@ -1981,9 +1966,7 @@ export async function getDiscoveryAnniversaries(anniversaryYears: number) {
     }));
   }
 
-  return invoke<DiscoveryAnniversaryStory[]>("get_discovery_anniversaries", {
-    anniversaryYears,
-  });
+  return commands.getDiscoveryAnniversaries(anniversaryYears) as Promise<DiscoveryAnniversaryStory[]>;
 }
 
 export async function getDiscoveryChartSnapshot(
@@ -2034,7 +2017,7 @@ export async function getDiscoveryChartSnapshot(
     } satisfies DiscoveryChartSnapshot;
   }
 
-  return invoke<DiscoveryChartSnapshot>("get_discovery_chart_snapshot", { request });
+  return commands.getDiscoveryChartSnapshot(request) as Promise<DiscoveryChartSnapshot>;
 }
 
 export async function getDiscoveryDeepCutSnapshot(
@@ -2063,9 +2046,7 @@ export async function getDiscoveryDeepCutSnapshot(
     } satisfies DiscoveryDeepCutSnapshot;
   }
 
-  return invoke<DiscoveryDeepCutSnapshot>("get_discovery_deep_cut_snapshot", {
-    request,
-  });
+  return commands.getDiscoveryDeepCutSnapshot(request) as Promise<DiscoveryDeepCutSnapshot>;
 }
 
 export async function getDiscoveryCompletionSnapshot(
@@ -2111,9 +2092,7 @@ export async function getDiscoveryCompletionSnapshot(
     } satisfies DiscoveryCompletionSnapshot;
   }
 
-  return invoke<DiscoveryCompletionSnapshot>("get_discovery_completion_snapshot", {
-    request,
-  });
+  return commands.getDiscoveryCompletionSnapshot(request) as Promise<DiscoveryCompletionSnapshot>;
 }
 
 export async function getDiscoveryRecommendationSnapshot(
@@ -2141,10 +2120,7 @@ export async function getDiscoveryRecommendationSnapshot(
     } satisfies DiscoveryRecommendationSnapshot;
   }
 
-  return invoke<DiscoveryRecommendationSnapshot>(
-    "get_discovery_recommendation_snapshot",
-    { request },
-  );
+  return commands.getDiscoveryRecommendationSnapshot(request) as Promise<DiscoveryRecommendationSnapshot>;
 }
 
 function mockDiscoveryMixerSeedOptions(): DiscoveryMixerSeedOption[] {
@@ -2177,9 +2153,7 @@ export async function getDiscoveryMixerSeedOptions(
   request: DiscoveryMixerSeedSearchRequest,
 ): Promise<DiscoveryMixerSeedOption[]> {
   if (isTauriRuntime()) {
-    return invoke<DiscoveryMixerSeedOption[]>("get_discovery_mixer_seed_options", {
-      request,
-    });
+    return commands.getDiscoveryMixerSeedOptions(request) as Promise<DiscoveryMixerSeedOption[]>;
   }
 
   const query = request.query?.trim().toLocaleLowerCase() ?? "";
@@ -2205,7 +2179,7 @@ export async function getDiscoveryMixer(
   request: DiscoveryMixerRequest,
 ): Promise<DiscoveryMixerResponse> {
   if (isTauriRuntime()) {
-    return invoke<DiscoveryMixerResponse>("get_discovery_mixer", { request });
+    return commands.getDiscoveryMixer(request) as Promise<DiscoveryMixerResponse>;
   }
 
   const allOptions = mockDiscoveryMixerSeedOptions();
@@ -2331,9 +2305,7 @@ export async function getDiscoveryShelfExplorer(
   request: DiscoveryShelfExplorerRequest,
 ): Promise<DiscoveryShelfExplorerResponse> {
   if (isTauriRuntime()) {
-    return invoke<DiscoveryShelfExplorerResponse>("get_discovery_shelf_explorer", {
-      request,
-    });
+    return commands.getDiscoveryShelfExplorer(request) as Promise<DiscoveryShelfExplorerResponse>;
   }
 
   const limit = Math.min(50, Math.max(1, request.limit ?? 24));
@@ -7058,7 +7030,7 @@ export async function getGenreTimeline(request: GenreTimelineRequest) {
     return mockGenreTimeline(request);
   }
 
-  return invoke<GenreTimelineResponse>("get_genre_timeline", { request });
+  return commands.getGenreTimeline(request) as Promise<GenreTimelineResponse>;
 }
 
 const mockArtistCareerProfiles = [
@@ -7153,7 +7125,7 @@ function mockArtistTimeline(request: ArtistTimelineRequest): ArtistTimelineRespo
 
 export async function getArtistTimeline(request: ArtistTimelineRequest) {
   if (!isTauriRuntime()) return mockArtistTimeline(request);
-  return invoke<ArtistTimelineResponse>("get_artist_timeline", { request });
+  return commands.getArtistTimeline(request) as Promise<ArtistTimelineResponse>;
 }
 
 export async function listGenreSuggestions() {
@@ -7161,7 +7133,7 @@ export async function listGenreSuggestions() {
     return mockGenres.map((genre) => genre.name);
   }
 
-  return invoke<string[]>("list_genre_suggestions");
+  return commands.listGenreSuggestions() as Promise<string[]>;
 }
 
 export async function listMusicTools() {

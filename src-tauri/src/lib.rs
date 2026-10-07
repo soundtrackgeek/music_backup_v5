@@ -1344,6 +1344,7 @@ async fn export_musicbrainz_artist_releases(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
     tauri::async_runtime::spawn_blocking(move || db::statistics_for_app(&app))
         .await
@@ -1353,6 +1354,7 @@ async fn get_statistics(app: AppHandle) -> Result<StatisticsResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_library_updates(
     app: AppHandle,
     request: LibraryUpdateRequest,
@@ -1365,6 +1367,7 @@ async fn list_library_updates(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_library_update_artists(
     app: AppHandle,
     request: LibraryUpdateRequest,
@@ -1377,6 +1380,7 @@ async fn list_library_update_artists(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_album_debut_timeline(
     app: AppHandle,
     selected_year: Option<i32>,
@@ -1392,6 +1396,7 @@ async fn get_album_debut_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_track_debut_timeline(
     app: AppHandle,
     selected_year: Option<i32>,
@@ -1407,6 +1412,7 @@ async fn get_track_debut_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_music_map(app: AppHandle) -> Result<MusicMapResponse, String> {
     tauri::async_runtime::spawn_blocking(move || music_map::music_map_for_app(&app))
         .await
@@ -1416,6 +1422,7 @@ async fn get_music_map(app: AppHandle) -> Result<MusicMapResponse, String> {
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_music_map_location_details(
     app: AppHandle,
     location_key: String,
@@ -1430,6 +1437,7 @@ async fn get_music_map_location_details(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn refresh_music_map_locations(app: AppHandle) -> Result<MusicMapRefreshSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
         music_map::refresh_music_map_locations_for_app(&app)
@@ -1441,6 +1449,7 @@ async fn refresh_music_map_locations(app: AppHandle) -> Result<MusicMapRefreshSu
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_year_progress(
     app: AppHandle,
     request: YearProgressRequest,
@@ -1453,6 +1462,7 @@ async fn get_year_progress(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_genre_progress(
     app: AppHandle,
     request: GenreProgressRequest,
@@ -1465,6 +1475,7 @@ async fn get_genre_progress(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery(
     app: AppHandle,
     refresh_daily_edition: Option<bool>,
@@ -1479,6 +1490,7 @@ async fn get_discovery(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_daily_edition(
     app: AppHandle,
     date: String,
@@ -1491,6 +1503,7 @@ async fn get_discovery_daily_edition(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_source_health(
     app: AppHandle,
     date: String,
@@ -1503,6 +1516,7 @@ async fn get_discovery_source_health(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn rebuild_discovery_chart_matches(
     app: AppHandle,
     date: String,
@@ -1517,6 +1531,7 @@ async fn rebuild_discovery_chart_matches(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_anniversaries(
     app: AppHandle,
     anniversary_years: i32,
@@ -1531,6 +1546,7 @@ async fn get_discovery_anniversaries(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_chart_snapshot(
     app: AppHandle,
     request: DiscoveryChartSnapshotRequest,
@@ -1545,6 +1561,7 @@ async fn get_discovery_chart_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_deep_cut_snapshot(
     app: AppHandle,
     request: DiscoveryDeepCutSnapshotRequest,
@@ -1559,6 +1576,7 @@ async fn get_discovery_deep_cut_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_completion_snapshot(
     app: AppHandle,
     request: DiscoveryCompletionSnapshotRequest,
@@ -1573,6 +1591,7 @@ async fn get_discovery_completion_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_recommendation_snapshot(
     app: AppHandle,
     request: DiscoveryRecommendationSnapshotRequest,
@@ -1587,6 +1606,7 @@ async fn get_discovery_recommendation_snapshot(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_mixer_seed_options(
     app: AppHandle,
     request: DiscoveryMixerSeedSearchRequest,
@@ -1601,6 +1621,7 @@ async fn get_discovery_mixer_seed_options(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_mixer(
     app: AppHandle,
     request: DiscoveryMixerRequest,
@@ -1613,6 +1634,7 @@ async fn get_discovery_mixer(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_discovery_shelf_explorer(
     app: AppHandle,
     request: DiscoveryShelfExplorerRequest,
@@ -1971,6 +1993,7 @@ async fn list_genres(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_genre_timeline(
     app: AppHandle,
     request: GenreTimelineRequest,
@@ -1983,6 +2006,7 @@ async fn get_genre_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn get_artist_timeline(
     app: AppHandle,
     request: ArtistTimelineRequest,
@@ -1995,6 +2019,7 @@ async fn get_artist_timeline(
 
 #[cfg(not(test))]
 #[tauri::command]
+#[specta::specta]
 async fn list_genre_suggestions(app: AppHandle) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || db::genre_suggestion_names_for_app(&app))
         .await
@@ -2223,28 +2248,6 @@ pub fn run() {
             save_settings,
             install_app_update,
             sync_music_doctor,
-            get_statistics,
-            list_library_updates,
-            list_library_update_artists,
-            get_album_debut_timeline,
-            get_track_debut_timeline,
-            get_music_map,
-            get_music_map_location_details,
-            refresh_music_map_locations,
-            get_year_progress,
-            get_genre_progress,
-            get_discovery,
-            get_discovery_daily_edition,
-            get_discovery_source_health,
-            rebuild_discovery_chart_matches,
-            get_discovery_anniversaries,
-            get_discovery_chart_snapshot,
-            get_discovery_deep_cut_snapshot,
-            get_discovery_completion_snapshot,
-            get_discovery_recommendation_snapshot,
-            get_discovery_mixer_seed_options,
-            get_discovery_mixer,
-            get_discovery_shelf_explorer,
             get_import_preview,
             prepare_import_preview,
             cancel_import_preview,
@@ -2263,9 +2266,6 @@ pub fn run() {
             list_artists,
             get_artist_track_highlights,
             list_genres,
-            get_genre_timeline,
-            get_artist_timeline,
-            list_genre_suggestions,
             list_music_tools,
             list_music_tool_issues,
             fix_music_tool_issues,

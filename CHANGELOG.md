@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.169.0] - 2026-10-07
+
+### Changed
+- Migrate 25 analytics and discovery commands to generated TypeScript bindings: statistics, library updates and update artists, album and track debut timelines, genre and artist timelines, year and genre progress, genre suggestions, Music Map (view, location details, refresh), and Discovery (home, daily edition, source health, anniversaries, chart, deep-cut, completion and recommendation snapshots, mixer and mixer seed options, shelf explorer, chart-match rebuild). `backend.ts` calls `commands.*` for them.
+- Mark the optional fields of the seven Discovery request structs `#[serde(default)]`, so the generated types treat them as optional like the callers already do (behavior is unchanged).
+
 ## [0.168.2] - 2026-10-07
 
 ### Removed

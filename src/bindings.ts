@@ -4,6 +4,31 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
+	getStatistics: () => __TAURI_INVOKE<StatisticsResponse>("get_statistics"),
+	listLibraryUpdates: (request: LibraryUpdateRequest) => __TAURI_INVOKE<LibraryUpdateResponse>("list_library_updates", { request }),
+	listLibraryUpdateArtists: (request: LibraryUpdateRequest) => __TAURI_INVOKE<LibraryUpdateArtistResponse>("list_library_update_artists", { request }),
+	getAlbumDebutTimeline: (selectedYear: number | null, chartSource: string) => __TAURI_INVOKE<AlbumDebutTimelineResponse>("get_album_debut_timeline", { selectedYear, chartSource }),
+	getTrackDebutTimeline: (selectedYear: number | null, chartSource: string) => __TAURI_INVOKE<TrackDebutTimelineResponse>("get_track_debut_timeline", { selectedYear, chartSource }),
+	getMusicMap: () => __TAURI_INVOKE<MusicMapResponse>("get_music_map"),
+	getMusicMapLocationDetails: (locationKey: string) => __TAURI_INVOKE<MusicMapLocationDetails>("get_music_map_location_details", { locationKey }),
+	refreshMusicMapLocations: () => __TAURI_INVOKE<MusicMapRefreshSummary>("refresh_music_map_locations"),
+	getYearProgress: (request: YearProgressRequest) => __TAURI_INVOKE<YearProgressStats[]>("get_year_progress", { request }),
+	getGenreProgress: (request: GenreProgressRequest) => __TAURI_INVOKE<GenreProgressStats[]>("get_genre_progress", { request }),
+	getDiscovery: (refreshDailyEdition: boolean | null) => __TAURI_INVOKE<DiscoveryResponse>("get_discovery", { refreshDailyEdition }),
+	getDiscoveryDailyEdition: (date: string) => __TAURI_INVOKE<DiscoveryDailyEditionSnapshotResponse>("get_discovery_daily_edition", { date }),
+	getDiscoverySourceHealth: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("get_discovery_source_health", { date }),
+	rebuildDiscoveryChartMatches: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("rebuild_discovery_chart_matches", { date }),
+	getDiscoveryAnniversaries: (anniversaryYears: number) => __TAURI_INVOKE<DiscoveryAnniversaryStory[]>("get_discovery_anniversaries", { anniversaryYears }),
+	getDiscoveryChartSnapshot: (request: DiscoveryChartSnapshotRequest) => __TAURI_INVOKE<DiscoveryChartSnapshot>("get_discovery_chart_snapshot", { request }),
+	getDiscoveryDeepCutSnapshot: (request: DiscoveryDeepCutSnapshotRequest) => __TAURI_INVOKE<DiscoveryDeepCutSnapshot>("get_discovery_deep_cut_snapshot", { request }),
+	getDiscoveryCompletionSnapshot: (request: DiscoveryCompletionSnapshotRequest) => __TAURI_INVOKE<DiscoveryCompletionSnapshot>("get_discovery_completion_snapshot", { request }),
+	getDiscoveryRecommendationSnapshot: (request: DiscoveryRecommendationSnapshotRequest) => __TAURI_INVOKE<DiscoveryRecommendationSnapshot>("get_discovery_recommendation_snapshot", { request }),
+	getDiscoveryMixerSeedOptions: (request: DiscoveryMixerSeedSearchRequest) => __TAURI_INVOKE<DiscoveryMixerSeedOption[]>("get_discovery_mixer_seed_options", { request }),
+	getDiscoveryMixer: (request: DiscoveryMixerRequest) => __TAURI_INVOKE<DiscoveryMixerResponse>("get_discovery_mixer", { request }),
+	getDiscoveryShelfExplorer: (request: DiscoveryShelfExplorerRequest) => __TAURI_INVOKE<DiscoveryShelfExplorerResponse>("get_discovery_shelf_explorer", { request }),
+	getGenreTimeline: (request: GenreTimelineRequest) => __TAURI_INVOKE<GenreTimelineResponse>("get_genre_timeline", { request }),
+	getArtistTimeline: (request: ArtistTimelineRequest) => __TAURI_INVOKE<ArtistTimelineResponse>("get_artist_timeline", { request }),
+	listGenreSuggestions: () => __TAURI_INVOKE<string[]>("list_genre_suggestions"),
 	usenetBootstrap: () => __TAURI_INVOKE<UsenetBootstrap>("usenet_bootstrap"),
 	usenetSaveProfile: (request: SaveUsenetProfileRequest) => __TAURI_INVOKE<UsenetBootstrap>("usenet_save_profile", { request }),
 	usenetReset: () => __TAURI_INVOKE<UsenetBootstrap>("usenet_reset"),
@@ -411,6 +436,38 @@ export type AiUsage = {
 	outputTokens: number | null,
 };
 
+export type AlbumDebutTimelineAlbum = {
+	id: string,
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	canonicalGenre: string | null,
+	year: number | null,
+	albumScore: number | null,
+	billboardRank: number | null,
+	billboardYear: number | null,
+	billboardDebutYear: number,
+	billboardDebutMonth: number,
+	billboardDebutWeek: number,
+	billboardDebutWeekKey: string,
+	coverPath: string | null,
+	coverMimeType: string | null,
+};
+
+export type AlbumDebutTimelineResponse = {
+	years: AlbumDebutTimelineYear[],
+	selectedYear: number | null,
+	albums: AlbumDebutTimelineAlbum[],
+	datedAlbumCount: number,
+	undatedAlbumCount: number,
+};
+
+export type AlbumDebutTimelineYear = {
+	year: number,
+	albumCount: number,
+	representativeAlbum: AlbumDebutTimelineAlbum | null,
+};
+
 export type AlbumReview = {
 	albumId: string,
 	albumArtist: string,
@@ -445,6 +502,56 @@ export type ArtistBiography = {
 	cached: boolean,
 	stale: boolean,
 	message: string,
+};
+
+export type ArtistTimelineAlbum = {
+	albumId: string,
+	album: string | null,
+	artistId: string,
+	artist: string,
+	year: number,
+	albumScore: number | null,
+	lovedTracks: number,
+	billboardRank: number | null,
+	officialUkRank: number | null,
+	vgListaRank: number | null,
+	chartPeak: number | null,
+	coverPath: string | null,
+};
+
+export type ArtistTimelineArtist = {
+	id: string,
+	name: string,
+	albumCount: number,
+	firstYear: number,
+	lastYear: number,
+	averageAlbumScore: number | null,
+	lovedTracks: number,
+	topGenre: string | null,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
+};
+
+export type ArtistTimelineRequest = {
+	yearFrom?: number | null,
+	yearTo?: number | null,
+	genres?: string[],
+	excludedGenres?: string[],
+	artists?: string[],
+	artistLimit?: number,
+	metric?: string,
+};
+
+export type ArtistTimelineResponse = {
+	artists: ArtistTimelineArtist[],
+	albums: ArtistTimelineAlbum[],
+	matchingAlbumCount: number,
+	matchingArtistCount: number,
+	datedAlbumCount: number,
+	availableYearFrom: number | null,
+	availableYearTo: number | null,
 };
 
 export type Assessment = {
@@ -549,6 +656,15 @@ export type BrowseSort = {
 	direction?: string,
 };
 
+export type CatalogConcentrationStats = {
+	artistPoints: ConcentrationPoint[],
+	genrePoints: ConcentrationPoint[],
+	topArtist: string | null,
+	topArtistAlbumCount: number,
+	topGenre: string | null,
+	topGenreAlbumCount: number,
+};
+
 export type ChartConfig = ChartConfig_Serialize | ChartConfig_Deserialize;
 
 export type ChartConfig_Deserialize = {
@@ -579,6 +695,12 @@ export type ChartConfig_Serialize = {
 	exportColumns: string[],
 	viewMode: string,
 	gridCoverSize: number,
+};
+
+export type ConcentrationPoint = {
+	topN: number,
+	albumCount: number,
+	share: number | null,
 };
 
 export type ConfirmLibraryCompletionArtistMatchRequest = {
@@ -617,6 +739,25 @@ export type ConnectionSnapshot = {
 };
 
 export type ConnectionState = "unconfigured" | "offline" | "connecting" | "authenticating" | "online" | "reconnecting" | "error";
+
+export type CountryCatalogStats = {
+	countryCode: string,
+	countryName: string,
+	artistCount: number,
+	albumCount: number,
+};
+
+export type DecadeProgressStats = {
+	decade: number,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	averageAlbumScore: number | null,
+};
 
 export type DeemixAlbumDownloadPreflight = {
 	alreadyDownloaded: boolean,
@@ -721,6 +862,438 @@ export type DiscogsCredentialStatus = {
 	source: string,
 };
 
+export type DiscoveryAlbumCompletionStory = {
+	albumId: string,
+	album: string,
+	artist: string,
+	releaseYear: number | null,
+	genre: string,
+	totalTracks: number,
+	ratedTracks: number,
+	unratedTracks: number,
+	completionPercent: number | null,
+	coverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryAlbumPoint = {
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	genreId: string | null,
+	genre: string | null,
+	year: number | null,
+	lovedTracks: number,
+	albumScore: number | null,
+	effectiveAlbumRating: number | null,
+	ratingCompleteness: number | null,
+	totalSeconds: number,
+};
+
+export type DiscoveryAnniversaryStory = {
+	albumId: string,
+	album: string,
+	artist: string,
+	releaseYear: number,
+	yearsAgo: number,
+	coverPath: string | null,
+	evidence: string,
+	chartEvidence: string[],
+	selectionReason: string,
+};
+
+export type DiscoveryArtistCompletionStory = {
+	artistId: string,
+	artist: string,
+	musicbrainzMbid: string,
+	ownedAlbumCount: number,
+	officialAlbumCount: number,
+	missingAlbumCount: number,
+	completionPercent: number | null,
+	missingReleaseTitle: string,
+	missingReleaseYear: number | null,
+	genre: string,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryArtistPoint = {
+	artistId: string,
+	artist: string,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	totalSeconds: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumScore: number | null,
+	topGenre: string | null,
+};
+
+export type DiscoveryChartSnapshot = {
+	source: string,
+	sourceLabel: string,
+	year: number | null,
+	week: number | null,
+	availableYears: number[],
+	availableWeeks: number[],
+	stories: DiscoveryChartStory[],
+};
+
+export type DiscoveryChartSnapshotRequest = {
+	source?: string | null,
+	year?: number | null,
+	week?: number | null,
+	random?: boolean,
+};
+
+export type DiscoveryChartStory = {
+	entity: string,
+	albumId: string,
+	trackId: number | null,
+	title: string,
+	artist: string,
+	album: string | null,
+	chart: string,
+	rank: number,
+	chartDate: string | null,
+	chartYear: number,
+	loved: boolean,
+	coverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryCompletionSnapshot = {
+	mode: string,
+	year: number | null,
+	decade: number | null,
+	genre: string | null,
+	availableYears: number[],
+	availableGenres: DiscoveryDeepCutGenre[],
+	matchingCount: number,
+	artistStories: DiscoveryArtistCompletionStory[],
+	albumStories: DiscoveryAlbumCompletionStory[],
+};
+
+export type DiscoveryCompletionSnapshotRequest = {
+	mode?: string | null,
+	year?: number | null,
+	decade?: number | null,
+	genre?: string | null,
+};
+
+export type DiscoveryDailyEdition = {
+	date: string,
+	anniversaryYears: number,
+	anniversaries: DiscoveryAnniversaryStory[],
+	lifeEvents: DiscoveryLifeEventStory[],
+	chartSnapshot: DiscoveryChartSnapshot,
+	deepCutSnapshot: DiscoveryDeepCutSnapshot,
+	completionSnapshot: DiscoveryCompletionSnapshot,
+	recommendationSnapshot: DiscoveryRecommendationSnapshot,
+	listeningEvidenceNote: string,
+};
+
+export type DiscoveryDailyEditionArchive = {
+	availableDates: string[],
+	snapshotCreatedAt: string,
+	retentionDays: number,
+	isArchived: boolean,
+	today: string,
+};
+
+export type DiscoveryDailyEditionSnapshotResponse = {
+	dailyEdition: DiscoveryDailyEdition,
+	archive: DiscoveryDailyEditionArchive,
+};
+
+export type DiscoveryDeepCutGenre = {
+	id: string,
+	label: string,
+};
+
+export type DiscoveryDeepCutSnapshot = {
+	year: number | null,
+	decade: number | null,
+	genre: string | null,
+	availableYears: number[],
+	availableGenres: DiscoveryDeepCutGenre[],
+	matchingAlbumCount: number,
+	stories: DiscoveryDeepCutStory[],
+};
+
+export type DiscoveryDeepCutSnapshotRequest = {
+	year?: number | null,
+	decade?: number | null,
+	genre?: string | null,
+};
+
+export type DiscoveryDeepCutStory = {
+	trackId: number,
+	title: string,
+	albumId: string,
+	album: string,
+	artist: string,
+	trackNumber: number | null,
+	timeSeconds: number | null,
+	albumRating: number,
+	releaseYear: number | null,
+	genre: string,
+	coverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryGenrePoint = {
+	genreId: string,
+	genre: string,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	totalSeconds: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumScore: number | null,
+};
+
+export type DiscoveryHeatmapCell = {
+	genreId: string,
+	genre: string,
+	year: number,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumScore: number | null,
+};
+
+export type DiscoveryLifeEventStory = {
+	artistId: string,
+	artist: string,
+	eventType: string,
+	eventDate: string,
+	years: number,
+	dayOffset: number,
+	albumCount: number,
+	lovedTracks: number,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryMission = {
+	id: string,
+	title: string,
+	description: string,
+	actionLabel: string,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	averageAlbumScore: number | null,
+	averageRatingCompleteness: number | null,
+	genreId: string | null,
+	genre: string | null,
+	artistId: string | null,
+	artist: string | null,
+	yearFrom: number | null,
+	yearTo: number | null,
+	ratedTracksMin: number | null,
+	ratingCompletenessMin: number | null,
+	ratingCompletenessMax: number | null,
+	lovedTracksMin: number | null,
+	sortField: string,
+	sortDirection: string,
+	limit: number,
+};
+
+export type DiscoveryMixerRecommendation = {
+	albumId: string,
+	album: string,
+	artist: string,
+	releaseYear: number | null,
+	genre: string,
+	coverPath: string | null,
+	ratingCompleteness: number | null,
+	reason: string,
+	seedLabels: string[],
+	evidence: string[],
+	rankingScore: number | null,
+};
+
+export type DiscoveryMixerRequest = {
+	seeds: DiscoveryMixerSeedInput[],
+	explorePercent?: number | null,
+	limit?: number | null,
+};
+
+export type DiscoveryMixerResponse = {
+	seeds: DiscoveryMixerSeedOption[],
+	explorePercent: number,
+	matchingCount: number,
+	lastfmLinkedCount: number,
+	recommendations: DiscoveryMixerRecommendation[],
+	evidence: string,
+};
+
+export type DiscoveryMixerSeedInput = {
+	kind: string,
+	id: string,
+};
+
+export type DiscoveryMixerSeedOption = {
+	kind: string,
+	id: string,
+	title: string,
+	subtitle: string,
+	artist: string | null,
+	coverPath: string | null,
+};
+
+export type DiscoveryMixerSeedSearchRequest = {
+	query?: string | null,
+	kind?: string | null,
+	limit?: number | null,
+};
+
+export type DiscoveryRecommendationAnchor = {
+	albumId: string,
+	album: string,
+	artist: string,
+	signal: string,
+	coverPath: string | null,
+	evidence: string,
+};
+
+export type DiscoveryRecommendationSnapshot = {
+	mode: string,
+	anchors: DiscoveryRecommendationAnchor[],
+	matchingCount: number,
+	lastfmLinkedCount: number,
+	stories: DiscoveryRecommendationStory[],
+	evidence: string,
+};
+
+export type DiscoveryRecommendationSnapshotRequest = {
+	mode?: string | null,
+};
+
+export type DiscoveryRecommendationStory = {
+	albumId: string,
+	album: string,
+	artist: string,
+	lovedTracks: number,
+	albumScore: number | null,
+	ratedTracks: number,
+	totalTracks: number,
+	ratingCompleteness: number | null,
+	coverPath: string | null,
+	reason: string,
+	anchorAlbumId: string,
+	anchorAlbum: string,
+	anchorArtist: string,
+	evidence: string,
+};
+
+export type DiscoveryResponse = {
+	dailyEdition: DiscoveryDailyEdition,
+	dailyEditionArchive: DiscoveryDailyEditionArchive,
+	heatmap: DiscoveryHeatmapCell[],
+	backlogMissions: DiscoveryMission[],
+	smartMissions: DiscoveryMission[],
+	loveRatingPoints: DiscoveryAlbumPoint[],
+	genrePoints: DiscoveryGenrePoint[],
+	artistPoints: DiscoveryArtistPoint[],
+	generatedAt: string | null,
+};
+
+export type DiscoveryShelfExplorerRequest = {
+	shelf: string,
+	date?: string | null,
+	anniversaryYears?: number | null,
+	eventType?: string | null,
+	source?: string | null,
+	year?: number | null,
+	week?: number | null,
+	decade?: number | null,
+	genre?: string | null,
+	mode?: string | null,
+	connection?: string | null,
+	query?: string | null,
+	sort?: string | null,
+	seed?: number | null,
+	limit?: number | null,
+	offset?: number | null,
+};
+
+export type DiscoveryShelfExplorerResponse = {
+	shelf: string,
+	title: string,
+	evidenceNote: string,
+	total: number,
+	limit: number,
+	offset: number,
+	seed: number,
+	anniversaryYears: number | null,
+	eventType: string | null,
+	source: string | null,
+	sourceLabel: string | null,
+	year: number | null,
+	week: number | null,
+	decade: number | null,
+	genre: string | null,
+	mode: string | null,
+	connection: string | null,
+	query: string | null,
+	sort: string,
+	availableYears: number[],
+	availableWeeks: number[],
+	availableGenres: DiscoveryDeepCutGenre[],
+	anniversaries: DiscoveryAnniversaryStory[],
+	lifeEvents: DiscoveryLifeEventStory[],
+	chartStories: DiscoveryChartStory[],
+	deepCuts: DiscoveryDeepCutStory[],
+	artistCompletions: DiscoveryArtistCompletionStory[],
+	albumCompletions: DiscoveryAlbumCompletionStory[],
+	recommendations: DiscoveryRecommendationStory[],
+	anchors: DiscoveryRecommendationAnchor[],
+};
+
+export type DiscoverySourceHealthItem = {
+	id: string,
+	label: string,
+	state: string,
+	coverageCount: number,
+	totalCount: number,
+	coveragePercent: number | null,
+	coverageLabel: string,
+	lastSuccessfulUpdate: string | null,
+	freshnessLabel: string,
+	shelves: string[],
+	details: string[],
+	sparseReasons: string[],
+	action: string,
+	actionLabel: string,
+};
+
+export type DiscoverySourceHealthResponse = {
+	checkedAt: string,
+	editionDate: string,
+	overallState: string,
+	healthyCount: number,
+	staleCount: number,
+	missingCount: number,
+	sources: DiscoverySourceHealthItem[],
+};
+
 export type DistributedSnapshot = {
 	state: DistributedState,
 	message: string,
@@ -733,6 +1306,25 @@ export type DistributedSnapshot = {
 };
 
 export type DistributedState = "offline" | "discovering" | "connected" | "branchRoot";
+
+export type DurationAlbumStat = {
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	year: number | null,
+	totalTracks: number,
+	totalSeconds: number,
+	ratingCompleteness: number | null,
+	albumScore: number | null,
+};
+
+export type DurationAnalyticsStats = {
+	averageAlbumSeconds: number | null,
+	averageTrackSeconds: number | null,
+	longestAlbums: DurationAlbumStat[],
+	shortestAlbums: DurationAlbumStat[],
+	trackCountBuckets: RatingBucket[],
+};
 
 export type EnqueueReleaseFileRequest = {
 	title: string,
@@ -794,6 +1386,91 @@ export type ExternalDiscoveryResponse = {
 	catalogCandidateCount: number,
 	excludedOwnedCount: number,
 	limitations: string[],
+};
+
+export type GenreProgressRequest = {
+	yearFrom?: number | null,
+	yearTo?: number | null,
+	genres?: string[],
+	excludedGenres?: string[],
+};
+
+export type GenreProgressStats = {
+	genre: string,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	averageAlbumScore: number | null,
+};
+
+export type GenreTimelineAlbumPoint = {
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	genreId: string,
+	genre: string,
+	year: number,
+};
+
+export type GenreTimelineGenre = {
+	id: string,
+	name: string,
+	albumCount: number,
+	firstYear: number,
+	lastYear: number,
+	peakYear: number,
+	peakAlbumCount: number,
+};
+
+export type GenreTimelineRequest = {
+	yearFrom?: number | null,
+	yearTo?: number | null,
+	genres?: string[],
+	excludedGenres?: string[],
+	genreLimit?: number,
+	albumPointLimit?: number,
+};
+
+export type GenreTimelineResponse = {
+	genres: GenreTimelineGenre[],
+	yearCounts: GenreTimelineYearCount[],
+	albums: GenreTimelineAlbumPoint[],
+	matchingAlbumCount: number,
+	matchingGenreCount: number,
+	datedAlbumCount: number,
+	availableYearFrom: number | null,
+	availableYearTo: number | null,
+};
+
+export type GenreTimelineYearCount = {
+	genreId: string,
+	year: number,
+	albumCount: number,
+};
+
+export type ImportRun = {
+	id: number,
+	sourcePath: string,
+	sourceSizeBytes: number,
+	startedAt: string,
+	completedAt: string | null,
+	status: string,
+	trackRows: number,
+	albumCount: number,
+	durationMs: number,
+	backupPath: string | null,
+	errorMessage: string | null,
+	addedTracks: number,
+	changedTracks: number,
+	removedTracks: number,
+	addedAlbums: number,
+	changedAlbums: number,
+	removedAlbums: number,
+	ratingEventsCount: number,
 };
 
 export type LastFmAlbumPopularity = {
@@ -1131,6 +1808,98 @@ export type LibraryCompletionVerificationStatus = {
 	recentItems: LibraryCompletionVerificationItemSummary[],
 };
 
+export type LibraryHealthScore = {
+	score: number | null,
+	ratingCoverage: number | null,
+	albumCompletion: number | null,
+	metadataCoverage: number | null,
+	coverCoverage: number | null,
+	scoreCoverage: number | null,
+};
+
+export type LibraryOverviewStats = {
+	trackCount: number,
+	albumCount: number,
+	albumArtistCount: number,
+	genreCount: number,
+	yearCount: number,
+	totalSeconds: number,
+	averageAlbumScore: number | null,
+};
+
+export type LibraryShapeStats = {
+	medianYear: number | null,
+	mostRepresentedDecade: number | null,
+	mostRepresentedDecadeAlbums: number,
+	peakYear: number | null,
+	peakYearAlbums: number,
+};
+
+export type LibraryUpdate = {
+	id: number,
+	importRunId: number | null,
+	createdAt: string,
+	changeKind: string,
+	category: string,
+	albumId: string,
+	albumArtistDisplay: string | null,
+	album: string | null,
+	year: number | null,
+	field: string | null,
+	fieldLabel: string | null,
+	previousValue: string | null,
+	currentValue: string | null,
+	changeCount: number | null,
+	description: string,
+	sourceKind: string,
+	sourceLabel: string,
+	sourcePath: string | null,
+};
+
+export type LibraryUpdateArtistResponse = {
+	rows: LibraryUpdateArtistSummary[],
+	newArtists: NewLibraryArtist[],
+	total: number,
+	summary: LibraryUpdateSummary,
+	limit: number,
+	offset: number,
+};
+
+export type LibraryUpdateArtistSummary = {
+	artistKey: string,
+	artistName: string,
+	totalChanges: number,
+	tracksAdded: number,
+	tracksRemoved: number,
+	otherChanges: number,
+	albumsAdded: number,
+	albumsDeleted: number,
+	lastUpdatedAt: string,
+};
+
+export type LibraryUpdateRequest = {
+	query?: string,
+	changeKind: string | null,
+	dateFrom: string | null,
+	limit?: number,
+	offset?: number,
+};
+
+export type LibraryUpdateResponse = {
+	rows: LibraryUpdate[],
+	total: number,
+	summary: LibraryUpdateSummary,
+	limit: number,
+	offset: number,
+};
+
+export type LibraryUpdateSummary = {
+	all: number,
+	new: number,
+	changed: number,
+	removed: number,
+};
+
 export type LocalSharesSnapshot = {
 	roots: SharedRootSnapshot[],
 	uploadSlots: number,
@@ -1139,6 +1908,31 @@ export type LocalSharesSnapshot = {
 	totalDirectoryCount: number,
 	totalSizeBytes: number,
 	lastScanAtMs: number | null,
+};
+
+export type LovedDensityStat = {
+	scope: string,
+	label: string,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	lovedPer100Tracks: number | null,
+};
+
+export type LovedTrackStats = {
+	lovedTracks: number,
+	albumsWithLovedTracks: number,
+	averageLovedTracksPerAlbum: number | null,
+	topLovedGenre: string | null,
+	topLovedYear: number | null,
+};
+
+export type MetadataCoverageMetric = {
+	id: string,
+	label: string,
+	scope: string,
+	coveredCount: number,
+	totalCount: number,
 };
 
 export type MixtapeConfig = {
@@ -1206,6 +2000,89 @@ export type MusicDoctorStatus = {
 	sources: MusicDoctorSource[],
 	formatStats: MusicDoctorFormatStat[],
 	bitrateStats: MusicDoctorBitrateStat[],
+};
+
+export type MusicMapArtist = {
+	artistKey: string,
+	name: string,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	topGenre: string,
+	representativeAlbumId: string | null,
+	representativeAlbumTitle: string | null,
+	coverPath: string | null,
+};
+
+export type MusicMapGenreStat = {
+	genre: string,
+	albumCount: number,
+	artistCount: number,
+	percentage: number | null,
+};
+
+export type MusicMapLocationDetails = {
+	point: MusicMapPoint,
+	genres: MusicMapGenreStat[],
+	artists: MusicMapArtist[],
+	artistKeys: string[],
+};
+
+export type MusicMapPoint = {
+	id: string,
+	name: string,
+	countryCode: string | null,
+	countryName: string | null,
+	precision: string,
+	latitude: number | null,
+	longitude: number | null,
+	artistCount: number,
+	albumCount: number,
+	trackCount: number,
+	lovedTracks: number,
+	topGenre: string,
+};
+
+export type MusicMapRefreshSummary = {
+	candidateAreas: number,
+	resolvedAreas: number,
+	candidateCountries: number,
+	resolvedCountries: number,
+	unresolvedLocations: number,
+	fetchedAt: string,
+};
+
+export type MusicMapResponse = {
+	summary: MusicMapSummary,
+	countries: MusicMapPoint[],
+	areas: MusicMapPoint[],
+	generatedAt: string,
+};
+
+export type MusicMapSummary = {
+	totalArtists: number,
+	mappedArtists: number,
+	preciseArtistCount: number,
+	countryFallbackArtistCount: number,
+	areaCount: number,
+	countryCount: number,
+	unresolvedArtistCount: number,
+	candidateAreaCount: number,
+	lastRefreshedAt: string | null,
+	needsRefresh: boolean,
+};
+
+export type NewLibraryArtist = {
+	artistKey: string,
+	artistName: string,
+	addedAt: string,
+};
+
+export type OutlierStat = {
+	id: string,
+	label: string,
+	value: string,
+	detail: string,
 };
 
 export type PatchRepairSnapshot = {
@@ -1325,6 +2202,55 @@ export type PublishedSongWeek = {
 	position: number,
 	entryStatus: string,
 	entryDate: string,
+};
+
+export type RatingBucket = {
+	label: string,
+	count: number,
+};
+
+export type RatingEvent = {
+	id: number,
+	importRunId: number,
+	createdAt: string,
+	eventType: string,
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	year: number | null,
+	previousRatedTracks: number | null,
+	currentRatedTracks: number | null,
+	previousRatingCompleteness: number | null,
+	currentRatingCompleteness: number | null,
+	previousEffectiveAlbumRating: number | null,
+	currentEffectiveAlbumRating: number | null,
+};
+
+export type RatingHistoryPoint = {
+	importRunId: number,
+	createdAt: string,
+	trackCount: number,
+	albumCount: number,
+	ratedTracks: number,
+	unratedTracks: number,
+	fullyRatedAlbums: number,
+	partiallyRatedAlbums: number,
+	unratedAlbums: number,
+	albumsWithEffectiveRating: number,
+	averageAlbumRating: number | null,
+	averageAlbumScore: number | null,
+	ratingEventsCount: number,
+};
+
+export type RatingProgressStats = {
+	fullyRatedAlbums: number,
+	partiallyRatedAlbums: number,
+	unratedAlbums: number,
+	albumsWithEffectiveRating: number,
+	ratedTracks: number,
+	unratedTracks: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumRating: number | null,
 };
 
 export type ReleaseAlternativeFile = {
@@ -1560,9 +2486,69 @@ export type StartLibraryCompletionVerificationRequest = {
 	label: string | null,
 };
 
+export type StatisticsResponse = {
+	overview: LibraryOverviewStats,
+	countryCatalog: CountryCatalogStats[],
+	healthScore: LibraryHealthScore,
+	libraryShape: LibraryShapeStats,
+	ratingProgress: RatingProgressStats,
+	decadeProgress: DecadeProgressStats[],
+	yearProgress: YearProgressStats[],
+	genreProgress: GenreProgressStats[],
+	lovedDensity: LovedDensityStat[],
+	catalogConcentration: CatalogConcentrationStats,
+	durationAnalytics: DurationAnalyticsStats,
+	outlierStats: OutlierStat[],
+	trackRatingDistribution: RatingBucket[],
+	albumRatingDistribution: RatingBucket[],
+	metadataCoverage: MetadataCoverageMetric[],
+	lovedTracks: LovedTrackStats,
+	importHistory: ImportRun[],
+	ratingHistory: RatingHistoryPoint[],
+	recentRatingEvents: RatingEvent[],
+	lastUpdated: string | null,
+};
+
 export type TextFilter = {
 	operator?: string,
 	value?: string,
+};
+
+export type TrackDebutTimelineResponse = {
+	years: TrackDebutTimelineYear[],
+	selectedYear: number | null,
+	tracks: TrackDebutTimelineTrack[],
+	datedTrackCount: number,
+	undatedTrackCount: number,
+};
+
+export type TrackDebutTimelineTrack = {
+	id: string,
+	trackId: number,
+	albumId: string,
+	title: string | null,
+	displayArtist: string | null,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	canonicalGenre: string | null,
+	year: number | null,
+	normalizedRating: number | null,
+	love: string | null,
+	billboardSingleRank: number | null,
+	billboardSingleYear: number | null,
+	billboardSingleDebutDate: string,
+	billboardSingleDebutYear: number,
+	billboardSingleDebutMonth: number,
+	billboardSingleDebutWeek: number,
+	billboardSingleDebutWeekKey: string,
+	coverPath: string | null,
+	coverMimeType: string | null,
+};
+
+export type TrackDebutTimelineYear = {
+	year: number,
+	trackCount: number,
+	representativeTrack: TrackDebutTimelineTrack | null,
 };
 
 export type TransferQueueSnapshot = {
@@ -1824,5 +2810,22 @@ export type WishListMusicBrainzCandidate = {
 export type WishListResponse = {
 	items: WishListItem[],
 	autoRemovedCount: number,
+};
+
+export type YearProgressRequest = {
+	genres?: string[],
+	excludedGenres?: string[],
+};
+
+export type YearProgressStats = {
+	year: number,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	averageAlbumScore: number | null,
 };
 
