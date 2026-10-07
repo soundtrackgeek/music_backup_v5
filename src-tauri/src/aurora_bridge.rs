@@ -394,6 +394,14 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
     let mut progress = BridgeProgressReporter::new(request_path, &request.operation);
     let result = match request.operation.as_str() {
         "capabilities" => capabilities(),
+        "sonicAnalyze" => {
+            let key = request
+                .payload
+                .get("trackKey")
+                .and_then(Value::as_str)
+                .context("sonicAnalyze requires trackKey")?;
+            crate::sonic::analyze_headless(&app_data_dir, key)
+        }
         "previewBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: PreviewBatchRequest = serde_json::from_value(request.payload)

@@ -1,7 +1,7 @@
 {
   "name": "music-library-app",
   "private": true,
-  "version": "0.177.0",
+  "version": "0.178.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -16,14 +16,16 @@
     "bindings": "cd src-tauri && cargo run --quiet -- --export-bindings ../src/bindings.ts",
     "check:charts-bundle": "python -B scripts/build_published_charts_bundle.py --check",
     "security:check": "node scripts/security-check.mjs",
-    "check": "npm run check:version && npm run lint && npm run check:charts-bundle && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run test:billboard-singles && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check && cd .. && npm run check:bindings",
+    "check": "npm run sonic:prepare && npm run sonic:test && npm run check:version && npm run lint && npm run check:charts-bundle && npm run test:release && npm run test:run && npm run test:tools && npm run test:database-sync && npm run test:billboard-singles && npm run security:check && npm run build && cd src-tauri && cargo test -- --test-threads=1 && cargo check && cd .. && npm run check:bindings",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "release:check": "npm run check && npm run tauri:build",
     "test:release": "node --test scripts/release-assets-checks.mjs",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "sonic:prepare": "node scripts/build-sonic-analyzer.mjs",
+    "sonic:test": "cargo test --manifest-path crates/sonic-core/Cargo.toml && cargo test --locked --manifest-path Tools/sonic-analyzer/Cargo.toml"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",

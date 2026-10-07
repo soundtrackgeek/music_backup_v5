@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library 0.178.0 adds local MP3 **Audio analysis** in Tools and album details.
+Analyze favorites first, use Windows idle-only scheduling or overnight hours,
+and pause/resume in Activity Center. Results are saved per track, so **Sounds
+like** playlists and Aurora's sonic radio work while analysis is incomplete.
+See [local sonic analysis](docs/sonic-analysis.md) for scheduling, storage,
+resource limits, and the packaged GPL analyzer's source/license notices.
+
 Music Library 0.159.0 removes Plex integration while preserving saved playlists, local Smart rules, and the Aurora/Tonehavn catalog workflows.
 
 Music Library 0.158.0 adds a persistent job system and global **Activity Center**. Open the Activity icon beside Luna to see running, queued, paused, failed, and finished work from every workspace. See [Activity Center](#activity-center).

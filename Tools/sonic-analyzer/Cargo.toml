@@ -1,0 +1,18 @@
+[package]
+name = "music-sonic-analyzer"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Standalone local audio feature extractor for Music Library"
+
+[dependencies]
+bliss-audio = { version = "=0.13.0", default-features = false, features = ["symphonia-mp3"] }
+serde_json = "1"
+symphonia = { version = "=0.6.1", default-features = false }
+
+[dev-dependencies]
+music-sonic-core = { path = "../../crates/sonic-core" }
+ndarray = "0.17.2"
+
+[profile.release]
+opt-level = 3

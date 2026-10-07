@@ -1,3 +1,4 @@
+import { SonicAnalysisPanel } from "../../components/SonicAnalysisPanel";
 import {
   RotateCcw,
   Database,
@@ -125,6 +126,7 @@ export function ToolsView({
         </div>
       </header>
 
+      <SonicAnalysisPanel />
       <section className="metric-grid" aria-label="Tools summary">
         <Metric
           label="Validators"

@@ -90,6 +90,9 @@ jobs:
           security list-keychains -d user -s "$keychain"
       - name: Run verification gate
         run: npm run check
+      - name: Prepare universal audio analyzer
+        if: matrix.platform == 'macos'
+        run: npm run sonic:prepare -- universal-apple-darwin
       - name: Build installers and signed updater archives
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

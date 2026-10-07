@@ -446,6 +446,13 @@ Also add a **taste drift** chart (genre share of 4★+ ratings by year). Export 
 
 ### 4. "Sounds like" similarity
 
+**First slice shipped in 0.178.0:** shared local MP3 analysis, idle/time-window
+scheduling, resumable jobs, partial coverage, track similarity and saved
+playlists, consumed by Aurora 0.29.0's search/radio. See
+[local sonic analysis](sonic-analysis.md). Album similarity, sonic paths, a
+vector index, and Discovery integration remain later stages; the suggestions
+below describe the broader roadmap.
+
 **How**
 - Compute a per-track audio embedding locally:
   - `bliss-audio` is pure Rust and fits directly. It is **GPL-3.0**, so check that against how you distribute the app.

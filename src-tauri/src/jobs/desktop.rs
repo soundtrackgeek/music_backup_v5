@@ -12,8 +12,8 @@ use std::{
     time::Instant,
 };
 use tauri::{AppHandle, Manager};
-use tokio::sync::{oneshot, Notify};
 use tauri_specta::Event as _;
+use tokio::sync::{oneshot, Notify};
 
 type Handler = fn(&AppHandle, Value) -> Result<Value>;
 struct Registration {
@@ -40,6 +40,14 @@ fn encode<T: Serialize>(value: T) -> Result<Value> {
     Ok(serde_json::to_value(value)?)
 }
 const HANDLERS: &[Registration] = &[
+    registration!(
+        "sonicAnalysis",
+        "Audio analysis",
+        true,
+        true,
+        true,
+        crate::sonic::run
+    ),
     registration!(
         "albumVerification",
         "Album verification",
@@ -324,7 +332,10 @@ pub async fn execute(
 /// specta rc.25 recurses forever on it.)
 pub struct JobOutput<T>(Value, std::marker::PhantomData<fn() -> T>);
 impl<T> serde::Serialize for JobOutput<T> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
     }
 }
@@ -368,6 +379,14 @@ fn run_next(app: &AppHandle) -> Result<bool> {
     };
     let Some(job) = job else {
         return Ok(false);
+    };
+    // Audio decoding owns only derived storage. A paused, multi-day scan must
+    // not prevent imports/restores; it rechecks the current catalog per item.
+    let _catalog = if job.kind == "sonicAnalysis" {
+        drop(_catalog);
+        None
+    } else {
+        Some(_catalog)
     };
     emit(app);
     let store = system.open()?;
@@ -429,6 +448,15 @@ pub fn cancel_requested() -> bool {
             get(&current.store, current.id)
                 .map(|j| matches!(j.state.as_str(), "cancelling" | "cancelled"))
                 .unwrap_or(false)
+        })
+    })
+}
+pub fn should_stop() -> bool {
+    CURRENT.with(|c| {
+        c.borrow().as_ref().is_some_and(|current| {
+            get(&current.store, current.id)
+                .map(|j| j.state != "running")
+                .unwrap_or(true)
         })
     })
 }

@@ -1,3 +1,4 @@
+import { SonicAnalysisPanel } from "../../components/SonicAnalysisPanel";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import { AlbumDetailPanel } from "./AlbumPanels";
 import type { AppModel } from "../../app/useAppController";
@@ -28,6 +29,7 @@ export function AlbumsDetails({
   } = model;
   return (
     <TransitionRegion>
+      {selectedAlbum && <SonicAnalysisPanel key={selectedAlbum.albumId} albumId={selectedAlbum.albumId} />}
       <AlbumDetailPanel
         album={selectedAlbum}
         tracks={albumTracksResponse}

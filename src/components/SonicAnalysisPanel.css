@@ -1,0 +1,14 @@
+.sonic-analysis { padding:20px; margin:16px 0; border:1px solid var(--color-border); border-radius:12px; min-width:0; color:var(--color-text); background:var(--color-panel); }
+.sonic-analysis h2 { font-size:18px; margin:0 0 8px; }
+.sonic-analysis p { font-size:13px; line-height:1.5; color:var(--color-text); opacity:0.8; }
+.sonic-analysis-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.sonic-analysis button,.sonic-analysis select,.sonic-analysis input[type=number] { padding:8px 10px; background:var(--color-panel); color:var(--color-text); border:1px solid var(--color-border); border-radius:6px; font:inherit; }
+.sonic-analysis button:disabled { opacity:0.5; }
+.sonic-seed { display:flex; flex-direction:column; gap:6px; font-size:13px; }
+.sonic-seed select { width:100%; min-width:0; }
+.sonic-result { display:flex; flex-direction:column; gap:3px; padding:9px 0; border-top:1px solid var(--color-border); overflow-wrap:anywhere; }
+.sonic-result span { font-size:12px; opacity:0.8; }
+.sonic-schedule { display:flex; flex-wrap:wrap; gap:0.7rem 1rem; align-items:center; border:1px solid var(--color-border); border-radius:8px; padding:1rem; }
+.sonic-schedule label { display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center; }
+.sonic-schedule input[type=number] { width:4.5rem; }
+.sonic-schedule p { flex-basis:100%; margin:0; }

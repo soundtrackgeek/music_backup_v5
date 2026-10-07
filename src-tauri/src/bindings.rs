@@ -11,6 +11,7 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    sonic,
     acknowledge_catalog_revision,
     refresh_lastfm_artist_images,
     search_wish_list_musicbrainz,
@@ -190,6 +191,12 @@ macro_rules! specta_commands {
 
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
+        sonic::sonic_status,
+        sonic::sonic_configure,
+        sonic::sonic_seeds,
+        sonic::sonic_matches,
+        sonic::sonic_analyze,
+        sonic::sonic_save_playlist,
         acknowledge_catalog_revision,
         refresh_lastfm_artist_images,
         search_wish_list_musicbrainz,

@@ -1,11 +1,11 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.177.0",
+  "version": "0.178.0",
   "identifier": "com.local.musiclibrary",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run sonic:prepare && npm run dev",
+    "beforeBuildCommand": "npm run sonic:prepare && npm run build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },
@@ -23,20 +23,29 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: cover: http://cover.localhost https://cover.localhost asset: http://asset.localhost https://asset.localhost https://tiles.openfreemap.org; connect-src 'self' ipc: http://ipc.localhost https://tiles.openfreemap.org; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
       "devCsp": "default-src 'self' http://127.0.0.1:1420; script-src 'self' http://127.0.0.1:1420; style-src 'self' 'unsafe-inline' http://127.0.0.1:1420; img-src 'self' data: blob: cover: http://cover.localhost https://cover.localhost asset: http://asset.localhost https://asset.localhost https://tiles.openfreemap.org; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420 https://tiles.openfreemap.org; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
       "dangerousDisableAssetCspModification": false,
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "resources": ["resources/published-charts/"],
+    "resources": [
+      "resources/published-charts/",
+      "../Tools/sonic-analyzer/LICENSE",
+      "../Tools/sonic-analyzer/NOTICE.md"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/music-sonic-analyzer"
     ]
   },
   "plugins": {

@@ -53,3 +53,8 @@ release-notes.md
 *.p8
 .private_keys/
 .macos-signing/
+
+# Generated sonic analyzer binaries and Rust build caches
+/src-tauri/binaries/
+/Tools/sonic-analyzer/target/
+/crates/sonic-core/target/

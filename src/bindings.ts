@@ -5,6 +5,12 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
+	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
+	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
+	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
+	sonicAnalyze: (request: AnalyzeRequest) => __TAURI_INVOKE<number>("sonic_analyze", { request }),
+	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
 	refreshLastfmArtistImages: (limit: number) => __TAURI_INVOKE<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }),
 	searchWishListMusicbrainz: (input: WishListMusicBrainzSearchRequest) => __TAURI_INVOKE<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input }),
@@ -633,6 +639,13 @@ export type AlbumReview = {
 	cached: boolean,
 	stale: boolean,
 	message: string,
+};
+
+export type AnalyzeRequest = {
+	/**  all, favorites, or album. Work is opt-in and checkpointed per file. */
+	scope: string,
+	albumId: string | null,
+	batchId: string | null,
 };
 
 export type AppSettings = AppSettings_Serialize | AppSettings_Deserialize;
@@ -3912,6 +3925,47 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	desiredCount: number,
 	previewCount: number,
 	refreshedAt: string,
+};
+
+export type SonicMatches = {
+	analyzed: number,
+	total: number,
+	seedReady: boolean,
+	tracks: SonicTrack[],
+};
+
+export type SonicSchedule = {
+	idleOnly: boolean,
+	idleMinutes: number,
+	startHour: number | null,
+	endHour: number | null,
+};
+
+export type SonicStatus = {
+	analyzed: number,
+	pending: number,
+	failed: number,
+	total: number,
+	profile: string,
+	schedule: SonicSchedule,
+	idleSupported: boolean,
+};
+
+export type SonicTrack = {
+	albumArtist: string,
+	trackId: number,
+	trackKey: string,
+	title: string,
+	artist: string,
+	album: string,
+	albumId: string,
+	filePath: string,
+	filename: string,
+	genre: string | null,
+	rating: number | null,
+	seconds: number,
+	loved: boolean,
+	distance: number | null,
 };
 
 /**  Serializes exactly as its payload. */

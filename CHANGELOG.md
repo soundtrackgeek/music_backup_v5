@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.178.0] - 2026-10-07
+
+### Added
+- Local MP3 audio analysis with saved per-track results, resumable Activity Center jobs, Windows idle-only scheduling, optional overnight hours, and Sounds like playlists shared with Aurora.
+- Packaged GPL-3.0 Bliss analyzer sidecar with pinned feature/decoder versions and license/source notices.
+
+
 ## [0.177.0] - 2026-10-07
 
 ### Added
