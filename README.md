@@ -1,5 +1,10 @@
 # Music Library
 
+Music Library 0.180.1 speeds up sonic matching in large, partially analyzed
+libraries: album coverage starts from analyzed albums, track display metadata
+is loaded only for final matches, and journeys clone only shortlisted candidates.
+Existing saved analysis is reused. See the [performance proof](docs/sonic-performance.md).
+
 Music Library 0.180.0 adds **Sonic journey** in Playlist Builder. Choose 2–10
 ordered track stops, add 1–10 sonic connectors between each pair, preview the
 whole journey, and save its exact order as a normal playlist.

@@ -30,6 +30,8 @@ mod published_charts;
 mod sonic;
 mod sonic_albums;
 mod sonic_journey;
+#[cfg(test)]
+mod sonic_performance;
 mod soulseek;
 mod thumbnails;
 mod events;

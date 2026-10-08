@@ -747,6 +747,18 @@ pub(crate) fn matches_at(dir: &Path, key: &str, limit: usize) -> Result<SonicMat
         bail!("Similarity requests require a seed and a limit of 1–100");
     }
     let c = catalog(dir)?;
+    matches_with_catalog(&c, dir, key, limit)
+}
+
+fn matches_with_catalog(
+    c: &Connection,
+    dir: &Path,
+    key: &str,
+    limit: usize,
+) -> Result<SonicMatches> {
+    let has_analysis = attach(&c, dir)?;
+    let transaction = c.unchecked_transaction()?;
+    let c = &*transaction;
     let total = c.query_row(
         "SELECT count(*) FROM tracks WHERE lower(filename) LIKE '%.mp3'",
         [],
@@ -758,7 +770,7 @@ pub(crate) fn matches_at(dir: &Path, key: &str, limit: usize) -> Result<SonicMat
         seed_ready: false,
         tracks: vec![],
     };
-    if !attach(&c, dir)? {
+    if !has_analysis {
         return Ok(response);
     }
     let seed:Option<(String,String,String,String,u64,String)>=c.query_row("SELECT a.features,p.weights,s.directory,s.filename,s.size,s.modified FROM sonic.sonic_tracks s JOIN sonic.sonic_audio a USING(audio_hash,profile) JOIN sonic.sonic_profiles p USING(profile) JOIN tracks t ON t.file_path=s.directory AND t.filename=s.filename WHERE s.track_key=?1 AND s.profile=?2",params![key,PROFILE],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get::<_,i64>(4)? as u64,r.get(5)?))).optional()?;
@@ -775,49 +787,66 @@ pub(crate) fn matches_at(dir: &Path, key: &str, limit: usize) -> Result<SonicMat
     };
     let metric = Metric::new(&seed).context("Incompatible analysis profile")?;
     response.seed_ready = true;
-    let mut q=c.prepare(&format!("SELECT {SELECT},a.features,s.size,s.modified FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'"))?;
+    // Stream only identity and analysis; hydrate display metadata for the winners.
+    let mut q=c.prepare("SELECT t.id,t.file_path,t.filename,a.features,s.size,s.modified FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'")?;
     let rows = q.query_map([PROFILE], |r| {
         Ok((
-            row(r)?,
-            r.get::<_, String>(12)?,
-            r.get::<_, i64>(13)? as u64,
-            r.get::<_, String>(14)?,
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, i64>(4)? as u64,
+            r.get::<_, String>(5)?,
         ))
     })?;
+    struct RankedTrack {
+        id: i64,
+        key: String,
+        directory: String,
+        filename: String,
+        distance: f64,
+        size: u64,
+        modified: String,
+    }
+    fn compare(a: &RankedTrack, b: &RankedTrack) -> std::cmp::Ordering {
+        a.distance.total_cmp(&b.distance).then(a.key.cmp(&b.key))
+    }
     let mut ranked = Vec::new();
     for result in rows {
-        let (mut track, features, size, modified) = result?;
+        let (id, directory, filename, features, size, modified) = result?;
         response.analyzed += 1;
-        if track.track_key == key {
+        let candidate_key = track_key(&directory, &filename);
+        if candidate_key == key {
             continue;
         }
         let features: Vec<f32> = serde_json::from_str(&features)?;
         if let Some(d) = metric.distance(&features) {
-            track.distance = Some(d);
-            ranked.push((track, size, modified));
+            ranked.push(RankedTrack {
+                id,
+                key: candidate_key,
+                directory,
+                filename,
+                distance: d,
+                size,
+                modified,
+            });
             if ranked.len() > limit * 8 {
-                ranked.sort_by(|a, b| {
-                    a.0.distance
-                        .unwrap_or(f64::MAX)
-                        .total_cmp(&b.0.distance.unwrap_or(f64::MAX))
-                        .then(a.0.track_key.cmp(&b.0.track_key))
-                });
+                ranked.sort_by(compare);
                 ranked.truncate(limit * 4);
             }
         }
     }
-    ranked.sort_by(|a, b| {
-        a.0.distance
-            .unwrap_or(f64::MAX)
-            .total_cmp(&b.0.distance.unwrap_or(f64::MAX))
-            .then(a.0.track_key.cmp(&b.0.track_key))
-    });
-    response.tracks = ranked
+    ranked.sort_by(compare);
+    let mut metadata = c.prepare(&format!("SELECT {SELECT} FROM tracks t WHERE t.id=?1"))?;
+    for candidate in ranked
         .into_iter()
-        .filter(|(t, size, modified)| file_is_current(&t.file_path, &t.filename, *size, modified))
-        .map(|(t, _, _)| t)
+        .filter(|t| file_is_current(&t.directory, &t.filename, t.size, &t.modified))
         .take(limit)
-        .collect();
+    {
+        let mut track = metadata.query_row([candidate.id], row)?;
+        track.distance = Some(candidate.distance);
+        response.tracks.push(track);
+    }
     Ok(response)
 }
 
@@ -1159,6 +1188,57 @@ mod tests {
         assert!(matches_at(dir.path(), &key, 10).unwrap().tracks.is_empty());
         c.execute("DELETE FROM tracks WHERE id=1", []).unwrap();
         assert!(!matches_at(dir.path(), &key, 10).unwrap().seed_ready);
+    }
+    #[test]
+    fn track_matching_reads_display_metadata_only_for_final_matches() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        let dir = fixture();
+        let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        c.execute_batch("WITH RECURSIVE n(x) AS (VALUES(4) UNION ALL SELECT x+1 FROM n WHERE x<1003)
+            INSERT INTO tracks SELECT x,'Far song','Singer','Various Artists','Album','album','Pop',
+                (SELECT file_path FROM tracks WHERE id=1),'far-'||x||'.mp3',80,180,NULL FROM n;
+            ALTER TABLE tracks RENAME TO raw_tracks;
+            CREATE VIEW tracks AS SELECT id,counted_title(title) AS title,display_artist,album_artist_display,
+                album,album_id,canonical_genre,file_path,filename,normalized_rating,time_seconds,love FROM raw_tracks;").unwrap();
+        let s = results(dir.path()).unwrap();
+        s.execute_batch("WITH RECURSIVE n(x) AS (VALUES(4) UNION ALL SELECT x+1 FROM n WHERE x<1003)
+            INSERT INTO sonic_tracks SELECT 'far-key-'||x,directory,'far-'||x||'.mp3',audio_hash,profile,size,modified,analyzed_at
+                FROM n CROSS JOIN sonic_tracks WHERE filename='3.mp3';").unwrap();
+        drop(s);
+        // Use the production read-only adapter with a connection-local metadata probe.
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        let reader = catalog(dir.path()).unwrap();
+        reader
+            .create_scalar_function(
+                "counted_title",
+                1,
+                rusqlite::functions::FunctionFlags::SQLITE_UTF8,
+                move |ctx| {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    ctx.get::<String>(0)
+                },
+            )
+            .unwrap();
+        let key = track_key(&dir.path().to_string_lossy(), "1.mp3");
+        let matches = matches_with_catalog(&reader, dir.path(), &key, 2).unwrap();
+        assert!(matches.seed_ready);
+        assert_eq!(matches.total, 1003);
+        assert_eq!(matches.analyzed, 1003);
+        assert_eq!(
+            matches
+                .tracks
+                .iter()
+                .map(|t| t.track_id)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        assert_eq!(matches.tracks[0].title, "Song");
+        assert_eq!(matches.tracks[0].album_artist, "Various Artists");
     }
     #[test]
     fn tag_edits_reuse_audio_features_without_decoding() {

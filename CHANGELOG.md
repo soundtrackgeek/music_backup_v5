@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.180.1] - 2026-10-08
+
+### Changed
+- Sonic album matching counts complete MP3 coverage only for albums with analyzed paths, using the existing catalog indexes instead of revisiting unrelated albums.
+- Track matching streams compact identity/features and loads display metadata only for final matches in one consistent read transaction. Journey candidate metadata is cloned only when shortlisted.
+- Added an opt-in native snapshot benchmark and complete-response comparison tool for repeatable sonic performance checks.
+
 ## [0.180.0] - 2026-10-08
 
 ### Added

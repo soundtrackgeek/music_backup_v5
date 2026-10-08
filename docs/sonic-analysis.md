@@ -144,6 +144,11 @@ reported as failures; failed files do not stop the remaining batch.
 
 Nearest-track ranking currently streams analyzed vectors and keeps a bounded
 candidate list. It does not load the million-track catalog into memory. This
+release loads track display metadata only for final matches, counts album
+coverage only in albums with analyzed paths, and clones journey metadata only
+when shortlisted. All MP3s in a candidate album still count toward its coverage.
+See [the native performance proof](sonic-performance.md) for measurements and
+repeatable snapshot checks. This
 release does not yet implement an
 approximate nearest-neighbor index, or cross-PC analysis snapshot publication.
 Do not copy a live SQLite/WAL database to another computer; those snapshots need

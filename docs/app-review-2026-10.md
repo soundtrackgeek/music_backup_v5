@@ -454,6 +454,9 @@ with visible partial coverage, a choice of
 50%, 80%, or complete analysis, and navigation to matching local albums. Aurora
 0.30.0 also adds album-seeded sonic radio. Sonic journeys with 2–10 ordered
 stops and connecting tracks shipped in Music Library 0.180.0 and Aurora 0.31.0.
+The first measured performance pass ships in Music Library 0.180.1 and Aurora
+0.31.1: indexed album coverage over analyzed albums, compact track ranking, and
+bounded journey metadata work. See [the snapshot proof](sonic-performance.md).
 A vector index and Discovery integration remain later stages; the suggestions below describe the
 broader roadmap.
 
