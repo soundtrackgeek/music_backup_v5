@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.180.0] - 2026-10-08
+
+### Added
+- Sonic journey playlists in Playlist Builder: 2–10 ordered stops, 1–10 connecting tracks per leg, analyzed-track search, reorder/remove controls, rating and genre filters, coverage guidance, and exact reviewed-order saving.
+- Shared bounded journey selection uses existing compatible audio features, avoids repeated tracks across all legs, checks file freshness and Ban state, and supports Aurora journey playlist saves through the companion bridge.
+- Saved journeys preserve their reviewed order and cannot enable Smart refresh; opening them identifies local sonic analysis.
+
 ## [0.179.0] - 2026-10-08
 
 ### Added

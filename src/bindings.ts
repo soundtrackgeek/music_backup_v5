@@ -8,6 +8,9 @@ export const commands = {
 	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
 	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
 	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
+	sonicJourney: (request: JourneyRequest) => __TAURI_INVOKE<JourneyResponse>("sonic_journey", { request }),
+	sonicJourneySearch: (text: string) => __TAURI_INVOKE<JourneyTrack[]>("sonic_journey_search", { text }),
+	sonicSaveJourney: (input: SaveJourneyRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_journey", { input }),
 	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
 	sonicAlbumMatches: (request: SonicAlbumRequest) => __TAURI_INVOKE<SonicAlbumMatches>("sonic_album_matches", { request }),
 	sonicAnalyze: (request: AnalyzeRequest) => __TAURI_INVOKE<number>("sonic_analyze", { request }),
@@ -2158,6 +2161,37 @@ export type Job = {
 
 export type JobState = "queued" | "running" | "pausing" | "paused" | "cancelling" | "cancelled" | "failed" | "completed";
 
+export type JourneyRequest = {
+	stopKeys: string[],
+	connectingTracks: number,
+	/**  Catalog scale, 0–100. Applies to connectors, not explicitly chosen stops. */
+	minimumRating: number | null,
+	sameGenre: boolean,
+};
+
+export type JourneyResponse = {
+	stopsReady: boolean[],
+	analyzed: number,
+	complete: boolean,
+	tracks: JourneyTrack[],
+};
+
+export type JourneyTrack = {
+	trackId: number,
+	trackKey: string,
+	title: string,
+	artist: string,
+	album: string,
+	albumId: string,
+	albumArtist: string,
+	filePath: string,
+	filename: string,
+	genre: string | null,
+	rating: number | null,
+	seconds: number,
+	loved: boolean,
+};
+
 export type LastFmAlbumPopularity = {
 	artistId: string,
 	albumId: string,
@@ -3706,6 +3740,12 @@ export type SaveExternalDiscoveryRequest = {
 	id: number | null,
 	name: string,
 	response: ExternalDiscoveryResponse,
+};
+
+export type SaveJourneyRequest = {
+	journey: JourneyRequest,
+	trackKeys: string[],
+	name: string,
 };
 
 export type SaveLastFmApiKeyRequest = {

@@ -622,6 +622,126 @@ fn seeds_at(dir: &Path) -> Result<Vec<SonicTrack>> {
     Ok(rows)
 }
 
+pub(crate) fn save_journey_at(
+    dir: &Path,
+    input: crate::sonic_journey::SaveJourneyRequest,
+) -> Result<crate::ai::SavedPlaylist> {
+    if input.name.trim().is_empty() || input.name.chars().count() > 120 {
+        bail!("Name the journey with 1–120 characters");
+    }
+    input.journey.validate().map_err(anyhow::Error::msg)?;
+    let c = crate::db::open_path(&dir.join("music-library.sqlite3"))?;
+    if !attach(&c, dir)? {
+        bail!("Analyze your chosen stops and more music before saving a journey");
+    }
+    let tx = c.unchecked_transaction()?;
+    let tracks = crate::sonic_journey::reviewed(
+        &tx,
+        &input.journey,
+        &input.track_keys,
+        &std::collections::HashMap::new(),
+    )
+    .map_err(anyhow::Error::msg)?;
+    let tracks = tracks
+        .into_iter()
+        .map(|t| crate::ai::AiPlaylistTrack {
+            track_id: t.track_id,
+            album_id: t.album_id,
+            album: Some(t.album),
+            album_artist: Some(t.album_artist),
+            display_artist: Some(t.artist),
+            title: Some(t.title),
+            genre: t.genre,
+            year: None,
+            seconds: t.seconds,
+            rating: t.rating,
+            loved: t.loved,
+            file_path: Some(t.file_path),
+            filename: Some(t.filename),
+        })
+        .collect::<Vec<_>>();
+    let count = tracks.len();
+    let mut request = crate::models::BrowseRequest {
+        view: "tracks".into(),
+        ..Default::default()
+    };
+    // Exact identities also make the existing Smart-refresh guard apply.
+    request.filters.track_ids = tracks.iter().map(|t| t.track_id).collect();
+    let playlist = crate::ai::AiPlaylist {
+        mixtape: None,
+        prompt: format!("Sonic journey through {} chosen stops, in the reviewed order.", input.journey.stop_keys.len()),
+        name: input.name.trim().into(),
+        description: format!("Sonic journey through {} chosen stops with {} connecting tracks between stops. Profile {PROFILE}. Keep playlist order for the journey.", input.journey.stop_keys.len(), input.journey.connecting_tracks),
+        request,
+        strategy: "ranked".into(),
+        target_track_count: count as u32,
+        target_minutes: 0,
+        max_tracks_per_artist: 10,
+        max_tracks_per_album: 10,
+        matching_track_count: count as i64,
+        candidate_count: count,
+        total_seconds: tracks.iter().map(|t| t.seconds).sum(),
+        tracks,
+        model: "Sonic Journey".into(),
+        usage: crate::ai::AiUsage { input_tokens: None, cached_input_tokens: None, output_tokens: None },
+    };
+    let saved = crate::db::save_journey_playlist(
+        &tx,
+        crate::ai::SavePlaylistRequest {
+            id: None,
+            name: input.name.trim().into(),
+            playlist,
+        },
+    )?;
+    tx.commit()?;
+    Ok(saved)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+pub async fn sonic_journey(
+    app: AppHandle,
+    request: crate::sonic_journey::JourneyRequest,
+) -> Result<crate::sonic_journey::JourneyResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = directory(&app).map_err(|e| e.to_string())?;
+        let c = catalog(&dir).map_err(|e| e.to_string())?;
+        let has = attach(&c, &dir).map_err(|e| e.to_string())?;
+        crate::sonic_journey::query(&c, has, &request, &std::collections::HashMap::new())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+pub async fn sonic_journey_search(
+    app: AppHandle,
+    text: String,
+) -> Result<Vec<crate::sonic_journey::JourneyTrack>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = directory(&app).map_err(|e| e.to_string())?;
+        let c = catalog(&dir).map_err(|e| e.to_string())?;
+        let has = attach(&c, &dir).map_err(|e| e.to_string())?;
+        crate::sonic_journey::search(&c, has, &text, &std::collections::HashMap::new())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+pub async fn sonic_save_journey(
+    app: AppHandle,
+    input: crate::sonic_journey::SaveJourneyRequest,
+) -> Result<crate::ai::SavedPlaylist, String> {
+    tauri::async_runtime::spawn_blocking(move || save_journey_at(&directory(&app)?, input))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
 pub(crate) fn matches_at(dir: &Path, key: &str, limit: usize) -> Result<SonicMatches> {
     if !(1..=100).contains(&limit) || key.len() > 4096 {
         bail!("Similarity requests require a seed and a limit of 1–100");
@@ -865,6 +985,101 @@ pub async fn sonic_save_playlist(
 mod tests {
     use super::*;
     use music_sonic_core::DIMENSIONS;
+    #[test]
+    fn journey_save_preserves_the_exact_five_stop_preview_and_rejects_changed_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let database = dir.path().join("music-library.sqlite3");
+        let c = crate::db::open_path(&database).unwrap();
+        c.execute("INSERT INTO import_runs(id,source_path,started_at,completed_at,status) VALUES(1,'test','now','now','completed')", []).unwrap();
+        let s = results(dir.path()).unwrap();
+        let mut weights = vec![0f32; DIMENSIONS * DIMENSIONS];
+        weights[0] = 1.;
+        s.execute(
+            "INSERT INTO sonic_profiles VALUES(?1,?2)",
+            params![PROFILE, serde_json::to_string(&weights).unwrap()],
+        )
+        .unwrap();
+        let mut keys = Vec::new();
+        for i in 0..9 {
+            let filename = format!("{i}.mp3");
+            let path = dir.path().join(&filename);
+            fs::write(&path, [255; 256]).unwrap();
+            let key = track_key(&dir.path().to_string_lossy(), &filename);
+            c.execute("INSERT INTO tracks(id,import_run_id,album_id,title,display_artist,album_artist_display,album,file_path,filename,normalized_rating,time_seconds,row_hash) VALUES(?1,1,'album',?2,'Singer','Various Artists','Album',?3,?4,80,180,?5)", params![i+1,format!("Song {i}"),dir.path().to_string_lossy(),filename,key]).unwrap();
+            let mut features = vec![0f32; DIMENSIONS];
+            features[0] = i as f32;
+            s.execute(
+                "INSERT INTO sonic_audio VALUES(?1,?2,?3)",
+                params![filename, PROFILE, serde_json::to_string(&features).unwrap()],
+            )
+            .unwrap();
+            let (size, modified) = signature(&path).unwrap();
+            s.execute(
+                "INSERT INTO sonic_tracks VALUES(?1,?2,?3,?4,?5,?6,?7,'now')",
+                params![
+                    key,
+                    dir.path().to_string_lossy(),
+                    filename,
+                    filename,
+                    PROFILE,
+                    size as i64,
+                    modified
+                ],
+            )
+            .unwrap();
+            keys.push(key);
+        }
+        drop(c);
+        drop(s);
+        let input = crate::sonic_journey::SaveJourneyRequest {
+            journey: crate::sonic_journey::JourneyRequest {
+                stop_keys: keys.iter().step_by(2).cloned().collect(),
+                connecting_tracks: 1,
+                minimum_rating: None,
+                same_genre: false,
+            },
+            track_keys: keys.clone(),
+            name: "Five stop journey".into(),
+        };
+        let saved = save_journey_at(dir.path(), input.clone()).unwrap();
+        assert_eq!(
+            saved
+                .playlist
+                .tracks
+                .iter()
+                .map(|t| t.track_id)
+                .collect::<Vec<_>>(),
+            (1..=9).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            saved.playlist.tracks[0].album_artist.as_deref(),
+            Some("Various Artists")
+        );
+        assert_eq!(
+            saved.playlist.tracks[0].display_artist.as_deref(),
+            Some("Singer")
+        );
+        assert!(!saved.automation.smart);
+        assert_eq!(saved.playlist.model, "Sonic Journey");
+        assert_eq!(
+            saved.playlist.request.filters.track_ids,
+            (1..=9).collect::<Vec<_>>()
+        );
+        fs::write(dir.path().join("1.mp3"), [255; 257]).unwrap();
+        assert!(save_journey_at(dir.path(), input).is_err());
+        let c = crate::db::open_path(&database).unwrap();
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM saved_playlists", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        drop(c);
+        crate::db::pool_for_path(&database)
+            .unwrap()
+            .shutdown()
+            .unwrap();
+    }
     fn fixture() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();

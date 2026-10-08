@@ -270,6 +270,13 @@ pub(crate) fn open_path(path: &Path) -> Result<CatalogConnection> {
     pool_for_path(path)?.checkout(lifecycle::Access::Write)
 }
 
+pub(crate) fn save_journey_playlist(
+    conn: &Connection,
+    input: SavePlaylistRequest,
+) -> Result<SavedPlaylist> {
+    playlists::save_playlist(conn, input)
+}
+
 pub(crate) fn open_read(app: &AppHandle) -> Result<(CatalogConnection, PathBuf)> {
     let path = database_path(app)?;
     let conn = pool_for_path(&path)?.checkout(lifecycle::Access::Read)?;

@@ -1,4 +1,6 @@
 import { VirtualList } from "../components/VirtualList";
+import { SonicJourneyPanel } from "../components/SonicJourneyPanel";
+import { useSonicJourney } from "../components/useSonicJourney";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowDown,
@@ -90,7 +92,8 @@ export function PlaylistBuilderWorkspace({
   savedPlaylistToOpen = null,
 }: PlaylistBuilderWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<"luna" | "mixtape">("luna");
+  const [mode, setMode] = useState<"luna" | "mixtape" | "journey">("luna");
+  const sonicJourney = useSonicJourney(() => { void listSavedPlaylists().then(setSavedPlaylists).catch(e => setSavedError(String(e))); });
   const [mixtapeRevision, setMixtapeRevision] = useState(0);
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
   const [name, setName] = useState("");
@@ -345,6 +348,7 @@ export function PlaylistBuilderWorkspace({
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
   const isLocalSearchPlaylist = playlist?.model === "Local Search";
+  const isSonicJourneyPlaylist = playlist?.model === "Sonic Journey";
   const playlistTrackKeys = useMemo(() => {
     const occurrences = new Map<number, number>();
     return playlist?.tracks.map((track) => {
@@ -362,7 +366,7 @@ export function PlaylistBuilderWorkspace({
           <p>
             {directSearchTitle
               ? "Your Search results are ready to review, save, and export."
-              : "Shape a playlist with Luna, or make a two-sided mixtape with Jev."}
+              : "Shape a playlist with Luna, make a mixtape with Jev, or connect tracks on a sonic journey."}
           </p>
         </div>
         <span className="playlist-local-badge">
@@ -373,9 +377,10 @@ export function PlaylistBuilderWorkspace({
       <div className="playlist-builder-modes" aria-label="Playlist builder mode">
         <button className="secondary-button" type="button" aria-pressed={mode === "luna"} disabled={isBuilding || isSaving} onClick={() => setMode("luna")}>Luna playlist</button>
         <button className="secondary-button" type="button" aria-pressed={mode === "mixtape"} disabled={isBuilding || isSaving} onClick={() => setMode("mixtape")}>Two-sided mixtape</button>
+        <button className="secondary-button" type="button" aria-pressed={mode === "journey"} disabled={isBuilding || isSaving} onClick={() => setMode("journey")}>Sonic journey</button>
       </div>
 
-      {mode === "mixtape" ? <MixtapeBuilder
+      {mode === "journey" ? <SonicJourneyPanel journey={sonicJourney} /> : mode === "mixtape" ? <MixtapeBuilder
         key={mixtapeRevision}
         playlist={playlist}
         sourceRequest={sourceRequest}
@@ -494,15 +499,16 @@ export function PlaylistBuilderWorkspace({
         </PageLunaCommandArea>
       )}
 
-      <div className="playlist-content-grid">
-        <section className="playlist-result-panel" aria-label="Playlist review">
-          {playlist ? (
+      <div className={`playlist-content-grid${mode === "journey" ? " journey-content-grid" : ""}`}>
+        <section className="playlist-result-panel" aria-label="Playlist review" hidden={mode === "journey"}>
+          {playlist && mode !== "journey" ? (
             <>
               <header className="playlist-result-heading">
                 <div>
                   <span>
                     {isLocalSearchPlaylist
                       ? "Local Search order · no Luna"
+                      : isSonicJourneyPlaylist ? "Sonic journey · chosen stops in order"
                       : playlist.mixtape ? "Two-sided mixtape · A → B" : `${playlist.strategy} recipe`}
                   </span>
                   <input
@@ -543,7 +549,7 @@ export function PlaylistBuilderWorkspace({
 
               <AiMarkdownExportButton
                 title={aiMarkdownTitle(
-                  isLocalSearchPlaylist ? "Search playlist" : playlist.mixtape ? "Two-sided mixtape" : "Luna playlist",
+                  isLocalSearchPlaylist ? "Search playlist" : isSonicJourneyPlaylist ? "Sonic journey" : playlist.mixtape ? "Two-sided mixtape" : "Luna playlist",
                   name,
                 )}
                 markdown={playlistMarkdown(
@@ -567,16 +573,18 @@ export function PlaylistBuilderWorkspace({
                   <dd>{playlist.matchingTrackCount.toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt>{isLocalSearchPlaylist ? "Order" : "Repeat cap"}</dt>
+                  <dt>{isLocalSearchPlaylist || isSonicJourneyPlaylist ? "Order" : "Repeat cap"}</dt>
                   <dd>
                     {isLocalSearchPlaylist
                       ? "Search results"
+                      : isSonicJourneyPlaylist ? "Reviewed journey"
                       : `${playlist.maxTracksPerArtist} / artist`}
                   </dd>
                 </div>
               </dl>
 
-              {activeSavedPlaylist && !playlist.mixtape ? (
+              {isSonicJourneyPlaylist && <p className="saved-playlist-note">This playlist preserves your reviewed journey. Smart refresh is unavailable because it would replace the chosen stops and order.</p>}
+              {activeSavedPlaylist && !playlist.mixtape && !isSonicJourneyPlaylist ? (
                 <section
                   className="playlist-automation-panel"
                   aria-label="Smart playlist automation"
@@ -727,6 +735,8 @@ export function PlaylistBuilderWorkspace({
                 <span>
                   {isLocalSearchPlaylist
                     ? `${playlist.candidateCount.toLocaleString()} local Search tracks loaded directly · no Luna request`
+                    : isSonicJourneyPlaylist
+                      ? `${playlist.tracks.length} tracks connected using saved audio analysis`
                     : playlist.mixtape
                       ? `${playlist.candidateCount} reviewed candidates · ${playlist.mixtape.assessments.length ? "Jev scored metadata and notes" : "built locally without Jev"}`
                       : `Luna inspected your request only · ${playlist.candidateCount} local candidates reviewed`}

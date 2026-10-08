@@ -1,5 +1,9 @@
 # Music Library
 
+Music Library 0.180.0 adds **Sonic journey** in Playlist Builder. Choose 2–10
+ordered track stops, add 1–10 sonic connectors between each pair, preview the
+whole journey, and save its exact order as a normal playlist.
+
 Music Library 0.178.2 automatically saves the visible idle/hour settings when
 starting audio analysis. Use **Save schedule** to apply changes to a running
 batch; Activity Center shows **Analyzing** as soon as its waiting period ends.

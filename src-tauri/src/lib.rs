@@ -29,6 +29,7 @@ mod musicbrainz_sync;
 mod published_charts;
 mod sonic;
 mod sonic_albums;
+mod sonic_journey;
 mod soulseek;
 mod thumbnails;
 mod events;

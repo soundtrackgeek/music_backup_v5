@@ -402,6 +402,13 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("sonicAnalyze requires trackKey")?;
             crate::sonic::analyze_headless(&app_data_dir, key)
         }
+        "sonicSaveJourney" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let input = serde_json::from_value(request.payload)
+                .context("Invalid sonic journey playlist")?;
+            serde_json::to_value(crate::sonic::save_journey_at(&app_data_dir, input)?)
+                .map_err(Into::into)
+        }
         "previewBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: PreviewBatchRequest = serde_json::from_value(request.payload)
@@ -523,6 +530,7 @@ fn capabilities() -> Result<Value> {
             "serviceExistingFolderSync": true,
             "boundedExistingFolderSync": true,
             "verifiedTrackDeletionSync": true,
+            "sonicJourneyPlaylists": true,
         },
     }))
 }

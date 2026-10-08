@@ -8,6 +8,21 @@ import type { BrowseResponse, BrowseRow } from "../types";
 import { mockVirtualLayout } from "../test/virtualLayout";
 
 describe("playlist builder workspace", () => {
+  it("keeps a saved sonic journey out of Smart refresh and identifies its local analysis", async () => {
+    const request = createRequest("tracks");
+    const draft = localSearchPlaylistFromResponse("Journey", request, {
+      view: "tracks", total: 1, limit: 1, offset: 0,
+      rows: [{ trackId: 41, albumId: "album", title: "Journey stop", album: "Album", displayArtist: "Artist", albumArtistDisplay: "Artist", trackSeconds: 180 } as BrowseRow],
+    });
+    draft.model = "Sonic Journey";
+    render(<PlaylistBuilderWorkspace isAvailable launch={{ id: 101, cohortTitle: "Journey", prompt: draft.prompt, request, draft }} />);
+    expect(screen.getByText("Sonic journey · chosen stops in order")).toBeVisible();
+    expect(screen.getByText("1 tracks connected using saved audio analysis")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Save playlist" }));
+    await screen.findByRole("button", { name: "Update saved" });
+    expect(screen.queryByRole("checkbox", { name: /Smart playlist/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Smart refresh is unavailable/)).toBeVisible();
+  });
   it("shows a large draft in full and keeps focus on a reordered track", async () => {
     const restoreLayout = mockVirtualLayout();
     const request = createRequest("tracks");

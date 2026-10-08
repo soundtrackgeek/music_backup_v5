@@ -452,8 +452,9 @@ playlists, consumed by Aurora 0.29.0's search/radio. See
 [local sonic analysis](sonic-analysis.md). Album similarity shipped in 0.179.0
 with visible partial coverage, a choice of
 50%, 80%, or complete analysis, and navigation to matching local albums. Aurora
-0.30.0 also adds album-seeded sonic radio. Sonic paths, a vector index, and
-Discovery integration remain later stages; the suggestions below describe the
+0.30.0 also adds album-seeded sonic radio. Sonic journeys with 2–10 ordered
+stops and connecting tracks shipped in Music Library 0.180.0 and Aurora 0.31.0.
+A vector index and Discovery integration remain later stages; the suggestions below describe the
 broader roadmap.
 
 **How**
