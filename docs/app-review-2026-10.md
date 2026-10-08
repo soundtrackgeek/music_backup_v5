@@ -465,7 +465,10 @@ sound neighbors with Last.fm and genre evidence; **Similar unrated albums** uses
 high-score or loved anchors and excludes every album with a rated track. See all
 can filter sonic connections. Partial coverage and source-album evidence remain
 visible, and saved editions preserve their original recommendations until refresh.
-A vector index remains a later stage; the suggestions below describe the broader roadmap.
+A persistent exact weighted tree index ships in Music Library 0.184.0 and Aurora
+0.32.0, with background rebuilding, current-data validation and full-scale
+comparison against the streamed baseline. See [index and scale proof](sonic-index-performance.md).
+The suggestions below describe the broader roadmap.
 
 **How**
 - Compute a per-track audio embedding locally:

@@ -32,6 +32,7 @@ mod sonic_backup;
 mod sonic_backup_schedule;
 mod sonic_albums;
 mod sonic_journey;
+mod sonic_index;
 #[cfg(test)]
 mod sonic_performance;
 mod soulseek;
@@ -2278,6 +2279,15 @@ pub fn run() {
                 eprintln!("Could not clean legacy completed import staging: {error:#}");
             }
             drop(conn);
+            if let Ok(directory) = sonic::directory(app.handle()) {
+                std::thread::spawn(move || {
+                    if directory.join("music-analysis.sqlite3").is_file() {
+                        if let Err(error) = sonic::results(&directory) {
+                            eprintln!("Could not initialize similarity index generations: {error:#}");
+                        }
+                    }
+                });
+            }
             app.manage(thumbnails::ThumbnailService::new(
                 db::database_path(app.handle())?,
                 app.path().app_data_dir()?.join("thumbs"),

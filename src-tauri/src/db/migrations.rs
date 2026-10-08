@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 61;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 62;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -155,7 +155,21 @@ const MIGRATIONS: &[Migration] = &[
         up: rebuild_loose_identity_keys,
         verify: None,
     },
+    Migration {
+        version: 62,
+        description: "sonic index generations and catalog change journal",
+        up: sonic_index_generation,
+        verify: Some(phase_sixty_two_schema_exists),
+    },
 ];
+
+fn sonic_index_generation(conn: &Connection) -> Result<()> {
+    crate::sonic_index::install_catalog(conn).map_err(anyhow::Error::msg)
+}
+fn phase_sixty_two_schema_exists(conn: &Connection) -> Result<bool> {
+    let count:i64=conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('sonic_index_identity','sonic_index_changes','sonic_index_prune','sonic_index_track_insert','sonic_index_track_update','sonic_index_track_delete')",[],|r|r.get(0))?;
+    Ok(count == 6 && phase_sixty_schema_exists(conn)?)
+}
 
 fn chart_album_match_state(conn: &Connection) -> Result<()> {
     super::ensure_chart_album_match_state_schema(conn)?;
@@ -2325,7 +2339,11 @@ mod tests {
 
         migrate(&conn).expect("upgrade from schema 43");
 
-        for table in ["daily_edition_snapshots", "album_reviews", "library_updates"] {
+        for table in [
+            "daily_edition_snapshots",
+            "album_reviews",
+            "library_updates",
+        ] {
             assert!(
                 schema_table_exists(&conn, table).unwrap(),
                 "{table} must be recreated by the schema 45-54 steps"

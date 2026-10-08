@@ -159,6 +159,7 @@ pub(crate) fn results(dir: &Path) -> Result<Connection> {
       CREATE TABLE IF NOT EXISTS sonic_tracks(track_key TEXT PRIMARY KEY,directory TEXT NOT NULL,filename TEXT NOT NULL,audio_hash TEXT NOT NULL,profile TEXT NOT NULL,size INTEGER NOT NULL,modified TEXT NOT NULL,analyzed_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS sonic_tracks_path ON sonic_tracks(directory,filename);
       PRAGMA user_version=1;")?;
+    crate::sonic_index::install_analysis(&c).map_err(anyhow::Error::msg)?;
     Ok(c)
 }
 
@@ -824,12 +825,15 @@ fn matches_with_catalog(
     limit: usize,
 ) -> Result<SonicMatches> {
     let has_analysis = attach(&c, dir)?;
+    matches_query(c, has_analysis, key, limit, true)
+}
+pub(crate) fn matches_query(c: &Connection, has_analysis: bool, key: &str, limit: usize, indexed: bool) -> Result<SonicMatches> {
+    let source=c;
     let transaction = c.unchecked_transaction()?;
     let c = &*transaction;
-    let total = c.query_row(
+    let total = crate::sonic_index::count(c,"mp3-total",
         "SELECT count(*) FROM tracks WHERE lower(filename) LIKE '%.mp3'",
-        [],
-        |r| r.get(0),
+        indexed,
     )?;
     let mut response = SonicMatches {
         analyzed: 0,
@@ -854,9 +858,16 @@ fn matches_with_catalog(
     };
     let metric = Metric::new(&seed).context("Incompatible analysis profile")?;
     response.seed_ready = true;
+    let candidates = indexed.then(|| crate::sonic_index::candidates(c, &seed, std::slice::from_ref(&seed.features), false, (limit*16).max(1024), None, &Default::default())).flatten();
     // Stream only identity and analysis; hydrate display metadata for the winners.
-    let mut q=c.prepare("SELECT t.id,t.file_path,t.filename,a.features,s.size,s.modified FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'")?;
-    let rows = q.query_map([PROFILE], |r| {
+    let selection = candidates.as_ref().map(|_| " AND s.track_key IN (SELECT value FROM json_each(?2))").unwrap_or("");
+    let mut q=c.prepare(&format!("SELECT t.id,t.file_path,t.filename,a.features,s.size,s.modified FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'{selection}"))?;
+    let mut values=vec![rusqlite::types::Value::Text(PROFILE.into())];
+    if let Some(candidates)=&candidates {
+        values.push(rusqlite::types::Value::Text(candidates.keys.clone()));
+        response.analyzed=crate::sonic_index::count(c,"tracks-unbanned","SELECT COUNT(*) FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'",true)?;
+    }
+    let rows = q.query_map(rusqlite::params_from_iter(values), |r| {
         Ok((
             r.get::<_, i64>(0)?,
             r.get::<_, String>(1)?,
@@ -881,7 +892,7 @@ fn matches_with_catalog(
     let mut ranked = Vec::new();
     for result in rows {
         let (id, directory, filename, features, size, modified) = result?;
-        response.analyzed += 1;
+        if candidates.is_none() { response.analyzed += 1; }
         let candidate_key = track_key(&directory, &filename);
         if candidate_key == key {
             continue;
@@ -913,6 +924,11 @@ fn matches_with_catalog(
         let mut track = metadata.query_row([candidate.id], row)?;
         track.distance = Some(candidate.distance);
         response.tracks.push(track);
+    }
+    if candidates.is_some() && response.tracks.len()<limit {
+        crate::sonic_index::fallback();
+        drop(metadata); drop(q); drop(transaction);
+        return matches_query(source, has_analysis, key, limit, false);
     }
     Ok(response)
 }
@@ -1621,5 +1637,19 @@ mod tests {
         );
         assert_eq!(result["failedCount"], 0);
         assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+    }
+    #[test]
+    fn indexed_track_matches_rebind_ids_and_exclude_bans_and_stale_files() {
+        let (dir,c,_)=crate::sonic_index::tests::fixture();
+        let key=track_key(&dir.path().to_string_lossy(),"00000.mp3");
+        let same=|| {
+            let exact=matches_query(&c,true,&key,50,false).unwrap();
+            let indexed=matches_query(&c,true,&key,50,true).unwrap();
+            assert_eq!(serde_json::to_value(exact).unwrap(),serde_json::to_value(indexed).unwrap());
+        };
+        same();c.execute("UPDATE tracks SET id=id+10000 WHERE id>100",[]).unwrap();
+        c.execute("UPDATE tracks SET love='B' WHERE filename='00001.mp3'",[]).unwrap();
+        c.execute("DELETE FROM tracks WHERE filename='00002.mp3'",[]).unwrap();
+        fs::write(dir.path().join("00003.mp3"),[9;257]).unwrap();same();
     }
 }

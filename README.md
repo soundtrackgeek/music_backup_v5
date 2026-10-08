@@ -1,5 +1,14 @@
 # Music Library
 
+Music Library 0.184.0 uses a persistent sonic similarity index shared by both apps.
+The current 23-dimensional weighted metric keeps exact nearest-neighbor ranking.
+Recent analysis and relevant catalog edits are searched alongside the saved tree;
+background rebuilds and a full-scan fallback keep partial libraries usable.
+Open Music Library 0.184.0 once to initialize existing analysis stores, then use similarity as usual.
+The local `sonic-index.bin` cache is disposable and is rebuilt on receiving PCs;
+it is not included in portable analysis backups. See the
+[index and scale proof](docs/sonic-index-performance.md) for timings and reproduction.
+
 Music Library 0.182.0 adds configurable **Automatic backups** under
 **Tools → Audio analysis → Backup and cross-PC reuse**. Enable them, set
 **Backup every (hours)** (default 6) and **Backups to keep** (default 7), then save.

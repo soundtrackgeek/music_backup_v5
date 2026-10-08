@@ -262,6 +262,12 @@ performs upload; a locally saved backup still does not confirm cloud upload.
 
 ## Development and licensing
 
+Similarity requests in Music Library 0.184.0 and Aurora 0.32.0 use a local
+persistent index of completed vectors and album means. The first request builds
+it in the background; recent checkpoints remain usable through a bounded delta
+and full-scan fallback. Portable backups omit this disposable cache and receiving
+PCs rebuild it. See [index operation and scale proof](sonic-index-performance.md).
+
 `npm run sonic:prepare` builds the standalone `Tools/sonic-analyzer` executable
 and copies a target-suffixed binary into `src-tauri/binaries` for Tauri bundling.
 Universal macOS builds prepare both Apple Silicon and Intel sidecars as well as

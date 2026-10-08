@@ -9,13 +9,22 @@ fn sonic_performance_proof() {
     let config: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("seeds.json")).unwrap()).unwrap();
     let stops: Vec<String> = serde_json::from_value(config["stops"].clone()).unwrap();
+    let indexed = std::env::var("MUSIC_SONIC_BENCH_MODE").as_deref() != Ok("exact");
     let mut records = Vec::new();
-    for iteration in 0..3 {
-        for task in ["tracks", "albums", "journey"] {
+    for iteration in 0..5 {
+        for task in ["tracks", "albums", "discovery", "journey"] {
             let start = Instant::now();
             let value = if task == "tracks" {
-                serde_json::to_value(crate::sonic::matches_at(&dir, &stops[0], 50).unwrap())
-                    .unwrap()
+                let c = Connection::open_with_flags(
+                    dir.join("music-library.sqlite3"),
+                    OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .unwrap();
+                assert!(crate::sonic::attach(&c, &dir).unwrap());
+                serde_json::to_value(
+                    crate::sonic::matches_query(&c, true, &stops[0], 50, indexed).unwrap(),
+                )
+                .unwrap()
             } else {
                 let c = Connection::open_with_flags(
                     dir.join("music-library.sqlite3"),
@@ -26,7 +35,7 @@ fn sonic_performance_proof() {
                 c.execute_batch("PRAGMA query_only=ON").unwrap();
                 if task == "albums" {
                     serde_json::to_value(
-                        crate::sonic_albums::query(
+                        crate::sonic_albums::query_indexed(
                             &c,
                             true,
                             &crate::sonic_albums::SonicAlbumRequest {
@@ -35,13 +44,29 @@ fn sonic_performance_proof() {
                                 minimum_coverage: 50,
                             },
                             &HashMap::new(),
+                            indexed,
                         )
                         .unwrap(),
                     )
                     .unwrap()
+                } else if task == "discovery" {
+                    let seed = config["album"].as_str().unwrap().to_string();
+                    let eligible = c
+                        .prepare("SELECT DISTINCT album_id FROM tracks WHERE album_id!=?1")
+                        .unwrap()
+                        .query_map([&seed], |r| r.get::<_, String>(0))
+                        .unwrap()
+                        .collect::<rusqlite::Result<std::collections::HashSet<_>>>()
+                        .unwrap();
+                    let result =
+                        crate::sonic_albums::discovery_indexed(&c, &[seed], &eligible, indexed)
+                            .unwrap();
+                    let mut ready = result.ready_seeds.into_iter().collect::<Vec<_>>();
+                    ready.sort();
+                    serde_json::json!({"readySeeds":ready,"albums":result.albums})
                 } else {
                     serde_json::to_value(
-                        crate::sonic_journey::query(
+                        crate::sonic_journey::query_indexed(
                             &c,
                             true,
                             &crate::sonic_journey::JourneyRequest {
@@ -51,6 +76,7 @@ fn sonic_performance_proof() {
                                 same_genre: false,
                             },
                             &HashMap::new(),
+                            indexed,
                         )
                         .unwrap(),
                     )
@@ -64,6 +90,13 @@ fn sonic_performance_proof() {
                     value["tracks"].as_array().unwrap().len(),
                     stops.len() + (stops.len() - 1) * 3
                 );
+            } else if task == "discovery" {
+                assert!(!value["readySeeds"].as_array().unwrap().is_empty());
+                assert!(value["albums"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .any(|v| !v.as_array().unwrap().is_empty()));
             } else {
                 assert_eq!(value["seedReady"], true);
                 assert!(!value[if task == "albums" { "albums" } else { "tracks" }]
@@ -81,7 +114,7 @@ fn sonic_performance_proof() {
     let output = std::env::var_os("MUSIC_SONIC_BENCH_OUTPUT").unwrap();
     std::fs::write(
         output,
-        serde_json::to_vec_pretty(&serde_json::json!({"profile":PROFILE,"records":records}))
+        serde_json::to_vec_pretty(&serde_json::json!({"profile":PROFILE,"indexed":indexed,"indexStats":crate::sonic_index::proof_stats(),"records":records}))
             .unwrap(),
     )
     .unwrap();
