@@ -6,6 +6,10 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
+	sonicBackupFolder: () => __TAURI_INVOKE<string | null>("sonic_backup_folder"),
+	sonicBackupExport: (folder: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_export", { folder }),
+	sonicBackupInspect: (path: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_inspect", { path }),
+	sonicBackupRestore: (path: string, sha256: string) => __TAURI_INVOKE<AnalysisRestore>("sonic_backup_restore", { path, sha256 }),
 	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
 	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
 	sonicJourney: (request: JourneyRequest) => __TAURI_INVOKE<JourneyResponse>("sonic_journey", { request }),
@@ -645,8 +649,25 @@ export type AlbumReview = {
 	message: string,
 };
 
+export type AnalysisBackup = {
+	path: string,
+	createdAt: string,
+	archiveVersion: number,
+	profile: string,
+	dimensions: number,
+	audioCount: number,
+	databaseBytes: number,
+	sha256: string,
+};
+
+export type AnalysisRestore = {
+	added: number,
+	alreadyPresent: number,
+	safetyBackup: string | null,
+};
+
 export type AnalyzeRequest = {
-	/**  all, favorites, or album. Work is opt-in and checkpointed per file. */
+	/**  all, favorites, album, or cache-only reuse. Checkpointed per local file. */
 	scope: string,
 	albumId: string | null,
 	batchId: string | null,

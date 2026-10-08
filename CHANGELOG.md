@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.181.0] - 2026-10-08
+
+### Added
+- Audio analysis backup and cross-PC reuse in Tools, defaulting to OneDrive's `_musicbackup/sonic-analysis` folder. Unique versioned archives contain completed compatible features and weights, with a consistent SQLite snapshot, checksum and strict schema/profile validation.
+- Reviewed, atomic cache merges preserve existing analysis, reject conflicting fingerprints or weights, and create a local feature safety backup. Foreign paths, catalog IDs, settings and jobs are never imported.
+- A scheduled, resumable Verify reused analysis scan fingerprints current local MP3s without decoding unmatched files. Completed matches are immediately available to Aurora's search, similarity, radio and journeys. Normal analysis also reuses restored features.
+- Verification has a separate Activity Center entry and shares a writer slot with extraction, so existing analysis can stay paused without blocking verification. Coverage follows the active batch after an older job resumes.
+
+### Fixed
+- Analysis writers reject a database from a future schema version instead of resetting its version marker. Fingerprinting can stop promptly when analysis is paused or cancelled.
+
 ## [0.180.1] - 2026-10-08
 
 ### Changed

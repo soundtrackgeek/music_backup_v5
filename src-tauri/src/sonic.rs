@@ -105,7 +105,7 @@ fn schedule(w: &Connection) -> Result<SonicSchedule> {
 #[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalyzeRequest {
-    /// all, favorites, or album. Work is opt-in and checkpointed per file.
+    /// all, favorites, album, or cache-only reuse. Checkpointed per local file.
     pub scope: String,
     pub album_id: Option<String>,
     pub batch_id: Option<String>,
@@ -139,16 +139,20 @@ pub struct SonicMatches {
     pub tracks: Vec<SonicTrack>,
 }
 
-fn directory(app: &AppHandle) -> Result<PathBuf> {
+pub(crate) fn directory(app: &AppHandle) -> Result<PathBuf> {
     Ok(crate::db::database_path(app)?
         .parent()
         .context("Catalog has no directory")?
         .to_path_buf())
 }
 
-fn results(dir: &Path) -> Result<Connection> {
+pub(crate) fn results(dir: &Path) -> Result<Connection> {
     let c = Connection::open(dir.join("music-analysis.sqlite3"))?;
     c.busy_timeout(Duration::from_secs(5))?;
+    let version: i32 = c.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    if version > 1 {
+        bail!("This analysis database needs a newer Music Library version");
+    }
     c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       CREATE TABLE IF NOT EXISTS sonic_profiles(profile TEXT PRIMARY KEY, weights TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sonic_audio(audio_hash TEXT NOT NULL,profile TEXT NOT NULL,features TEXT NOT NULL,PRIMARY KEY(audio_hash,profile));
@@ -179,7 +183,7 @@ fn catalog(dir: &Path) -> Result<Connection> {
     Ok(c)
 }
 
-fn lock(dir: &Path) -> Result<File> {
+pub(crate) fn lock(dir: &Path) -> Result<File> {
     let f = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -217,7 +221,11 @@ fn signature(path: &Path) -> Result<(u64, String)> {
     Ok(file_signature(path)?)
 }
 
+#[cfg(test)]
 pub(crate) fn audio_hash(path: &Path) -> Result<String> {
+    audio_hash_with_stop(path, &|| false)
+}
+fn audio_hash_with_stop(path: &Path, stop: &impl Fn() -> bool) -> Result<String> {
     let mut file = File::open(path)?;
     let length = file.metadata()?.len();
     let (start, end) = audio_range(&mut file, length)?;
@@ -225,7 +233,14 @@ pub(crate) fn audio_hash(path: &Path) -> Result<String> {
     let mut limited = file.take(end - start);
     let mut hash = Sha256::new();
     let mut buffer = [0; 65536];
+    let mut checked = Instant::now() - Duration::from_millis(100);
     loop {
+        if checked.elapsed() >= Duration::from_millis(100) {
+            if stop() {
+                bail!("Audio fingerprint verification stopped");
+            }
+            checked = Instant::now();
+        }
         let n = limited.read(&mut buffer)?;
         if n == 0 {
             break;
@@ -320,6 +335,15 @@ fn analyze_one(
     filename: &str,
     stop: &impl Fn() -> bool,
 ) -> Result<()> {
+    analyze_one_mode(dir, directory, filename, stop, false)
+}
+fn analyze_one_mode(
+    dir: &Path,
+    directory: &str,
+    filename: &str,
+    stop: &impl Fn() -> bool,
+    reuse_only: bool,
+) -> Result<()> {
     // Re-resolve each checkpoint against the current catalog, not an old numeric ID.
     let c = catalog(dir)?;
     let exists: bool = c.query_row(
@@ -344,7 +368,7 @@ fn analyze_one(
     if saved.as_ref() == Some(&before) {
         return Ok(());
     }
-    let hash = audio_hash(&path)?;
+    let hash = audio_hash_with_stop(&path, stop)?;
     let existing: Option<String> = store
         .query_row(
             "SELECT features FROM sonic_audio WHERE audio_hash=?1 AND profile=?2",
@@ -353,8 +377,12 @@ fn analyze_one(
         )
         .optional()?;
     if existing.is_none() {
+        // A reuse scan never decodes unmatched files or publishes foreign paths.
+        if reuse_only {
+            return Ok(());
+        }
         let analysis = extract(&path, stop)?;
-        if before != signature(&path)? || hash != audio_hash(&path)? {
+        if before != signature(&path)? || hash != audio_hash_with_stop(&path, stop)? {
             bail!("The audio changed during analysis; retry the track");
         }
         let weights = serde_json::to_string(&analysis.weights)?;
@@ -441,6 +469,25 @@ fn run_at(
     hour: &impl Fn() -> u32,
 ) -> Result<serde_json::Value> {
     let _lock = lock(dir)?;
+    if request.scope == "reuse" {
+        let cache = Connection::open_with_flags(
+            dir.join("music-analysis.sqlite3"),
+            OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .context(
+            "Restore an analysis backup or analyze some music before verifying reused results",
+        )?;
+        let has_features: bool = cache.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sonic_audio WHERE profile=?1)",
+            [PROFILE],
+            |r| r.get(0),
+        )?;
+        if !has_features {
+            bail!(
+                "Restore an analysis backup or analyze some music before verifying reused results"
+            );
+        }
+    }
     let batch = request
         .batch_id
         .context("Analysis batch identity missing")?;
@@ -457,7 +504,7 @@ fn run_at(
     if !prepared {
         let c = catalog(dir)?;
         let filter = match request.scope.as_str() {
-            "all" => "1=1",
+            "all" | "reuse" => "1=1",
             "favorites" => "(love='L' OR normalized_rating>=80)",
             "album" => "album_id=?1",
             _ => bail!("Unknown analysis scope"),
@@ -518,12 +565,17 @@ fn run_at(
             std::thread::sleep(Duration::from_secs(1));
             continue;
         }
+        let action = if request.scope == "reuse" {
+            "Checking reusable analysis"
+        } else {
+            "Analyzing"
+        };
         if waiting || reported.elapsed() >= Duration::from_secs(2) {
-            report(completed, total, &format!("Analyzing {filename}"));
+            report(completed, total, &format!("{action} {filename}"));
             reported = Instant::now();
         }
         waiting = false;
-        let outcome = analyze_one(dir, &directory, &filename, stop);
+        let outcome = analyze_one_mode(dir, &directory, &filename, stop, request.scope == "reuse");
         if stop() {
             bail!("Analysis stopped at a durable checkpoint");
         }
@@ -537,7 +589,7 @@ fn run_at(
         )?;
         completed += 1;
         if reported.elapsed() >= Duration::from_secs(2) || completed == total {
-            report(completed, total, &format!("Analyzing {filename}"));
+            report(completed, total, &format!("{action} {filename}"));
             reported = Instant::now();
         }
     }
@@ -584,6 +636,20 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SonicTrack> {
 }
 const SELECT:&str="t.id,t.title,COALESCE(NULLIF(t.display_artist,''),t.album_artist_display),t.album,t.album_id,t.canonical_genre,t.file_path,t.filename,t.normalized_rating,t.time_seconds,t.love,t.album_artist_display";
 
+fn active_sonic_batch(dir: &Path) -> Result<Option<String>> {
+    let path = dir.join("jobs.sqlite3");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let c = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    c.busy_timeout(Duration::from_secs(5))?;
+    let payload: Option<String> = c.query_row("SELECT payload_json FROM jobs WHERE kind IN ('sonicAnalysis','sonicReuse') AND state IN ('running','pausing','cancelling','queued','paused') ORDER BY CASE WHEN state IN ('running','pausing','cancelling') THEN 0 WHEN state='queued' THEN 1 ELSE 2 END,id DESC LIMIT 1", [], |r| r.get(0)).optional()?;
+    Ok(payload
+        .map(|json| serde_json::from_str::<AnalyzeRequest>(&json))
+        .transpose()?
+        .and_then(|r| r.batch_id))
+}
+
 pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
     let c = catalog(dir)?;
     let total = c.query_row(
@@ -597,8 +663,9 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         0
     };
     let w = work(dir)?;
-    let pending=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1) AND state='pending'",[],|r|r.get(0))?;
-    let failed=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1) AND state='failed'",[],|r|r.get(0))?;
+    let batch = active_sonic_batch(dir)?;
+    let pending=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=COALESCE(?1,(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1)) AND state='pending'",[&batch],|r|r.get(0))?;
+    let failed=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=COALESCE(?1,(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1)) AND state='failed'",[&batch],|r|r.get(0))?;
     Ok(SonicStatus {
         analyzed,
         total,
@@ -896,7 +963,10 @@ pub async fn sonic_matches(
 #[tauri::command]
 #[specta::specta]
 pub async fn sonic_analyze(app: AppHandle, mut request: AnalyzeRequest) -> Result<i64, String> {
-    if !matches!(request.scope.as_str(), "all" | "favorites" | "album") {
+    if !matches!(
+        request.scope.as_str(),
+        "all" | "favorites" | "album" | "reuse"
+    ) {
         return Err("Unknown analysis scope".into());
     }
     request.batch_id = Some(format!(
@@ -904,9 +974,14 @@ pub async fn sonic_analyze(app: AppHandle, mut request: AnalyzeRequest) -> Resul
         std::process::id(),
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     ));
+    let kind = if request.scope == "reuse" {
+        "sonicReuse"
+    } else {
+        "sonicAnalysis"
+    };
     crate::jobs::submit(
         &app,
-        "sonicAnalysis",
+        kind,
         serde_json::to_value(request).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
@@ -1283,6 +1358,164 @@ mod tests {
         let w = work(dir.path()).unwrap();
         w.execute_batch("INSERT INTO sonic_batches VALUES('old',1);INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('old','old','x','x');INSERT INTO sonic_batches VALUES('new',1);").unwrap();
         assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+    }
+
+    #[test]
+    fn restored_features_bind_only_to_hash_verified_local_paths_with_new_catalog_ids() {
+        let source = fixture();
+        let s = results(source.path()).unwrap();
+        // Use genuine payload identities; the archive never contains path observations.
+        s.execute("DELETE FROM sonic_audio", []).unwrap();
+        s.execute("DELETE FROM sonic_tracks", []).unwrap();
+        for i in 1..=3 {
+            let hash = audio_hash(&source.path().join(format!("{i}.mp3"))).unwrap();
+            s.execute(
+                "INSERT OR IGNORE INTO sonic_audio VALUES(?1,?2,?3)",
+                params![
+                    hash,
+                    PROFILE,
+                    serde_json::to_string(&vec![i as f32; DIMENSIONS]).unwrap()
+                ],
+            )
+            .unwrap();
+        }
+        drop(s);
+        let archive = crate::sonic_backup::export_at(
+            source.path(),
+            &source.path().join("OneDrive/sonic-analysis"),
+        )
+        .unwrap();
+        let target = fixture();
+        let s = results(target.path()).unwrap();
+        s.execute("DELETE FROM sonic_tracks", []).unwrap();
+        s.execute("DELETE FROM sonic_audio", []).unwrap();
+        s.execute("DELETE FROM sonic_profiles", []).unwrap();
+        drop(s);
+        let c = Connection::open(target.path().join("music-library.sqlite3")).unwrap();
+        c.execute("UPDATE tracks SET id=id+1000", []).unwrap();
+        drop(c);
+        // Tags and timestamps differ on the receiving computer; payload is the identity.
+        let mut tagged = b"ID3\x04\0\0\0\0\0\x03tag".to_vec();
+        tagged.extend_from_slice(&[255; 256]);
+        fs::write(target.path().join("1.mp3"), tagged).unwrap();
+        let imported = crate::sonic_backup::restore_at(
+            target.path(),
+            Path::new(&archive.path),
+            &archive.sha256,
+        )
+        .unwrap();
+        assert!(imported.added > 0);
+        assert!(seeds_at(target.path()).unwrap().is_empty());
+        analyze_one_mode(
+            target.path(),
+            &target.path().to_string_lossy(),
+            "1.mp3",
+            &|| false,
+            true,
+        )
+        .unwrap();
+        let key = track_key(&target.path().to_string_lossy(), "1.mp3");
+        assert!(matches_at(target.path(), &key, 10).unwrap().seed_ready);
+        assert_eq!(seeds_at(target.path()).unwrap()[0].track_id, 1001);
+        // Changed audio has no reusable result, and a reuse scan never invokes extraction.
+        fs::write(target.path().join("2.mp3"), [17; 256]).unwrap();
+        analyze_one_mode(
+            target.path(),
+            &target.path().to_string_lossy(),
+            "2.mp3",
+            &|| false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(seeds_at(target.path()).unwrap().len(), 1);
+        assert!(audio_hash_with_stop(&target.path().join("1.mp3"), &|| true).is_err());
+        let w = work(target.path()).unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..SonicSchedule::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        let result = run_at(
+            target.path(),
+            AnalyzeRequest {
+                scope: "reuse".into(),
+                album_id: None,
+                batch_id: Some("reuse-test".into()),
+            },
+            &|| false,
+            &|_, _, _| {},
+            &|| None,
+            &|| 12,
+        )
+        .unwrap();
+        assert_eq!(result["total"], 3);
+        assert_eq!(result["failedCount"], 0);
+        assert_eq!(seeds_at(target.path()).unwrap().len(), 2);
+    }
+    #[test]
+    fn future_analysis_schema_is_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("music-analysis.sqlite3");
+        let c = Connection::open(&path).unwrap();
+        c.execute_batch("PRAGMA user_version=2; CREATE TABLE future(value); INSERT INTO future VALUES('preserve');").unwrap();
+        assert!(results(dir.path()).is_err());
+        assert_eq!(
+            c.pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))
+                .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn coverage_reports_the_active_batch_after_resuming_older_analysis() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('old',1); INSERT INTO sonic_items VALUES('old','old','x','x','pending',NULL); INSERT INTO sonic_batches VALUES('new',1); INSERT INTO sonic_items VALUES('new','new','x','x','done',NULL);").unwrap();
+        assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+        let j = Connection::open(dir.path().join("jobs.sqlite3")).unwrap();
+        crate::jobs::ensure_schema(&j).unwrap();
+        crate::jobs::enqueue(
+            &j,
+            "sonicAnalysis",
+            "Audio analysis",
+            &serde_json::to_string(&AnalyzeRequest {
+                scope: "all".into(),
+                album_id: None,
+                batch_id: Some("old".into()),
+            })
+            .unwrap(),
+            true,
+            true,
+            true,
+            None,
+        )
+        .unwrap();
+        j.execute("UPDATE jobs SET state='running'", []).unwrap();
+        assert_eq!(status_at(dir.path()).unwrap().pending, 1);
+    }
+
+    #[test]
+    fn reuse_without_a_cache_does_not_prepare_a_million_file_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "reuse".into(),
+                album_id: None,
+                batch_id: Some("empty-cache".into()),
+            },
+            &|| false,
+            &|_, _, _| {},
+            &|| None,
+            &|| 12,
+        );
+        assert!(result.is_err());
+        assert!(!dir.path().join("sonic-work.sqlite3").exists());
+        assert!(!dir.path().join("music-analysis.sqlite3").exists());
     }
     #[test]
     fn idle_wait_and_resume_keep_each_completed_checkpoint() {

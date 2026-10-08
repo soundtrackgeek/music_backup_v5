@@ -22,9 +22,9 @@ const seeds: SonicTrack[] = [
 export async function getSonicStatus(): Promise<SonicStatus> { return isTauriRuntime() ? commands.sonicStatus() : { analyzed: previewReady ? 3 : 0, pending: 0, failed: 0, total: 1096288, profile: "Browser preview", idleSupported: true, schedule: previewSchedule }; }
 export async function configureSonicSchedule(schedule: SonicSchedule): Promise<SonicStatus> { if (isTauriRuntime()) return commands.sonicConfigure(schedule); previewSchedule = schedule; return getSonicStatus(); }
 export async function getSonicSeeds(): Promise<SonicTrack[]> { return isTauriRuntime() ? commands.sonicSeeds() : previewReady ? seeds : []; }
-export async function startSonicAnalysis(scope: "all" | "favorites" | "album", albumId: string | null): Promise<number> {
+export async function startSonicAnalysis(scope: "all" | "favorites" | "album" | "reuse", albumId: string | null): Promise<number> {
   if (isTauriRuntime()) return commands.sonicAnalyze({ scope, albumId, batchId: null });
-  previewReady = true; previewActivity("sonicAnalysis", "Audio analysis", "completed", 3, 3, true); return 1;
+  previewReady = true; previewActivity(scope === "reuse" ? "sonicReuse" : "sonicAnalysis", scope === "reuse" ? "Verify reused analysis" : "Audio analysis", "completed", 3, 3, true); return 1;
 }
 export async function findSonicMatches(trackKey: string): Promise<SonicMatches> { return isTauriRuntime() ? commands.sonicMatches(trackKey, 30) : { analyzed: 3, total: 1096288, seedReady: true, tracks: seeds.filter(t => t.trackKey !== trackKey) }; }
 export async function saveSonicPlaylist(seedKey: string, name: string): Promise<string> {

@@ -27,6 +27,7 @@ it.each([
   ["all", "Analyze library"],
   ["favorites", "Analyze favorites"],
   ["album", "Analyze this album"],
+  ["reuse", "Verify reused analysis"],
 ] as const)("saves the visible schedule before starting %s analysis", async (scope, button) => {
   const status = { analyzed: 0, total: 100, pending: 0, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: 22, endHour: 8 } };
   const unrestricted = { idleOnly: false, idleMinutes: 5, startHour: null, endHour: null };
@@ -36,6 +37,7 @@ it.each([
   vi.mocked(backend.configureSonicSchedule).mockReturnValue(new Promise(resolve => { finishSave = resolve; }));
   vi.mocked(backend.startSonicAnalysis).mockResolvedValue(1);
   render(<SonicAnalysisPanel albumId={scope === "album" ? "album-a" : undefined} />);
+  if (scope === "reuse") fireEvent.click(screen.getByText("Backup and cross-PC reuse"));
   const idle = await screen.findByLabelText("Only when the computer is idle");
   fireEvent.click(idle);
   fireEvent.click(screen.getByLabelText("Limit to certain hours"));

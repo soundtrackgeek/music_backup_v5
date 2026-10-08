@@ -12,6 +12,7 @@ use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
     sonic,
+    sonic_backup,
     acknowledge_catalog_revision,
     refresh_lastfm_artist_images,
     search_wish_list_musicbrainz,
@@ -192,6 +193,10 @@ macro_rules! specta_commands {
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         sonic::sonic_status,
+        sonic_backup::sonic_backup_folder,
+        sonic_backup::sonic_backup_export,
+        sonic_backup::sonic_backup_inspect,
+        sonic_backup::sonic_backup_restore,
         sonic::sonic_configure,
         sonic::sonic_seeds,
         sonic::sonic_journey,

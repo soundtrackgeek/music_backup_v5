@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library 0.181.0 adds **Tools → Audio analysis → Backup and cross-PC reuse**.
+Backups default to **OneDrive\\_musicbackup\\sonic-analysis**. Save a checksummed
+archive of completed features, merge it on another computer, then run **Verify
+reused analysis** to fingerprint local MP3s without decoding them again. Verified
+tracks become usable in Aurora as the scheduled, resumable scan progresses.
+See [analysis backup and restore](docs/sonic-analysis.md#backup-and-cross-pc-reuse).
+
 Music Library 0.180.1 speeds up sonic matching in large, partially analyzed
 libraries: album coverage starts from analyzed albums, track display metadata
 is loaded only for final matches, and journeys clone only shortlisted candidates.

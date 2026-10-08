@@ -41,6 +41,14 @@ fn encode<T: Serialize>(value: T) -> Result<Value> {
 }
 const HANDLERS: &[Registration] = &[
     registration!(
+        "sonicReuse",
+        "Verify reused analysis",
+        true,
+        true,
+        true,
+        crate::sonic::run
+    ),
+    registration!(
         "sonicAnalysis",
         "Audio analysis",
         true,
@@ -382,7 +390,7 @@ fn run_next(app: &AppHandle) -> Result<bool> {
     };
     // Audio decoding owns only derived storage. A paused, multi-day scan must
     // not prevent imports/restores; it rechecks the current catalog per item.
-    let _catalog = if job.kind == "sonicAnalysis" {
+    let _catalog = if matches!(job.kind.as_str(), "sonicAnalysis" | "sonicReuse") {
         drop(_catalog);
         None
     } else {

@@ -457,6 +457,9 @@ stops and connecting tracks shipped in Music Library 0.180.0 and Aurora 0.31.0.
 The first measured performance pass ships in Music Library 0.180.1 and Aurora
 0.31.1: indexed album coverage over analyzed albums, compact track ranking, and
 bounded journey metadata work. See [the snapshot proof](sonic-performance.md).
+Analysis backup and cross-PC reuse ships in 0.181.0: versioned, checksummed
+archives default to OneDrive's `_musicbackup/sonic-analysis`, merge completed
+features safely, and verify local MP3 fingerprints in a resumable scheduled scan.
 A vector index and Discovery integration remain later stages; the suggestions below describe the
 broader roadmap.
 

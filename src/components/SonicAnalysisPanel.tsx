@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { configureSonicSchedule, findSonicMatches, getSonicSeeds, getSonicStatus, saveSonicPlaylist, startSonicAnalysis, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule } from "../backend/sonic";
 import { listenToActivityJobs } from "../backend/activity";
 import "./SonicAnalysisPanel.css";
+import { SonicBackupPanel } from "./SonicBackupPanel";
 export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
   const [status, setStatus] = useState<SonicStatus | null>(null);
   const [seeds, setSeeds] = useState<SonicTrack[]>([]);
@@ -19,7 +20,7 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
   useEffect(() => {
     live.current = true; let disposed = false; let release: (() => void) | undefined; let last = 0; let previous = "";
     void refresh().catch((e: unknown) => { if (!disposed) setError(String(e)); });
-    void listenToActivityJobs(jobs => { const job = jobs.find(j => j.kind === "sonicAnalysis"); const key = job ? `${job.id}:${job.updatedAt}` : ""; if (!job || key === previous || Date.now() - last < 15000 && job.state === "running") return; previous = key; last = Date.now(); void refresh().catch((e: unknown) => { if (!disposed) setError(String(e)); }); }).then(fn => { if (disposed) fn(); else release = fn; });
+    void listenToActivityJobs(jobs => { const job = jobs.find(j => (j.kind === "sonicAnalysis" || j.kind === "sonicReuse") && j.state === "running") ?? jobs.find(j => j.kind === "sonicAnalysis" || j.kind === "sonicReuse"); const key = job ? `${job.id}:${job.updatedAt}` : ""; if (!job || key === previous || Date.now() - last < 15000 && job.state === "running") return; previous = key; last = Date.now(); void refresh().catch((e: unknown) => { if (!disposed) setError(String(e)); }); }).then(fn => { if (disposed) fn(); else release = fn; });
     return () => { disposed = true; live.current = false; serial.current++; release?.(); };
   }, []);
   function changeSchedule(change: Partial<SonicSchedule>) { dirty.current = true; setSchedule(s => s ? { ...s, ...change } : s); }
@@ -37,9 +38,9 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (live.current) setBusy(false); }
   }
-  async function analyze(scope: "all" | "favorites" | "album") {
+  async function analyze(scope: "all" | "favorites" | "album" | "reuse") {
     setBusy(true); setError(null); setMessage(null);
-    try { if (!await persistSchedule()) return; await startSonicAnalysis(scope, albumId ?? null); if (!live.current) return; setMessage("Analysis queued. Use Activity Center to pause, resume, cancel, or retry."); await refresh(); }
+    try { if (!await persistSchedule()) return; await startSonicAnalysis(scope, albumId ?? null); if (!live.current) return; setMessage(`${scope === "reuse" ? "Verification" : "Analysis"} queued. Use Activity Center to pause, resume, cancel, or retry.`); await refresh(); }
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (live.current) setBusy(false); }
   }
@@ -73,6 +74,7 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
     {matches && <p>Matches among {matches.analyzed.toLocaleString()} analyzed tracks. {matches.seedReady ? "" : "This seed needs analysis."}</p>}
     {matches?.seedReady && !matches.tracks.length && <p>No eligible matches yet. Analyze more music.</p>}
     {matches?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}</span></div>)}
+    {!albumId && <SonicBackupPanel onVerify={() => analyze("reuse")} />}
     {message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}
   </section>;
 }

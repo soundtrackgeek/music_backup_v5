@@ -146,7 +146,7 @@ pub fn claim(conn: &mut Connection) -> Result<Option<Job>> {
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let id = tx
         .query_row(
-            "SELECT id FROM jobs WHERE state='queued' ORDER BY id LIMIT 1",
+            "SELECT id FROM jobs WHERE state='queued' AND (kind NOT IN ('sonicAnalysis','sonicReuse') OR NOT EXISTS(SELECT 1 FROM jobs active WHERE active.kind IN ('sonicAnalysis','sonicReuse') AND active.state IN ('running','pausing','cancelling'))) ORDER BY id LIMIT 1",
             [],
             |r| r.get::<_, i64>(0),
         )
@@ -247,6 +247,25 @@ mod tests {
         assert!(claim(&mut c).unwrap().is_none());
         finish(&c, id, &Ok(serde_json::json!({"done":true}))).unwrap();
         assert!(enqueue(&c, "covers", "Covers", "{}", false, false, true, None).is_ok());
+    }
+    #[test]
+    fn analysis_and_reuse_share_a_writer_slot_but_paused_work_can_be_retained() {
+        let mut c = db();
+        let analysis = enqueue(&c, "sonicAnalysis", "Audio analysis", "{}", true, true, true, None).unwrap();
+        assert_eq!(claim(&mut c).unwrap().unwrap().id, analysis);
+        let reuse = enqueue(&c, "sonicReuse", "Verify reused analysis", "{}", true, true, true, None).unwrap();
+        assert!(claim(&mut c).unwrap().is_none());
+        let covers = enqueue(&c, "covers", "Covers", "{}", false, false, true, None).unwrap();
+        assert_eq!(claim(&mut c).unwrap().unwrap().id, covers);
+        control(&c, analysis, "pause").unwrap();
+        assert!(claim(&mut c).unwrap().is_none());
+        finish(&c, analysis, &Err(anyhow::anyhow!("Paused at checkpoint"))).unwrap();
+        assert_eq!(get(&c, analysis).unwrap().state, "paused");
+        assert_eq!(claim(&mut c).unwrap().unwrap().id, reuse);
+        control(&c, analysis, "resume").unwrap();
+        assert!(claim(&mut c).unwrap().is_none());
+        finish(&c, reuse, &Ok(serde_json::Value::Null)).unwrap();
+        assert_eq!(claim(&mut c).unwrap().unwrap().id, analysis);
     }
     #[test]
     fn restart_recovers_checkpoints_and_requires_review_for_interrupted_writes() {

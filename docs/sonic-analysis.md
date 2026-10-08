@@ -149,10 +149,61 @@ coverage only in albums with analyzed paths, and clones journey metadata only
 when shortlisted. All MP3s in a candidate album still count toward its coverage.
 See [the native performance proof](sonic-performance.md) for measurements and
 repeatable snapshot checks. This
-release does not yet implement an
-approximate nearest-neighbor index, or cross-PC analysis snapshot publication.
-Do not copy a live SQLite/WAL database to another computer; those snapshots need
-a separate coordinated backup/export step.
+release does not yet implement an approximate nearest-neighbor index.
+
+## Backup and cross-PC reuse
+
+Music Library 0.181.0 adds **Tools → Audio analysis → Backup and cross-PC reuse**.
+The default destination is **OneDrive\\_musicbackup\\sonic-analysis**, beside the
+other shared backups. OneDrive's configured Windows root is detected; if it is
+unavailable, or on macOS, choose your synced folder using **Choose backup folder**.
+You can also choose another drive or a share. Each backup has a unique name;
+earlier backups and backups made by another computer are preserved.
+
+1. On the source computer, select **Back up analysis**. The analyzer may remain
+   running: the SQLite backup API pins one read view including committed WAL
+   data. A self-contained `.sonic-backup` file is published only after snapshot
+   validation and checksum calculation. Wait for OneDrive to finish uploading.
+2. On the receiving computer, install Music Library 0.181.0 or newer and make
+   your catalog and MP3s available at the cataloged paths. Download the archive
+   in OneDrive (make it available offline). Choose **Choose backup to restore**
+   and review its date, size and reusable audio count.
+3. Pause any running analysis in Activity Center, then select **Merge this
+   backup**. Restore checks the full archive again, including the reviewed
+   checksum. Existing feature results are preserved, identical results are
+   skipped, and conflicting features/weights abort and roll back the merge.
+   Existing compatible features get a safety archive under the local app-data
+   `backups/sonic-analysis` folder before merging.
+4. Select **Verify reused analysis**. It saves the visible idle/hours settings
+   and scans cataloged MP3s using the same pause/resume/cancel/retry controls as
+   analysis. It fingerprints files and binds matching cached features to the
+   current local path, catalog identity, size and timestamp. Each completed
+   checkpoint immediately supports `sonic:yes`, similarity, radio and journeys
+   in Aurora. Refresh coverage or rerun an Aurora search to see new results.
+
+Verification has its own Activity Center entry, so an extraction job can remain
+paused. The two jobs share one writer slot; resuming extraction while verification
+runs queues it safely until verification finishes. Coverage reports the active
+batch when an older extraction job resumes. Verification refuses an empty cache
+before preparing a large queue.
+
+Archives contain only compatible audio hashes, feature vectors and weights:
+no music, catalog, device paths, numeric IDs, schedule, queues or credentials.
+The format has an explicit archive/schema/profile version, 23 dimensions,
+SHA-256, row/size bounds and integrity checks; unsupported, unsafe, truncated or
+corrupt archives are rejected before merge. Hashing uses the MP3 audio payload,
+so tag-only differences and different catalog IDs/root paths can reuse results.
+Imported paths/timestamps are never trusted as proof of local analysis.
+
+Verification still reads local audio, so a large library can require substantial
+disk/network I/O. It never decodes or analyzes files missing from the restored
+cache. Those remain unanalyzed; use normal favorites/album/library analysis when
+ready. Normal analysis also uses the cache, so an existing paused job can simply
+resume after restore. Cancel leaves merged features and verified checkpoints
+intact. A cloud upload or real second-computer transfer is not confirmed merely
+by successful local export. Use these archives instead of copying live SQLite
+or WAL files. Backup creation is manual; this release does not schedule backups
+or prune older archives automatically.
 
 ## Development and licensing
 
