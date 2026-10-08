@@ -1,5 +1,9 @@
 # Music Library
 
+The ["Sounds like" roadmap item](docs/app-review-2026-10.md#4-sounds-like-similarity---done)
+is complete through Music Library 0.184.0 and Aurora 0.32.0, including the shared
+index and scale benchmarks. See the [sonic guide](docs/sonic-analysis.md) for use.
+
 Music Library 0.184.0 uses a persistent sonic similarity index shared by both apps.
 The current 23-dimensional weighted metric keeps exact nearest-neighbor ranking.
 Recent analysis and relevant catalog edits are searched alongside the saved tree;

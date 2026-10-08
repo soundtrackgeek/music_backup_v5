@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.184.1] - 2026-10-08
+
+### Changed
+- Mark the "Sounds like" similarity review item complete, documenting the shipped implementation and the scope of the real-catalog and synthetic full-scale benchmarks.
+
 ## [0.184.0] - 2026-10-08
 
 ### Added

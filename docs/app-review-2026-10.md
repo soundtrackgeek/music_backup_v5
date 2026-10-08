@@ -444,7 +444,12 @@ Also add a **taste drift** chart (genre share of 4★+ ratings by year). Export 
   - enable tempo-aware and loudness-matched mixtape transitions,
   - optionally write ReplayGain tags for Aurora and Tonehavn.
 
-### 4. "Sounds like" similarity
+### 4. "Sounds like" similarity - DONE
+
+**Completed 2026-10-08 in Music Library 0.184.0 and Aurora 0.32.0.** The scoped
+feature includes track and album similarity, sonic radio, multi-stop journeys,
+Discovery integration, scheduled analysis with pause/resume/cancel, portable
+backups with automatic retention, and the persistent shared similarity index.
 
 **First slice shipped in 0.178.0:** shared local MP3 analysis, idle/time-window
 scheduling, resumable jobs, partial coverage, track similarity and saved
@@ -454,33 +459,31 @@ with visible partial coverage, a choice of
 50%, 80%, or complete analysis, and navigation to matching local albums. Aurora
 0.30.0 also adds album-seeded sonic radio. Sonic journeys with 2–10 ordered
 stops and connecting tracks shipped in Music Library 0.180.0 and Aurora 0.31.0.
-The first measured performance pass ships in Music Library 0.180.1 and Aurora
+The first measured performance pass shipped in Music Library 0.180.1 and Aurora
 0.31.1: indexed album coverage over analyzed albums, compact track ranking, and
 bounded journey metadata work. See [the snapshot proof](sonic-performance.md).
-Analysis backup and cross-PC reuse ships in 0.181.0: versioned, checksummed
+Analysis backup and cross-PC reuse shipped in 0.181.0: versioned, checksummed
 archives default to OneDrive's `_musicbackup/sonic-analysis`, merge completed
 features safely, and verify local MP3 fingerprints in a resumable scheduled scan.
-Discovery integration ships in 0.183.0: Played/Loved recommendations blend verified
+Discovery integration shipped in 0.183.0: Played/Loved recommendations blend verified
 sound neighbors with Last.fm and genre evidence; **Similar unrated albums** uses
 high-score or loved anchors and excludes every album with a rated track. See all
 can filter sonic connections. Partial coverage and source-album evidence remain
 visible, and saved editions preserve their original recommendations until refresh.
-A persistent exact weighted tree index ships in Music Library 0.184.0 and Aurora
+A persistent exact weighted tree index shipped in Music Library 0.184.0 and Aurora
 0.32.0, with background rebuilding, current-data validation and full-scale
 comparison against the streamed baseline. See [index and scale proof](sonic-index-performance.md).
-The suggestions below describe the broader roadmap.
 
-**How**
-- Compute a per-track audio embedding locally:
-  - `bliss-audio` is pure Rust and fits directly. It is **GPL-3.0**, so check that against how you distribute the app.
-  - Alternatively, run Essentia's Discogs-EffNet ONNX model through the `ort` crate.
-- Store vectors in SQLite with `sqlite-vec` (`vec0` virtual table, KNN via `MATCH … ORDER BY distance`).
-- Features this enables:
-  - "More like this track/album" from library items only,
-  - **sonic paths** (a playlist that walks from track A to track B),
-  - "similar albums I haven't rated",
-  - a sonic signal blended into Discovery shelves alongside Last.fm similarity.
-- Run analysis as a resumable background job (Part 1 #6); 1.1M tracks is a multi-day first pass, so prioritize rated and loved albums first.
+**Implemented approach.** A standalone GPL-3.0 Bliss analyzer saves local MP3
+features in SQLite. Both apps reuse the same analysis and exact weighted tree
+index, with background rebuilding and a streamed fallback. Results are usable
+while the rest of the library is still being analyzed.
+
+**Validation.** The real catalog with partial analysis and a synthetic fixture
+with 1.1 million analyzed tracks passed complete-response comparisons against
+the baseline. A separate release-profile benchmark covers 1.1 million vectors.
+These measurements do not represent a completed analysis of all real MP3s;
+measurement scope and reproduction are recorded in the linked scale proof.
 
 ### 5. Audio-based genre and mood suggestions
 
