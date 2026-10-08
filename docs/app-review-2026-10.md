@@ -449,9 +449,12 @@ Also add a **taste drift** chart (genre share of 4★+ ratings by year). Export 
 **First slice shipped in 0.178.0:** shared local MP3 analysis, idle/time-window
 scheduling, resumable jobs, partial coverage, track similarity and saved
 playlists, consumed by Aurora 0.29.0's search/radio. See
-[local sonic analysis](sonic-analysis.md). Album similarity, sonic paths, a
-vector index, and Discovery integration remain later stages; the suggestions
-below describe the broader roadmap.
+[local sonic analysis](sonic-analysis.md). Album similarity shipped in 0.179.0
+with visible partial coverage, a choice of
+50%, 80%, or complete analysis, and navigation to matching local albums. Aurora
+0.30.0 also adds album-seeded sonic radio. Sonic paths, a vector index, and
+Discovery integration remain later stages; the suggestions below describe the
+broader roadmap.
 
 **How**
 - Compute a per-track audio embedding locally:

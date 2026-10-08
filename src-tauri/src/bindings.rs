@@ -195,6 +195,7 @@ fn builder() -> Builder<Wry> {
         sonic::sonic_configure,
         sonic::sonic_seeds,
         sonic::sonic_matches,
+        sonic::sonic_album_matches,
         sonic::sonic_analyze,
         sonic::sonic_save_playlist,
         acknowledge_catalog_revision,

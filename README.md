@@ -7,7 +7,10 @@ batch; Activity Center shows **Analyzing** as soon as its waiting period ends.
 Music Library 0.178.1 fixes universal macOS installer builds by preparing the
 Apple Silicon and Intel audio analyzers alongside the combined universal binary.
 
-Music Library 0.178.0 adds local MP3 **Audio analysis** in Tools and album details.
+Music Library 0.179.0 adds **Sounds like this album** in album details. Find
+similar local albums, choose 50%, 80%, or complete analysis coverage, and open
+matches. Existing per-track analysis is reused; no new full-library scan is needed.
+Local MP3 **Audio analysis** is available in Tools and album details.
 Analyze favorites first, use Windows idle-only scheduling or overnight hours,
 and pause/resume in Activity Center. Results are saved per track, so **Sounds
 like** playlists and Aurora's sonic radio work while analysis is incomplete.

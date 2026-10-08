@@ -766,6 +766,28 @@ pub async fn sonic_analyze(app: AppHandle, mut request: AnalyzeRequest) -> Resul
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+pub async fn sonic_album_matches(
+    app: AppHandle,
+    request: crate::sonic_albums::SonicAlbumRequest,
+) -> Result<crate::sonic_albums::SonicAlbumMatches, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = directory(&app).map_err(|e| e.to_string())?;
+        let c = catalog(&dir).map_err(|e| e.to_string())?;
+        let has_analysis = attach(&c, &dir).map_err(|e| e.to_string())?;
+        crate::sonic_albums::query(
+            &c,
+            has_analysis,
+            &request,
+            &std::collections::HashMap::new(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 pub async fn sonic_save_playlist(
     app: AppHandle,
     seed_key: String,

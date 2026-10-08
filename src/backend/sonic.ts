@@ -1,7 +1,17 @@
 import { commands, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule } from "../bindings";
 import { isTauriRuntime } from "./tauriClient";
 import { previewActivity } from "./activity";
+import { mockRows } from "./webPreview";
 export type { SonicMatches, SonicStatus, SonicTrack, SonicSchedule } from "../bindings";
+export type { SonicAlbum, SonicAlbumMatches } from "../bindings";
+export async function findSonicAlbums(albumId: string, minimumCoverage: number): Promise<import("../bindings").SonicAlbumMatches> {
+  if (isTauriRuntime()) return commands.sonicAlbumMatches({ albumId, minimumCoverage, limit: 20 });
+  const albums = mockRows.filter(row => row.trackId === null).map((row, index) => ({ albumId: row.albumId, title: row.album ?? "Unknown album", albumArtist: row.albumArtistDisplay ?? "Unknown artist", genre: row.canonicalGenre,
+    totalTracks: row.totalTracks ?? 1, analyzedTracks: previewReady ? (index % 2 ? Math.ceil((row.totalTracks ?? 1) * 0.8) : row.totalTracks ?? 1) : 0, distance: 0.12 + index / 10 }));
+  const seed = albums.find(a => a.albumId === albumId) ?? null;
+  const ready = (a: typeof albums[number]) => a.analyzedTracks >= Math.min(3, a.totalTracks) && a.analyzedTracks * 100 >= a.totalTracks * minimumCoverage;
+  return { seed, seedReady: Boolean(seed && ready(seed)), analyzedAlbums: albums.filter(ready).length, albums: seed && ready(seed) ? albums.filter(a => a.albumId !== albumId && ready(a)) : [] };
+}
 let previewReady = false;
 let previewSchedule: SonicSchedule = { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null };
 const seeds: SonicTrack[] = [

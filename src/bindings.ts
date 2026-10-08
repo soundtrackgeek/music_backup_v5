@@ -9,6 +9,7 @@ export const commands = {
 	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
 	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
 	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
+	sonicAlbumMatches: (request: SonicAlbumRequest) => __TAURI_INVOKE<SonicAlbumMatches>("sonic_album_matches", { request }),
 	sonicAnalyze: (request: AnalyzeRequest) => __TAURI_INVOKE<number>("sonic_analyze", { request }),
 	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
@@ -3925,6 +3926,29 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	desiredCount: number,
 	previewCount: number,
 	refreshedAt: string,
+};
+
+export type SonicAlbum = {
+	albumId: string,
+	title: string,
+	albumArtist: string,
+	genre: string | null,
+	totalTracks: number,
+	analyzedTracks: number,
+	distance: number | null,
+};
+
+export type SonicAlbumMatches = {
+	seed: SonicAlbum | null,
+	seedReady: boolean,
+	analyzedAlbums: number,
+	albums: SonicAlbum[],
+};
+
+export type SonicAlbumRequest = {
+	albumId: string,
+	limit: number,
+	minimumCoverage: number,
 };
 
 export type SonicMatches = {

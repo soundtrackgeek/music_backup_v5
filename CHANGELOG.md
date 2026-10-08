@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.179.0] - 2026-10-08
+
+### Added
+- Sounds like this album in album details: find local albums by the mean sound features of their analyzed tracks, choose 50%, 80%, or complete coverage, see partial-analysis counts, and open a matching album.
+- Shared album aggregation and coverage rules preserve current catalog identities and exclude banned, changed, missing, and incompatible track results. Existing MP3 analysis is reused without decoding again.
+
 ## [0.178.2] - 2026-10-07
 
 ### Fixed

@@ -56,6 +56,37 @@ describe saved coverage, rather than scanning every music file for freshness.
 Similarity checks seed and shortlisted candidate file size/time observations
 and excludes missing or changed files until they are reanalyzed.
 
+## Album similarity
+
+In **Albums**, select an album and use **Sounds like this album → Find similar
+albums**. Open a result to inspect it. Music Library 0.179.0 and Aurora 0.30.0
+reuse the existing compatible MP3 features: no reanalysis is needed for this
+feature. Every usable track has equal weight in the album's mean feature vector,
+and the same profile-specific distance matrix ranks albums by that mean.
+
+Choose at least **50%**, **80%**, or **Complete albums only**. Both seed and
+matches must meet the chosen threshold and have at least three usable analyzed
+tracks, or every track for one- and two-track releases. Counts are relative to
+all cataloged MP3 tracks in the album. Banned, missing, changed, malformed, and
+incompatible results do not contribute; results clearly label partial coverage.
+Album IDs keep editions and identically named albums separate, including multi-disc
+albums whose tracks share one catalog album ID. Album Artist supplies the label.
+
+Rollups use a consistent read snapshot of the current catalog and saved results;
+they are rebuilt on each request and become available as checkpoints accumulate.
+Ranking streams one album at a time and retains a bounded shortlist. The seed
+and every contributing file in shortlisted albums are checked for freshness,
+and those album means are recalculated before final ranking. The displayed pool
+count describes albums with enough saved analysis before these freshness checks.
+
+Aurora's Album sidebar adds **More like this album**, with open/play actions and
+**Start album sonic radio** after finding matches. Radio ranks individual tracks
+against the seed album's mean, excludes the seed album's tracks, retains the
+existing rating/genre/Ban filters and diversity limits, and persists the album
+seed and coverage threshold. A running station refreshes its mean when it refills,
+so further analysis of a partial seed is included. It remains anchored to that
+album. Pending Aurora Ban edits also apply to album comparisons.
+
 ## Reuse and reproducibility
 
 Audio identity is SHA-256 over the MP3 payload, excluding leading ID3v2 and
@@ -74,7 +105,7 @@ reported as failures; failed files do not stop the remaining batch.
 
 Nearest-track ranking currently streams analyzed vectors and keeps a bounded
 candidate list. It does not load the million-track catalog into memory. This
-first release does not yet implement album vectors, sonic A-to-B paths, an
+release does not yet implement sonic A-to-B paths, an
 approximate nearest-neighbor index, or cross-PC analysis snapshot publication.
 Do not copy a live SQLite/WAL database to another computer; those snapshots need
 a separate coordinated backup/export step.

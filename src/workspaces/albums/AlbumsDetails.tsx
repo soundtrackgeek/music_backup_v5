@@ -1,4 +1,5 @@
 import { SonicAnalysisPanel } from "../../components/SonicAnalysisPanel";
+import { SonicAlbumPanel } from "../../components/SonicAlbumPanel";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import { AlbumDetailPanel } from "./AlbumPanels";
 import type { AppModel } from "../../app/useAppController";
@@ -15,6 +16,7 @@ export function AlbumsDetails({
     | "albumExportResult"
     | "runAlbumExport"
     | "settings"
+    | "openTimelineAlbum"
   >;
 }) {
   const {
@@ -26,10 +28,12 @@ export function AlbumsDetails({
     albumExportResult,
     runAlbumExport,
     settings,
+    openTimelineAlbum,
   } = model;
   return (
     <TransitionRegion>
       {selectedAlbum && <SonicAnalysisPanel key={selectedAlbum.albumId} albumId={selectedAlbum.albumId} />}
+      {selectedAlbum && <SonicAlbumPanel key={`sonic-album:${selectedAlbum.albumId}`} albumId={selectedAlbum.albumId} onOpenAlbum={openTimelineAlbum} />}
       <AlbumDetailPanel
         album={selectedAlbum}
         tracks={albumTracksResponse}
