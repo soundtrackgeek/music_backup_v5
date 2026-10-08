@@ -496,6 +496,8 @@ pub enum DiscoveryRecommendationMode {
     Played,
     #[serde(rename = "loved")]
     Loved,
+    #[serde(rename = "sonic")]
+    Sonic,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

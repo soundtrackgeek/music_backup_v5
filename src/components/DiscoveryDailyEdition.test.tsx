@@ -172,6 +172,8 @@ const edition: DiscoveryDailyEditionData = {
     ],
     matchingCount: 1,
     lastfmLinkedCount: 1,
+    sonicLinkedCount: 0,
+    sonicNote: "",
     stories: [
       {
         albumId: "album-recommendation",
@@ -184,6 +186,7 @@ const edition: DiscoveryDailyEditionData = {
         ratingCompleteness: 0.2,
         coverPath: null,
         reason: "Similar artist",
+        sonicDistance: null,
         anchorAlbumId: "album-anchor",
         anchorAlbum: "Anchor Album",
         anchorArtist: "Anchor Artist",
@@ -246,6 +249,61 @@ function explorerResponse(
 }
 
 describe("DiscoveryDailyEdition", () => {
+  it("opens sonic recommendations, keeps their evidence, and filters the explorer", async () => {
+    const props = {
+      isLoading: false, isAnniversaryLoading: false, isChartLoading: false,
+      isDeepCutLoading: false, isCompletionLoading: false, isRecommendationLoading: false,
+      onAnniversaryYearsChange: vi.fn(), onChartSnapshotChange: vi.fn(),
+      onDeepCutSnapshotChange: vi.fn(), onCompletionSnapshotChange: vi.fn(),
+      onRecommendationSnapshotChange: vi.fn(), onOpenAlbum: vi.fn(),
+      onOpenArtist: vi.fn(), onOpenTrack: vi.fn(),
+      onLoadExplorer: vi.fn(async (request: DiscoveryShelfExplorerRequest) => explorerResponse(request)),
+    };
+    const view = render(<DiscoveryDailyEdition edition={edition} {...props} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Similar unrated albums" }));
+    expect(props.onRecommendationSnapshotChange).toHaveBeenLastCalledWith({ mode: "sonic" });
+    const soundEdition: DiscoveryDailyEditionData = {
+      ...edition,
+      recommendationSnapshot: {
+        ...edition.recommendationSnapshot, mode: "sonic", sonicLinkedCount: 1,
+        sonicNote: "1 of 1 anchors have current sound analysis · at least 50% MP3 coverage per album.",
+        evidence: "Similar albums with no rated tracks",
+        stories: edition.recommendationSnapshot.stories.map((story) => ({
+          ...story, ratedTracks: 0, ratingCompleteness: 0, sonicDistance: 0.2,
+          evidence: "Sounds like Anchor Album by Anchor Artist · 5/10 MP3s analyzed · 0% rated",
+        })),
+      },
+    };
+    view.rerender(<DiscoveryDailyEdition edition={soundEdition} {...props} />);
+    expect(screen.getByRole("tab", { name: "Similar unrated albums" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/Sounds like Anchor Album/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Sounds like Anchor Album/ }));
+    expect(props.onOpenAlbum).toHaveBeenLastCalledWith("album-recommendation");
+    fireEvent.click(screen.getByRole("button", { name: /See all 1 recommendations/ }));
+    await screen.findByRole("combobox", { name: "Filter recommendation connection" });
+    expect(props.onLoadExplorer).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "sonic", connection: "all" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter recommendation connection" }), { target: { value: "sonic" } });
+    await waitFor(() => expect(props.onLoadExplorer).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "sonic", connection: "sonic", offset: 0 })));
+  });
+
+  it("explains missing sonic coverage and locks the sonic tab on archived editions", () => {
+    const props = {
+      isLoading: false, isAnniversaryLoading: false, isChartLoading: false,
+      isDeepCutLoading: false, isCompletionLoading: false, isRecommendationLoading: false,
+      onAnniversaryYearsChange: vi.fn(), onChartSnapshotChange: vi.fn(),
+      onDeepCutSnapshotChange: vi.fn(), onCompletionSnapshotChange: vi.fn(),
+      onRecommendationSnapshotChange: vi.fn(), onOpenAlbum: vi.fn(),
+      onOpenArtist: vi.fn(), onOpenTrack: vi.fn(),
+    };
+    const noSound = { ...edition, recommendationSnapshot: { ...edition.recommendationSnapshot, mode: "sonic" as const, stories: [], sonicNote: "Analyze favorite albums in Tools, then refresh." } };
+    const view = render(<DiscoveryDailyEdition edition={noSound} {...props} />);
+    expect(screen.getByText(/No analyzed unrated neighbors/)).toBeVisible();
+    expect(screen.getByText("Analyze favorite albums in Tools, then refresh.")).toBeVisible();
+    view.rerender(<DiscoveryDailyEdition edition={noSound} archive={{ availableDates: [], snapshotCreatedAt: "2026-08-11T08:00:00Z", retentionDays: 90, isArchived: true, today: "2026-08-12" }} {...props} />);
+    expect(screen.getByRole("tab", { name: "Similar unrated albums" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Refresh recommendation suggestions" })).toBeDisabled();
+  });
+
   it("navigates saved dates and locks reshuffling controls on an archived edition", () => {
     const onEditionDateChange = vi.fn();
     const commonProps = {
@@ -959,7 +1017,7 @@ describe("DiscoveryDailyEdition", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /^Because You Played \/ Loved$/ }),
+      screen.getByRole("button", { name: /^Played \/ Loved \/ Sounds like$/ }),
     );
     const target = document.getElementById("discovery-because");
     expect(scrollIntoView).toHaveBeenCalledWith({

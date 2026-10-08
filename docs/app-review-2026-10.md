@@ -460,8 +460,12 @@ bounded journey metadata work. See [the snapshot proof](sonic-performance.md).
 Analysis backup and cross-PC reuse ships in 0.181.0: versioned, checksummed
 archives default to OneDrive's `_musicbackup/sonic-analysis`, merge completed
 features safely, and verify local MP3 fingerprints in a resumable scheduled scan.
-A vector index and Discovery integration remain later stages; the suggestions below describe the
-broader roadmap.
+Discovery integration ships in 0.183.0: Played/Loved recommendations blend verified
+sound neighbors with Last.fm and genre evidence; **Similar unrated albums** uses
+high-score or loved anchors and excludes every album with a rated track. See all
+can filter sonic connections. Partial coverage and source-album evidence remain
+visible, and saved editions preserve their original recommendations until refresh.
+A vector index remains a later stage; the suggestions below describe the broader roadmap.
 
 **How**
 - Compute a per-track audio embedding locally:

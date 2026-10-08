@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.183.0] - 2026-10-08
+
+### Added
+- Discovery blends verified album sound similarity with Last.fm and genre evidence in **Because You Played / Loved**. Agreements receive priority, sound neighbors get regular places in the mixed shelf, and each result explains its anchor and MP3 analysis coverage.
+- **Similar unrated albums** recommends sound neighbors of high-score or loved albums with no rated tracks. The See all explorer supports sonic connections, search, sorting and pagination; partial analysis is usable at 50% coverage with at least three analyzed tracks, or every track on smaller albums.
+
+### Changed
+- Discovery ranks up to eight anchors in one analyzed-path scan and verifies a bounded shortlist, excluding ineligible ratings, recent albums and anchor artists before ranking. Missing or incompatible analysis leaves existing recommendations usable with a visible explanation.
+- Today's older Daily Edition snapshot upgrades once to include sound evidence. Saved editions keep their results until explicit refresh; archived editions remain immutable and compatible.
+
 ## [0.182.0] - 2026-10-08
 
 ### Added

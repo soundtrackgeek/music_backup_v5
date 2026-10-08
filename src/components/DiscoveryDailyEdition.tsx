@@ -1278,11 +1278,11 @@ export function DiscoveryDailyEdition({
                   <Sparkles aria-hidden="true" />
                   <div>
                     <h3 id="because-heading">
-                      Because You {recommendationSnapshot.mode === "played" ? "Played" : "Loved"}…
+                      {recommendationSnapshot.mode === "sonic" ? "Similar unrated albums" : `Because You ${recommendationSnapshot.mode === "played" ? "Played" : "Loved"}…`}
                     </h3>
                     <p>
                       {recommendationSnapshot.anchors.length
-                        ? `${recommendationSnapshot.anchors.length} ${recommendationSnapshot.mode === "played" ? "recent" : "high-score"} albums · mixed artists`
+                        ? `${recommendationSnapshot.anchors.length} ${recommendationSnapshot.mode === "played" ? "recent" : "high-score or loved"} albums · mixed artists`
                         : "Connected through ratings and loved tracks"}
                     </p>
                   </div>
@@ -1319,12 +1319,22 @@ export function DiscoveryDailyEdition({
                 >
                   Loved
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={recommendationSnapshot.mode === "sonic"}
+                  disabled={isRecommendationLoading || isArchived}
+                  onClick={() => onRecommendationSnapshotChange({ mode: "sonic" })}
+                >
+                  Similar unrated albums
+                </button>
               </div>
+              {recommendationSnapshot.sonicNote ? <p className="daily-edition-sonic-note">{recommendationSnapshot.sonicNote}</p> : null}
               {recommendationSnapshot.stories.length ? (
                 <div className="daily-edition-stack-list">
                   {recommendationSnapshot.stories.slice(0, 6).map((story) => (
                     <button
-                      className="daily-edition-media-row daily-edition-because-row"
+                      className={`daily-edition-media-row daily-edition-because-row${story.sonicDistance != null ? " is-sonic" : ""}`}
                       key={story.albumId}
                       type="button"
                       onClick={() => onOpenAlbum(story.albumId)}
@@ -1348,7 +1358,9 @@ export function DiscoveryDailyEdition({
                 </div>
               ) : (
                 <EditionEmpty>
-                  {recommendationSnapshot.mode === "played"
+                  {recommendationSnapshot.mode === "sonic"
+                    ? "No analyzed unrated neighbors are available yet. Analyze favorite albums and more of your library in Tools, then refresh."
+                    : recommendationSnapshot.mode === "played"
                     ? "Rate tracks on a few albums to start recommendation threads."
                     : "Love tracks or highly rate albums to start recommendation threads."}
                 </EditionEmpty>
@@ -1375,6 +1387,7 @@ export function DiscoveryDailyEdition({
                   {recommendationSnapshot.lastfmLinkedCount > 0
                     ? ` · ${recommendationSnapshot.lastfmLinkedCount} Last.fm-linked matches`
                     : ""}
+                  {(recommendationSnapshot.sonicLinkedCount ?? 0) > 0 ? ` · ${recommendationSnapshot.sonicLinkedCount} sound-linked matches` : ""}
                 </span>
                 <strong>See all {recommendationSnapshot.matchingCount} recommendations</strong>
                 <ChevronRight aria-hidden="true" />
@@ -1396,7 +1409,7 @@ export function DiscoveryDailyEdition({
             ["discovery-charts", "Chart Toppers"],
             ["discovery-deep-cuts", "Deep Cuts"],
             ["discovery-completion", "Complete the Collection"],
-            ["discovery-because", "Because You Played / Loved"],
+            ["discovery-because", "Played / Loved / Sounds like"],
           ].map(([storyId, label]) => (
             <button
               className={activeStoryId === storyId ? "active" : ""}

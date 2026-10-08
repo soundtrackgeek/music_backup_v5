@@ -2509,6 +2509,22 @@
   border-radius: 5px;
 }
 
+.daily-edition-sonic-note {
+  margin: 8px 0 12px;
+  color: var(--edition-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.daily-edition-because-row.is-sonic .daily-edition-row-copy small:last-child {
+  white-space: normal;
+  overflow: visible;
+}
+
+.daily-edition-because-tabs button:last-child {
+  grid-column: 1 / -1;
+}
+
 .daily-edition-completion-tabs button,
 .daily-edition-because-tabs button {
   min-height: 24px;

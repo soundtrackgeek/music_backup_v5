@@ -330,6 +330,7 @@ export function DiscoveryShelfExplorer({
               >
                 <option value="played">Played</option>
                 <option value="loved">Loved</option>
+                <option value="sonic">Similar unrated albums</option>
               </select>
             </label>
             <label>
@@ -344,6 +345,7 @@ export function DiscoveryShelfExplorer({
                 <option value="related">Related album</option>
                 <option value="similar">Similar artist</option>
                 <option value="genre">Genre fallback</option>
+                <option value="sonic">Sonic similarity</option>
               </select>
             </label>
           </>

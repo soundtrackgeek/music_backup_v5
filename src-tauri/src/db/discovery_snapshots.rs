@@ -892,6 +892,16 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
     story_limit: usize,
     seed_override: Option<u64>,
 ) -> Result<DiscoveryRecommendationSnapshot> {
+    discovery_recommendation_snapshot_filtered(conn, request, story_limit, seed_override, None)
+}
+
+pub(super) fn discovery_recommendation_snapshot_filtered(
+    conn: &Connection,
+    request: &DiscoveryRecommendationSnapshotRequest,
+    story_limit: usize,
+    seed_override: Option<u64>,
+    connection: Option<&str>,
+) -> Result<DiscoveryRecommendationSnapshot> {
     #[derive(Clone)]
     struct AnchorData {
         album_id: String,
@@ -931,14 +941,15 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
         anchor_index: usize,
         priority: u8,
         lastfm_linked: bool,
+        sonic_distance: Option<f64>,
         reason: String,
         evidence: String,
     }
 
-    let mode = if request.mode.as_deref() == Some("loved") {
-        "loved"
-    } else {
-        "played"
+    let mode = match request.mode.as_deref() {
+        Some("loved") => "loved",
+        Some("sonic") => "sonic",
+        _ => "played",
     };
     let seed = if let Some(seed) = seed_override {
         seed
@@ -1013,8 +1024,7 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                     OR EXISTS(SELECT 1 FROM lastfm_artist_similarity similarity WHERE similarity.artist_key = {album_artist_key})
              FROM albums album
              LEFT JOIN album_covers cover ON cover.album_id = album.id
-             WHERE album.album_score IS NOT NULL
-               AND (album.loved_tracks > 0 OR album.effective_album_rating >= 90)
+             WHERE album.loved_tracks > 0 OR album.effective_album_rating >= 90
              ORDER BY album.album_score DESC, album.loved_tracks DESC
              LIMIT 128"
         );
@@ -1040,9 +1050,17 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
     };
 
     let mut ordered_anchor_pool = anchor_pool;
-    if mode == "loved" {
+    if mode != "played" {
+        let sonic_anchor_ids = discovery_sonic::bound_anchors(
+            conn,
+            &ordered_anchor_pool
+                .iter()
+                .map(|a| a.album_id.clone())
+                .collect::<Vec<_>>(),
+        );
         ordered_anchor_pool.sort_by_key(|anchor| {
             (
+                !sonic_anchor_ids.contains(&anchor.album_id),
                 !anchor.has_lastfm,
                 discovery_random_sort_key(seed, &anchor.album_id),
             )
@@ -1080,11 +1098,12 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                 album.loved_tracks, album.album_score, cover.cache_path
          FROM albums album
          LEFT JOIN album_covers cover ON cover.album_id = album.id
-         WHERE album.total_tracks > 0 AND album.rating_completeness < 0.5"
+         WHERE album.total_tracks > 0 AND album.rating_completeness < 0.5
+           AND (?1 != 'sonic' OR (album.rated_tracks = 0 AND album.rating_completeness = 0))"
     );
     let candidates = conn
         .prepare(&candidate_sql)?
-        .query_map([], |row| {
+        .query_map([mode], |row| {
             let album: String = row.get(1)?;
             Ok(CandidateAlbum {
                 album_id: row.get(0)?,
@@ -1139,6 +1158,22 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
         }
     }
 
+    let eligible = candidates
+        .iter()
+        .filter(|candidate| {
+            !anchor_artist_keys.contains(&candidate.artist_key)
+                && !recent_album_ids.contains(&candidate.album_id)
+        })
+        .map(|candidate| candidate.album_id.clone())
+        .collect::<HashSet<_>>();
+    let sonic = discovery_sonic::discovery_sonic(
+        conn,
+        &anchors
+            .iter()
+            .map(|a| a.album_id.clone())
+            .collect::<Vec<_>>(),
+        &eligible,
+    );
     let mut edges_by_anchor = vec![Vec::<RecommendationEdge>::new(); anchors.len()];
     let mut related_stmt = conn.prepare(
         "SELECT candidate_artist_name, candidate_album_title, candidate_album_mbid,
@@ -1182,8 +1217,9 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                 RecommendationEdge {
                     candidate_index,
                     anchor_index,
-                    priority: 0,
+                    priority: 1,
                     lastfm_linked: true,
+                    sonic_distance: None,
                     reason: "Related album".to_string(),
                     evidence: format!(
                         "Related to {} on Last.fm · {}% rated",
@@ -1217,8 +1253,9 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                     .or_insert_with(|| RecommendationEdge {
                         candidate_index,
                         anchor_index,
-                        priority: 1,
+                        priority: 3,
                         lastfm_linked: true,
+                        sonic_distance: None,
                         reason: "Similar artist".to_string(),
                         evidence: format!(
                             "Last.fm links {} to {} · {}% rated",
@@ -1249,8 +1286,9 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                     .or_insert_with(|| RecommendationEdge {
                         candidate_index,
                         anchor_index,
-                        priority: 2,
+                        priority: 4,
                         lastfm_linked: false,
+                        sonic_distance: None,
                         reason: "Shared genre".to_string(),
                         evidence: format!(
                             "{} link to {} · {}% rated",
@@ -1261,12 +1299,73 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                     });
             }
         }
+        if mode == "sonic" {
+            best_edge_by_album.clear();
+        }
+        for album in sonic
+            .matches
+            .albums
+            .get(&anchor.album_id)
+            .into_iter()
+            .flatten()
+        {
+            let Some(&candidate_index) = candidate_by_album_id.get(&album.album_id) else {
+                continue;
+            };
+            let sound = format!(
+                "Sounds like {} by {} · {}/{} MP3s analyzed · {}% rated",
+                anchor.album,
+                anchor.artist,
+                album.analyzed_tracks,
+                album.total_tracks,
+                (candidates[candidate_index].rating_completeness * 100.0).round() as i64
+            );
+            if let Some(edge) = best_edge_by_album
+                .get_mut(&album.album_id)
+                .filter(|edge| edge.lastfm_linked)
+            {
+                edge.priority = 0; // Independent provider and sound evidence agree.
+                edge.sonic_distance = album.distance;
+                edge.evidence = format!("{} · {}", edge.evidence, sound);
+            } else {
+                best_edge_by_album.insert(
+                    album.album_id.clone(),
+                    RecommendationEdge {
+                        candidate_index,
+                        anchor_index,
+                        priority: 2,
+                        lastfm_linked: false,
+                        sonic_distance: album.distance,
+                        reason: "Sonic similarity".into(),
+                        evidence: sound,
+                    },
+                );
+            }
+        }
         let mut edges = best_edge_by_album.into_values().collect::<Vec<_>>();
-        edges.sort_by_key(|edge| {
-            (
-                edge.priority,
-                discovery_random_sort_key(seed, &candidates[edge.candidate_index].album_id),
-            )
+        edges.sort_by(|a, b| {
+            a.priority
+                .cmp(&b.priority)
+                .then_with(|| {
+                    a.sonic_distance
+                        .unwrap_or(f64::MAX)
+                        .total_cmp(&b.sonic_distance.unwrap_or(f64::MAX))
+                })
+                .then_with(|| {
+                    discovery_random_sort_key(seed, &candidates[a.candidate_index].album_id).cmp(
+                        &discovery_random_sort_key(seed, &candidates[b.candidate_index].album_id),
+                    )
+                })
+        });
+        // Apply connection filters before choosing one explanation per album:
+        // another anchor may provide its only sound/provider relationship.
+        edges.retain(|edge| match connection {
+            Some("sonic") => edge.sonic_distance.is_some(),
+            Some("lastfm") => edge.lastfm_linked,
+            Some("related") => edge.reason == "Related album",
+            Some("similar") => edge.reason == "Similar artist",
+            Some("genre") => edge.reason == "Shared genre",
+            _ => true,
         });
         edges_by_anchor[anchor_index] = edges;
     }
@@ -1282,26 +1381,40 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
         .filter(|edge| edge.lastfm_linked)
         .map(|edge| candidates[edge.candidate_index].album_id.clone())
         .collect::<HashSet<_>>();
+    let sonic_album_ids = edges_by_anchor
+        .iter()
+        .flatten()
+        .filter(|edge| edge.sonic_distance.is_some())
+        .map(|edge| candidates[edge.candidate_index].album_id.clone())
+        .collect::<HashSet<_>>();
     let mut selected = Vec::<RecommendationEdge>::new();
     let mut selected_albums = HashSet::<String>::new();
     let mut selected_artists = HashSet::<String>::new();
-    let mut cursors = vec![0_usize; anchors.len()];
     while selected.len() < story_limit {
         let mut progressed = false;
         for anchor_index in 0..anchors.len() {
-            while let Some(edge) = edges_by_anchor[anchor_index].get(cursors[anchor_index]) {
-                cursors[anchor_index] += 1;
+            let available = |edge: &&RecommendationEdge| {
                 let candidate = &candidates[edge.candidate_index];
-                if selected_albums.contains(&candidate.album_id)
-                    || selected_artists.contains(&candidate.artist_key)
-                {
-                    continue;
-                }
+                !selected_albums.contains(&candidate.album_id)
+                    && !selected_artists.contains(&candidate.artist_key)
+            };
+            let edges = &edges_by_anchor[anchor_index];
+            // Give sound evidence a regular place in the mixed shelf. Provider
+            // agreement still ranks first; rotate across anchors and artists.
+            let sound = if selected.len() % 3 == 1 {
+                edges
+                    .iter()
+                    .filter(available)
+                    .find(|edge| edge.sonic_distance.is_some())
+            } else {
+                None
+            };
+            if let Some(edge) = sound.or_else(|| edges.iter().find(available)) {
+                let candidate = &candidates[edge.candidate_index];
                 selected_albums.insert(candidate.album_id.clone());
                 selected_artists.insert(candidate.artist_key.clone());
                 selected.push(edge.clone());
                 progressed = true;
-                break;
             }
             if selected.len() == story_limit {
                 break;
@@ -1348,6 +1461,7 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                 anchor_album: anchor.album.clone(),
                 anchor_artist: anchor.artist.clone(),
                 evidence: edge.evidence,
+                sonic_distance: edge.sonic_distance,
             }
         })
         .collect::<Vec<_>>();
@@ -1361,6 +1475,14 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
                     format!(
                         "{} of {} tracks rated in recent activity",
                         anchor.rated_tracks, anchor.total_tracks
+                    ),
+                )
+            } else if anchor.album_score.is_none() {
+                (
+                    format!("{} loved tracks", anchor.loved_tracks),
+                    format!(
+                        "{} loved tracks provide the anchor; no album score yet",
+                        anchor.loved_tracks
                     ),
                 )
             } else {
@@ -1388,7 +1510,12 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
             }
         })
         .collect::<Vec<_>>();
-    let evidence = if mode == "played" {
+    let evidence = if mode == "sonic" {
+        format!(
+            "{} high-score or loved anchors · similar albums with no rated tracks",
+            anchor_stories.len()
+        )
+    } else if mode == "played" {
         format!(
             "{} recent rating threads · suggestions are under 50% rated",
             anchor_stories.len()
@@ -1405,6 +1532,8 @@ pub(super) fn discovery_recommendation_snapshot_with_scope(
         anchors: anchor_stories,
         matching_count: matching_album_ids.len() as i64,
         lastfm_linked_count: lastfm_album_ids.len() as i64,
+        sonic_linked_count: sonic_album_ids.len() as i64,
+        sonic_note: sonic.note,
         stories,
         evidence,
     })

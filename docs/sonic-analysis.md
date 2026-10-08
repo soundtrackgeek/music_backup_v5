@@ -34,6 +34,30 @@ restarts, cancellation, and failed batches; retry retains completed checkpoints.
 
 ## Results you can use immediately
 
+In Music Library's **Discovery → Because You Played / Loved**, sound neighbors
+blend with cached Last.fm and genre evidence. The **Similar unrated albums** tab
+uses high-score or loved albums as anchors and requires zero rated tracks on
+every suggestion. Played/Loved continue to accept albums under 50% rated.
+Recommendations exclude recent albums and every anchor artist, and rotate across
+anchors and candidate artists. Agreements between sound and Last.fm rank first;
+every third mixed suggestion slot starting with the second prefers a sound link
+when the current anchor has one. **See all → Connection → Sonic similarity**
+filters sound links, including recommendations also supported by Last.fm.
+
+Sound evidence requires the current analysis profile, current local files, at
+least 50% MP3 coverage and at least three analyzed tracks (all tracks for smaller
+albums). Imported fingerprints alone are insufficient until local paths have
+been verified. Up to eight anchors share one analyzed-path scan, with 12 nearest
+eligible neighbors each and a maximum 48-album verification shortlist per anchor;
+overlapping shortlists share file verification. Distances are used for ordering,
+not presented as similarity percentages. These are a bounded discovery pool,
+not an exhaustive list of all analyzed albums.
+
+The shelf reports coverage or an unavailable-cache explanation. Start or resume
+analysis in Tools, then refresh suggestions to use newly completed work. Today's
+Daily Edition stays saved until explicit refresh; older snapshot formats upgrade
+once for today, while archived editions keep their original evidence.
+
 Each successful file is published to `music-analysis.sqlite3` beside the Music
 Library catalog. `sonic-work.sqlite3` keeps batches, per-file errors, and schedule
 settings. `sonic-worker.lock` enforces one writer across GUI and headless bridge

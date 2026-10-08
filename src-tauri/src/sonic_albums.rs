@@ -5,7 +5,7 @@ use music_sonic_core::{
 };
 use rusqlite::{params_from_iter, types::Value, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -200,6 +200,94 @@ fn compare(a: &SonicAlbum, b: &SonicAlbum) -> std::cmp::Ordering {
         .total_cmp(&b.distance.unwrap_or(f64::MAX))
         .then(a.album_id.cmp(&b.album_id))
 }
+
+#[derive(Default)]
+pub(crate) struct DiscoveryMatches {
+    pub ready_seeds: HashSet<String>,
+    pub albums: HashMap<String, Vec<SonicAlbum>>,
+}
+
+/// Rank all Discovery anchors in one analyzed-path scan. Filter before the
+/// shortlist so already-rated albums cannot crowd out eligible discoveries.
+pub(crate) fn discovery(
+    c: &Connection,
+    seeds: &[String],
+    eligible: &HashSet<String>,
+) -> Result<DiscoveryMatches, String> {
+    const MINIMUM: u32 = 50;
+    const LIMIT: usize = 12;
+    const SHORTLIST: usize = LIMIT * 4;
+    let transaction = c.unchecked_transaction().map_err(|e| e.to_string())?;
+    let c = &*transaction;
+    let overrides = HashMap::new();
+    let mut result = DiscoveryMatches::default();
+    let mut metrics = Vec::new();
+    for id in seeds.iter().take(8) {
+        let (_, analysis) = seed(c, id, MINIMUM, &overrides)?;
+        if let Some(metric) = analysis.as_ref().and_then(Metric::new) {
+            result.ready_seeds.insert(id.clone());
+            metrics.push((id, metric, Vec::<SonicAlbum>::new()));
+        }
+    }
+    if metrics.is_empty() || eligible.is_empty() {
+        return Ok(result);
+    }
+    scan(c, None, false, &overrides, |r| {
+        if !eligible.contains(&r.album.album_id)
+            || !album_ready(r.album.analyzed_tracks, r.album.total_tracks, MINIMUM)
+        {
+            return;
+        }
+        let features = r.features.mean().unwrap();
+        for (id, metric, ranked) in &mut metrics {
+            if *id == &r.album.album_id {
+                continue;
+            }
+            let Some(distance) = metric.distance(&features) else {
+                continue;
+            };
+            let mut album = r.album.clone();
+            album.distance = Some(distance);
+            ranked.push(album);
+            if ranked.len() > SHORTLIST * 2 {
+                ranked.sort_by(compare);
+                ranked.truncate(SHORTLIST);
+            }
+        }
+    })?;
+    // Verify each shortlisted album only once even if several anchors like it.
+    let mut verified = HashMap::new();
+    for (_, _, ranked) in &mut metrics {
+        ranked.sort_by(compare);
+        ranked.truncate(SHORTLIST);
+        for album in ranked.iter() {
+            if !verified.contains_key(&album.album_id) {
+                let id = album.album_id.clone();
+                let (album, analysis) = seed(c, &album.album_id, MINIMUM, &overrides)?;
+                if let (Some(album), Some(analysis)) = (album, analysis) {
+                    verified.insert(album.album_id.clone(), Some((album, analysis.features)));
+                } else {
+                    verified.insert(id, None);
+                }
+            }
+        }
+    }
+    for (id, metric, ranked) in metrics {
+        let mut albums = ranked
+            .iter()
+            .filter_map(|candidate| {
+                let (album, features) = verified.get(&candidate.album_id)?.as_ref()?;
+                let mut album = album.clone();
+                album.distance = metric.distance(features);
+                album.distance.map(|_| album)
+            })
+            .collect::<Vec<_>>();
+        albums.sort_by(compare);
+        albums.truncate(LIMIT);
+        result.albums.insert(id.clone(), albums);
+    }
+    Ok(result)
+}
 pub(crate) fn query(
     c: &Connection,
     has_analysis: bool,
@@ -353,6 +441,54 @@ mod tests {
             limit: 20,
             minimum_coverage,
         }
+    }
+    #[test]
+    fn discovery_filters_before_ranking_and_shares_one_sparse_scan_across_seeds() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        let (_dir, c) = fixture();
+        c.execute_batch(
+            "CREATE INDEX album_tracks ON tracks(album_id);
+            CREATE INDEX track_files ON tracks(file_path,filename);
+            WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000)
+            INSERT INTO tracks(album_id,filename) SELECT 'unanalysed-'||x,'song.mp3' FROM n;",
+        )
+        .unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = calls.clone();
+        c.create_scalar_function(
+            "lower",
+            1,
+            rusqlite::functions::FunctionFlags::SQLITE_UTF8
+                | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| {
+                counter.fetch_add(1, Ordering::Relaxed);
+                Ok(ctx.get::<String>(0)?.to_ascii_lowercase())
+            },
+        )
+        .unwrap();
+        let result = discovery(
+            &c,
+            &["seed".into(), "near".into()],
+            &HashSet::from(["partial".into(), "single".into()]),
+        )
+        .unwrap();
+        assert_eq!(result.ready_seeds.len(), 2);
+        for id in ["seed", "near"] {
+            assert_eq!(
+                result.albums[id]
+                    .iter()
+                    .map(|a| a.album_id.as_str())
+                    .collect::<Vec<_>>(),
+                ["partial", "single"]
+            );
+        }
+        assert!(
+            calls.load(Ordering::Relaxed) < 500,
+            "Discovery visited unrelated catalog filenames"
+        );
     }
     #[test]
     fn sparse_analysis_counts_full_candidate_coverage_without_scanning_unrelated_albums() {

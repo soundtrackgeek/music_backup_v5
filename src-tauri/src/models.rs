@@ -1656,6 +1656,10 @@ pub struct DiscoveryRecommendationSnapshot {
     pub anchors: Vec<DiscoveryRecommendationAnchor>,
     pub matching_count: i64,
     pub lastfm_linked_count: i64,
+    #[serde(default)]
+    pub sonic_linked_count: i64,
+    #[serde(default)]
+    pub sonic_note: String,
     pub stories: Vec<DiscoveryRecommendationStory>,
     pub evidence: String,
 }
@@ -1877,6 +1881,8 @@ pub struct DiscoveryRecommendationStory {
     pub anchor_album: String,
     pub anchor_artist: String,
     pub evidence: String,
+    #[serde(default)]
+    pub sonic_distance: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]

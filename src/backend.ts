@@ -2101,17 +2101,28 @@ export async function getDiscoveryRecommendationSnapshot(
     const anchors = mode === "played"
       ? base.anchors.filter((anchor) => anchor.signal.includes("rated recently"))
       : base.anchors.filter((anchor) => anchor.signal.includes("Album score"));
-    const stories = [...base.stories]
+    const candidates = base.stories
+      .filter((story) => mode !== "sonic" || (anchors.length > 0 && story.ratedTracks === 0 && story.sonicDistance != null))
+      .map((story, index) => {
+        if (mode !== "sonic") return story;
+        const anchor = anchors[index % anchors.length];
+        return { ...story, reason: "Sonic similarity", anchorAlbumId: anchor.albumId,
+          anchorAlbum: anchor.album, anchorArtist: anchor.artist,
+          evidence: `Sounds like ${anchor.album} by ${anchor.artist} · ${Math.ceil(story.totalTracks * .8)}/${story.totalTracks} MP3s analyzed · 0% rated` };
+      });
+    const stories = [...candidates]
       .sort(() => Math.random() - 0.5)
       .slice(0, 6);
     return {
       ...base,
       mode,
       anchors,
-      matchingCount: base.stories.length,
-      lastfmLinkedCount: stories.filter((story) => story.reason !== "Shared genre").length,
+      matchingCount: candidates.length,
+      lastfmLinkedCount: mode === "sonic" ? 0 : candidates.filter((story) => ["Related album", "Similar artist"].includes(story.reason)).length,
+      sonicLinkedCount: candidates.filter((story) => story.sonicDistance != null).length,
+      sonicNote: mode === "sonic" ? `${anchors.length} of ${anchors.length} anchors have current sound analysis · at least 50% MP3 coverage per album. Refresh as analysis completes.` : base.sonicNote,
       stories,
-      evidence: mode === "played"
+      evidence: mode === "sonic" ? `${anchors.length} high-score or loved anchors · similar albums with no rated tracks` : mode === "played"
         ? `${anchors.length} recent rating threads · suggestions are under 50% rated`
         : `${anchors.length} high-score or loved anchors · suggestions are under 50% rated`,
     } satisfies DiscoveryRecommendationSnapshot;
@@ -2492,12 +2503,14 @@ export async function getDiscoveryShelfExplorer(
     mode: request.mode as DiscoveryRecommendationSnapshotRequest["mode"],
   });
   const connection = request.connection ?? "all";
-  let items = Array.from({ length: Math.max(30, snapshot.stories.length) }, (_, index) => {
+  const previewCount = snapshot.mode === "sonic" ? snapshot.stories.length : snapshot.stories.length ? Math.max(30, snapshot.stories.length) : 0;
+  let items = Array.from({ length: previewCount }, (_, index) => {
     const story = snapshot.stories[index % snapshot.stories.length];
     return { ...story, albumId: `${story.albumId}:explorer:${index}` };
   }).filter((story) => {
     const connectionMatches = connection === "all" ||
-      (connection === "lastfm" && story.reason !== "Shared genre") ||
+      (connection === "lastfm" && ["Related album", "Similar artist"].includes(story.reason)) ||
+      (connection === "sonic" && story.sonicDistance != null) ||
       (connection === "related" && story.reason === "Related album") ||
       (connection === "similar" && story.reason === "Similar artist") ||
       (connection === "genre" && story.reason === "Shared genre");
@@ -2508,8 +2521,8 @@ export async function getDiscoveryShelfExplorer(
   if (request.sort === "album") items.sort((a, b) => a.album.localeCompare(b.album));
   return {
     ...base,
-    title: snapshot.mode === "played" ? "Because You Played…" : "Because You Loved…",
-    evidenceNote: "Rating activity or loved/high-score anchors connected through cached Last.fm data and genre fallback; candidates remain under 50% rated.",
+    title: snapshot.mode === "sonic" ? "Similar unrated albums" : snapshot.mode === "played" ? "Because You Played…" : "Because You Loved…",
+    evidenceNote: snapshot.mode === "sonic" ? `Sound neighbors with no rated tracks. ${snapshot.sonicNote}` : `Rating activity or loved/high-score anchors connected through sound, cached Last.fm data and genre fallback; candidates remain under 50% rated. ${snapshot.sonicNote}`,
     total: items.length,
     mode: snapshot.mode,
     connection,

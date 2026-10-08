@@ -1753,13 +1753,15 @@ export type DiscoveryRecommendationAnchor = {
 	evidence: string,
 };
 
-export type DiscoveryRecommendationMode = "played" | "loved";
+export type DiscoveryRecommendationMode = "played" | "loved" | "sonic";
 
 export type DiscoveryRecommendationSnapshot = {
 	mode: DiscoveryRecommendationMode,
 	anchors: DiscoveryRecommendationAnchor[],
 	matchingCount: number,
 	lastfmLinkedCount: number,
+	sonicLinkedCount?: number,
+	sonicNote?: string,
 	stories: DiscoveryRecommendationStory[],
 	evidence: string,
 };
@@ -1783,6 +1785,7 @@ export type DiscoveryRecommendationStory = {
 	anchorAlbum: string,
 	anchorArtist: string,
 	evidence: string,
+	sonicDistance?: number | null,
 };
 
 export type DiscoveryResponse = {

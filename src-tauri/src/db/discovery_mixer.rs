@@ -1149,24 +1149,25 @@ pub(super) fn discovery_shelf_explorer(
             }
         }
         "recommendations" => {
-            let mode = if request.mode.as_deref() == Some("loved") {
-                "loved"
-            } else {
-                "played"
+            let mode = match request.mode.as_deref() {
+                Some("loved") => "loved",
+                Some("sonic") => "sonic",
+                _ => "played",
             };
             let connection = match request.connection.as_deref() {
-                Some("lastfm" | "related" | "similar" | "genre") => {
+                Some("lastfm" | "related" | "similar" | "genre" | "sonic") => {
                     request.connection.as_deref().unwrap_or("all")
                 }
                 _ => "all",
             };
-            let snapshot = discovery_recommendation_snapshot_with_scope(
+            let snapshot = discovery_recommendation_snapshot_filtered(
                 conn,
                 &DiscoveryRecommendationSnapshotRequest {
                     mode: Some(mode.to_string()),
                 },
                 usize::MAX,
                 Some(seed as u64),
+                Some(connection),
             )?;
             let sort = match request.sort.as_deref() {
                 Some("least-rated" | "artist" | "album") => {
@@ -1178,7 +1179,8 @@ pub(super) fn discovery_shelf_explorer(
                 .stories
                 .into_iter()
                 .filter(|story| match connection {
-                    "lastfm" => story.reason != "Shared genre",
+                    "lastfm" => matches!(story.reason.as_str(), "Related album" | "Similar artist"),
+                    "sonic" => story.sonic_distance.is_some(),
                     "related" => story.reason == "Related album",
                     "similar" => story.reason == "Similar artist",
                     "genre" => story.reason == "Shared genre",
@@ -1207,7 +1209,9 @@ pub(super) fn discovery_shelf_explorer(
                 "album" => stories.sort_by_key(|story| story.album.to_lowercase()),
                 _ => {}
             }
-            response.title = if mode == "played" {
+            response.title = if mode == "sonic" {
+                "Similar unrated albums".to_string()
+            } else if mode == "played" {
                 "Because You Played…".to_string()
             } else {
                 "Because You Loved…".to_string()
@@ -1220,6 +1224,13 @@ pub(super) fn discovery_shelf_explorer(
                     "High album scores and loved tracks provide the listening signal"
                 }
             );
+            if mode == "sonic" {
+                response.evidence_note = format!("Sound neighbors of high-score or loved albums; candidates have no rated tracks and exclude recent albums plus every anchor artist. {}", snapshot.sonic_note);
+            } else {
+                response
+                    .evidence_note
+                    .push_str(&format!(" {}", snapshot.sonic_note));
+            }
             response.total = stories.len() as i64;
             response.mode = Some(mode.to_string());
             response.connection = Some(connection.to_string());
