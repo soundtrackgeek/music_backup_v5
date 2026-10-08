@@ -475,14 +475,25 @@ pub fn checkpoint() -> Result<()> {
     Ok(())
 }
 pub fn progress(completed: i64, total: i64, message: &str) {
+    let eta = CURRENT.with(|c| {
+        c.borrow().as_ref().and_then(|current| {
+            (completed > 0 && completed < total).then(|| {
+                (current.started.elapsed().as_secs_f64() / completed as f64
+                    * (total - completed) as f64)
+                    .ceil() as i64
+            })
+        })
+    });
+    progress_with_eta(completed, total, message, eta);
+}
+
+/// Workers with cached skips or idle waits supply their own measured estimate.
+pub fn progress_with_eta(completed: i64, total: i64, message: &str, eta: Option<i64>) {
     CURRENT.with(|c| {
         if let Some(current) = c.borrow().as_ref() {
             let percent = if total > 0 {
                 (completed as f64 / total as f64 * 100.0).clamp(0.0, 100.0)
             } else { 0.0 };
-            let eta = if completed > 0 && completed < total {
-                Some((current.started.elapsed().as_secs_f64() / completed as f64 * (total-completed) as f64).ceil() as i64)
-            } else { None };
             let _ = current.store.execute(
                 "UPDATE jobs SET completed=?2,total=?3,progress=?4,eta_seconds=?5,message=?6,updated_at=?7 WHERE id=?1",
                 params![current.id,completed,total,percent,eta,message,Utc::now().to_rfc3339()],

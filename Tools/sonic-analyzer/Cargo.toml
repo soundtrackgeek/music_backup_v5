@@ -8,11 +8,13 @@ description = "Standalone local audio feature extractor for Music Library"
 [dependencies]
 bliss-audio = { version = "=0.13.0", default-features = false, features = ["symphonia-mp3"] }
 serde_json = "1"
-symphonia = { version = "=0.6.1", default-features = false }
+# MP3s commonly start with large ID3 artwork tags; the probe must read/skip them.
+symphonia = { version = "=0.6.1", default-features = false, features = ["all-meta"] }
 
 [dev-dependencies]
 music-sonic-core = { path = "../../crates/sonic-core" }
 ndarray = "0.17.2"
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

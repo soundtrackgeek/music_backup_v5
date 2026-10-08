@@ -25,6 +25,8 @@ pub fn should_stop() -> bool {
 }
 #[cfg(test)]
 pub fn progress(_: i64, _: i64, _: &str) {}
+#[cfg(test)]
+pub fn progress_with_eta(_: i64, _: i64, _: &str, _: Option<i64>) {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.185.1] - 2026-10-08
+
+### Fixed
+- Enable Symphonia's ID3/APE metadata readers in the standalone analyzer. Tagged MP3s and large embedded covers no longer fail as unsupported formats/codecs or expose artwork bytes to audio probing. Existing analysis profiles and saved results remain compatible.
+- Audio analysis remaining time uses successful new work in the current run, excluding already analyzed tracks, failed attempts and idle waits. Estimates remain hidden until three samples, clear on failures/waits, and recalibrate after resume.
+
+### Changed
+- Stop an analysis batch after ten failures without successful new analysis, preserving checkpoints and showing the last error in Activity Center. Retrying rechecks failed items without discarding completed work.
+- Run the finished native analyzer on a tagged MP3 fixture before bundling; decoder and invalid-profile failures block publication. Added CLI regression coverage for large ID3v2.3/v2.4 artwork and unchanged audio features.
+
 ## [0.185.0] - 2026-10-08
 
 ### Added

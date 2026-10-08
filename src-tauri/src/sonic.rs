@@ -336,15 +336,55 @@ fn analyze_one(
     filename: &str,
     stop: &impl Fn() -> bool,
 ) -> Result<()> {
-    analyze_one_mode(dir, directory, filename, stop, false)
+    analyze_one_mode(dir, directory, filename, stop, false).map(|_| ())
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AnalysisWork {
+    Cached,
+    Reused,
+    Extracted,
+    Unmatched,
+}
+
+/// Sample useful work in this run, never old checkpoints, cached skips, or failures.
+#[derive(Default)]
+struct AnalysisEstimate {
+    samples: u64,
+    active_time: Duration,
+    healthy: bool,
+}
+impl AnalysisEstimate {
+    fn observe(&mut self, work: Option<AnalysisWork>, elapsed: Duration, reuse_only: bool) {
+        let Some(work) = work else {
+            self.healthy = false;
+            return;
+        };
+        if work == AnalysisWork::Extracted || reuse_only && work != AnalysisWork::Cached {
+            self.samples += 1;
+            self.active_time += elapsed;
+            self.healthy = true;
+        }
+    }
+
+    fn remaining(&self, queued: i64) -> Option<i64> {
+        if !self.healthy || self.samples < 3 || queued <= 0 {
+            return None;
+        }
+        // Remaining cached files can finish faster; assume decoding until checked.
+        let nanos = self.active_time.as_nanos().saturating_mul(queued as u128);
+        let seconds = nanos.div_ceil(u128::from(self.samples) * 1_000_000_000);
+        Some(i64::try_from(seconds).unwrap_or(i64::MAX))
+    }
+}
+
 fn analyze_one_mode(
     dir: &Path,
     directory: &str,
     filename: &str,
     stop: &impl Fn() -> bool,
     reuse_only: bool,
-) -> Result<()> {
+) -> Result<AnalysisWork> {
     // Re-resolve each checkpoint against the current catalog, not an old numeric ID.
     let c = catalog(dir)?;
     let exists: bool = c.query_row(
@@ -367,7 +407,7 @@ fn analyze_one_mode(
         )
         .optional()?;
     if saved.as_ref() == Some(&before) {
-        return Ok(());
+        return Ok(AnalysisWork::Cached);
     }
     let hash = audio_hash_with_stop(&path, stop)?;
     let existing: Option<String> = store
@@ -380,7 +420,7 @@ fn analyze_one_mode(
     if existing.is_none() {
         // A reuse scan never decodes unmatched files or publishes foreign paths.
         if reuse_only {
-            return Ok(());
+            return Ok(AnalysisWork::Unmatched);
         }
         let analysis = extract(&path, stop)?;
         if before != signature(&path)? || hash != audio_hash_with_stop(&path, stop)? {
@@ -418,7 +458,11 @@ fn analyze_one_mode(
         bail!("The track was removed during analysis");
     }
     store.execute("INSERT INTO sonic_tracks VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(track_key) DO UPDATE SET directory=excluded.directory,filename=excluded.filename,audio_hash=excluded.audio_hash,profile=excluded.profile,size=excluded.size,modified=excluded.modified,analyzed_at=excluded.analyzed_at",params![track_key(directory,filename),directory,filename,hash,PROFILE,before.0 as i64,before.1,chrono::Utc::now().to_rfc3339()])?;
-    Ok(())
+    Ok(if existing.is_none() {
+        AnalysisWork::Extracted
+    } else {
+        AnalysisWork::Reused
+    })
 }
 
 pub(crate) fn analyze_headless(dir: &Path, key: &str) -> Result<serde_json::Value> {
@@ -455,7 +499,7 @@ pub(crate) fn run(app: &AppHandle, payload: serde_json::Value) -> Result<serde_j
         &directory(app)?,
         serde_json::from_value(payload)?,
         &crate::jobs::should_stop,
-        &crate::jobs::progress,
+        &crate::jobs::progress_with_eta,
         &idle_seconds,
         &|| chrono::Local::now().hour(),
     )
@@ -465,7 +509,7 @@ fn run_at(
     dir: &Path,
     request: AnalyzeRequest,
     stop: &impl Fn() -> bool,
-    report: &impl Fn(i64, i64, &str),
+    report: &impl Fn(i64, i64, &str, Option<i64>),
     idle: &impl Fn() -> Option<u64>,
     hour: &impl Fn() -> u32,
 ) -> Result<serde_json::Value> {
@@ -549,6 +593,10 @@ fn run_at(
     )?;
     let mut reported = Instant::now() - Duration::from_secs(5);
     let mut waiting = false;
+    let reuse_only = request.scope == "reuse";
+    let mut estimate = AnalysisEstimate::default();
+    let mut unsuccessful_attempts = 0;
+    let mut failed_this_run = 0;
     loop {
         if stop() {
             bail!("Analysis stopped at a durable checkpoint");
@@ -559,7 +607,12 @@ fn run_at(
         };
         if !schedule(&w)?.allows(hour(), idle()) {
             if !waiting || reported.elapsed() >= Duration::from_secs(30) {
-                report(completed, total, "Waiting for idle time / scheduled hours");
+                report(
+                    completed,
+                    total,
+                    "Waiting for idle time / scheduled hours",
+                    None,
+                );
                 reported = Instant::now();
             }
             waiting = true;
@@ -572,26 +625,63 @@ fn run_at(
             "Analyzing"
         };
         if waiting || reported.elapsed() >= Duration::from_secs(2) {
-            report(completed, total, &format!("{action} {filename}"));
+            report(
+                completed,
+                total,
+                &format!("{action} {filename}"),
+                estimate.remaining(total - completed),
+            );
             reported = Instant::now();
         }
         waiting = false;
-        let outcome = analyze_one_mode(dir, &directory, &filename, stop, request.scope == "reuse");
+        let started = Instant::now();
+        let outcome = analyze_one_mode(dir, &directory, &filename, stop, reuse_only);
         if stop() {
             bail!("Analysis stopped at a durable checkpoint");
         }
+        estimate.observe(
+            outcome.as_ref().ok().copied(),
+            started.elapsed(),
+            reuse_only,
+        );
         let (state, error) = match outcome {
-            Ok(()) => ("done", None),
-            Err(e) => ("failed", Some(format!("{e:#}"))),
+            Ok(work) => {
+                if work == AnalysisWork::Extracted || reuse_only && work != AnalysisWork::Cached {
+                    unsuccessful_attempts = 0;
+                }
+                ("done", None)
+            }
+            Err(e) => {
+                unsuccessful_attempts += 1;
+                failed_this_run += 1;
+                ("failed", Some(format!("{e:#}")))
+            }
         };
         w.execute(
             "UPDATE sonic_items SET state=?3,error=?4 WHERE batch_id=?1 AND track_key=?2",
             params![batch, key, state, error],
         )?;
         completed += 1;
-        if reported.elapsed() >= Duration::from_secs(2) || completed == total {
-            report(completed, total, &format!("{action} {filename}"));
+        if reported.elapsed() >= Duration::from_secs(2)
+            || completed == total
+            || unsuccessful_attempts >= 10
+        {
+            let message = match &error {
+                Some(error) => {
+                    format!("{failed_this_run} files failed. Last file: {filename}. {error}")
+                }
+                None => format!("{action} {filename}"),
+            };
+            report(
+                completed,
+                total,
+                &message,
+                estimate.remaining(total - completed),
+            );
             reported = Instant::now();
+        }
+        if unsuccessful_attempts >= 10 {
+            bail!("Stopped after 10 failed files without successful new analysis. Last file: {filename}. {} Completed analysis is saved; check the analyzer or files, then retry this job.", error.as_deref().unwrap_or_default());
         }
     }
     let failed: i64 = w.query_row(
@@ -828,11 +918,19 @@ fn matches_with_catalog(
     let has_analysis = attach(&c, dir)?;
     matches_query(c, has_analysis, key, limit, true)
 }
-pub(crate) fn matches_query(c: &Connection, has_analysis: bool, key: &str, limit: usize, indexed: bool) -> Result<SonicMatches> {
-    let source=c;
+pub(crate) fn matches_query(
+    c: &Connection,
+    has_analysis: bool,
+    key: &str,
+    limit: usize,
+    indexed: bool,
+) -> Result<SonicMatches> {
+    let source = c;
     let transaction = c.unchecked_transaction()?;
     let c = &*transaction;
-    let total = crate::sonic_index::count(c,"mp3-total",
+    let total = crate::sonic_index::count(
+        c,
+        "mp3-total",
         "SELECT count(*) FROM tracks WHERE lower(filename) LIKE '%.mp3'",
         indexed,
     )?;
@@ -859,12 +957,27 @@ pub(crate) fn matches_query(c: &Connection, has_analysis: bool, key: &str, limit
     };
     let metric = Metric::new(&seed).context("Incompatible analysis profile")?;
     response.seed_ready = true;
-    let candidates = indexed.then(|| crate::sonic_index::candidates(c, &seed, std::slice::from_ref(&seed.features), false, (limit*16).max(1024), None, &Default::default())).flatten();
+    let candidates = indexed
+        .then(|| {
+            crate::sonic_index::candidates(
+                c,
+                &seed,
+                std::slice::from_ref(&seed.features),
+                false,
+                (limit * 16).max(1024),
+                None,
+                &Default::default(),
+            )
+        })
+        .flatten();
     // Stream only identity and analysis; hydrate display metadata for the winners.
-    let selection = candidates.as_ref().map(|_| " AND s.track_key IN (SELECT value FROM json_each(?2))").unwrap_or("");
+    let selection = candidates
+        .as_ref()
+        .map(|_| " AND s.track_key IN (SELECT value FROM json_each(?2))")
+        .unwrap_or("");
     let mut q=c.prepare(&format!("SELECT t.id,t.file_path,t.filename,a.features,s.size,s.modified FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'{selection}"))?;
-    let mut values=vec![rusqlite::types::Value::Text(PROFILE.into())];
-    if let Some(candidates)=&candidates {
+    let mut values = vec![rusqlite::types::Value::Text(PROFILE.into())];
+    if let Some(candidates) = &candidates {
         values.push(rusqlite::types::Value::Text(candidates.keys.clone()));
         response.analyzed=crate::sonic_index::count(c,"tracks-unbanned","SELECT COUNT(*) FROM sonic.sonic_tracks s CROSS JOIN tracks t ON s.directory=t.file_path AND s.filename=t.filename JOIN sonic.sonic_audio a USING(audio_hash,profile) WHERE s.profile=?1 AND COALESCE(t.love,'')!='B'",true)?;
     }
@@ -893,7 +1006,9 @@ pub(crate) fn matches_query(c: &Connection, has_analysis: bool, key: &str, limit
     let mut ranked = Vec::new();
     for result in rows {
         let (id, directory, filename, features, size, modified) = result?;
-        if candidates.is_none() { response.analyzed += 1; }
+        if candidates.is_none() {
+            response.analyzed += 1;
+        }
         let candidate_key = track_key(&directory, &filename);
         if candidate_key == key {
             continue;
@@ -926,9 +1041,11 @@ pub(crate) fn matches_query(c: &Connection, has_analysis: bool, key: &str, limit
         track.distance = Some(candidate.distance);
         response.tracks.push(track);
     }
-    if candidates.is_some() && response.tracks.len()<limit {
+    if candidates.is_some() && response.tracks.len() < limit {
         crate::sonic_index::fallback();
-        drop(metadata); drop(q); drop(transaction);
+        drop(metadata);
+        drop(q);
+        drop(transaction);
         return matches_query(source, has_analysis, key, limit, false);
     }
     Ok(response)
@@ -1106,6 +1223,144 @@ pub async fn sonic_save_playlist(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn estimate_uses_new_successes_and_excludes_cache_failures_and_waits() {
+        let mut estimate = AnalysisEstimate::default();
+        for _ in 0..10_000 {
+            estimate.observe(Some(AnalysisWork::Cached), Duration::from_millis(2), false);
+        }
+        estimate.observe(None, Duration::from_millis(5), false);
+        assert_eq!(estimate.remaining(1_000_000), None);
+        for _ in 0..3 {
+            estimate.observe(Some(AnalysisWork::Extracted), Duration::from_secs(2), false);
+        }
+        assert_eq!(estimate.remaining(1_000_000), Some(2_000_000));
+        estimate.observe(Some(AnalysisWork::Reused), Duration::from_millis(10), false);
+        assert_eq!(estimate.remaining(1_000_000), Some(2_000_000));
+        // An idle wait is never a sample; remaining() does not read wall time.
+        assert_eq!(estimate.remaining(500_000), Some(1_000_000));
+        estimate.observe(None, Duration::from_secs(180), false);
+        estimate.observe(Some(AnalysisWork::Cached), Duration::from_millis(1), false);
+        assert_eq!(estimate.remaining(500_000), None);
+        estimate.observe(Some(AnalysisWork::Extracted), Duration::from_secs(2), false);
+        assert_eq!(estimate.remaining(500_000), Some(1_000_000));
+        assert_eq!(AnalysisEstimate::default().remaining(500_000), None);
+        assert_eq!(estimate.remaining(0), None);
+    }
+
+    #[test]
+    fn reuse_estimate_samples_verified_and_unmatched_files_without_decoding() {
+        let mut estimate = AnalysisEstimate::default();
+        for work in [
+            AnalysisWork::Reused,
+            AnalysisWork::Unmatched,
+            AnalysisWork::Reused,
+        ] {
+            estimate.observe(Some(work), Duration::from_millis(100), true);
+        }
+        assert_eq!(estimate.remaining(1_000), Some(100));
+    }
+
+    #[test]
+    fn repeated_failures_stop_with_saved_errors_and_unprocessed_checkpoints() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('broken-decoder',1);")
+            .unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..SonicSchedule::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        for i in 0..12 {
+            let filename = format!("missing-{i:02}.mp3");
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![filename, dir.path().to_string_lossy(), filename]).unwrap();
+        }
+        // Existing analysis between failures must not disguise a broken decoder.
+        for i in 1..=3 {
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![format!("missing-{:02}-cached", i * 2), dir.path().to_string_lossy(), format!("{i}.mp3")]).unwrap();
+        }
+        let reports = std::cell::RefCell::new(Vec::new());
+        let error = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "all".into(),
+                album_id: None,
+                batch_id: Some("broken-decoder".into()),
+            },
+            &|| false,
+            &|completed, _, message, eta| {
+                reports
+                    .borrow_mut()
+                    .push((completed, message.to_string(), eta))
+            },
+            &|| None,
+            &|| 12,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Stopped after 10 failed files"));
+        assert_eq!(
+            w.query_row(
+                "SELECT count(*) FROM sonic_items WHERE state='failed'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            10
+        );
+        assert_eq!(
+            w.query_row(
+                "SELECT count(*) FROM sonic_items WHERE state='pending'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+        assert!(reports.borrow().iter().all(|(_, _, eta)| eta.is_none()));
+        assert_eq!(reports.borrow().last().unwrap().0, 13);
+        assert!(reports
+            .borrow()
+            .last()
+            .unwrap()
+            .1
+            .contains("10 files failed"));
+        assert_eq!(status_at(dir.path()).unwrap().analyzed, 3);
+    }
+
+    #[test]
+    fn cached_resumed_checkpoints_do_not_generate_an_analysis_estimate() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..SonicSchedule::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        let result = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "all".into(),
+                album_id: None,
+                batch_id: Some("cached-eta".into()),
+            },
+            &|| false,
+            &|_, _, _, eta| assert_eq!(eta, None),
+            &|| None,
+            &|| 12,
+        )
+        .unwrap();
+        assert_eq!(result["failedCount"], 0);
+    }
     use music_sonic_core::DIMENSIONS;
     #[test]
     fn journey_save_preserves_the_exact_five_stop_preview_and_rejects_changed_files() {
@@ -1465,7 +1720,7 @@ mod tests {
                 batch_id: Some("reuse-test".into()),
             },
             &|| false,
-            &|_, _, _| {},
+            &|_, _, _, _| {},
             &|| None,
             &|| 12,
         )
@@ -1527,7 +1782,7 @@ mod tests {
                 batch_id: Some("empty-cache".into()),
             },
             &|| false,
-            &|_, _, _| {},
+            &|_, _, _, _| {},
             &|| None,
             &|| 12,
         );
@@ -1562,7 +1817,7 @@ mod tests {
             dir.path(),
             request.clone(),
             &|| stop.load(Ordering::SeqCst),
-            &|_, _, message| {
+            &|_, _, message, _| {
                 assert!(message.contains("Waiting"));
                 stop.store(true, Ordering::SeqCst);
             },
@@ -1577,7 +1832,7 @@ mod tests {
             dir.path(),
             request.clone(),
             &|| w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id='resume-test' AND state='done'", [], |r| r.get::<_, i64>(0)).unwrap() == 1,
-            &|_, _, _| {},
+            &|_, _, _, _| {},
             &|| Some(301),
             &|| 23
         )
@@ -1587,7 +1842,7 @@ mod tests {
             dir.path(),
             request,
             &|| false,
-            &|_, _, _| {},
+            &|_, _, _, _| {},
             &|| Some(301),
             &|| 23,
         )
@@ -1618,7 +1873,7 @@ mod tests {
             dir.path(),
             AnalyzeRequest { scope: "all".into(), album_id: None, batch_id: Some("schedule-change".into()) },
             &|| false,
-            &|completed, _, message| {
+            &|completed, _, message, _| {
                 if message.contains("Waiting") {
                     saw_wait.set(true);
                     let unrestricted = SonicSchedule { idle_only: false, idle_minutes: 5, start_hour: None, end_hour: None };
@@ -1642,16 +1897,24 @@ mod tests {
     }
     #[test]
     fn indexed_track_matches_rebind_ids_and_exclude_bans_and_stale_files() {
-        let (dir,c,_)=crate::sonic_index::tests::fixture();
-        let key=track_key(&dir.path().to_string_lossy(),"00000.mp3");
-        let same=|| {
-            let exact=matches_query(&c,true,&key,50,false).unwrap();
-            let indexed=matches_query(&c,true,&key,50,true).unwrap();
-            assert_eq!(serde_json::to_value(exact).unwrap(),serde_json::to_value(indexed).unwrap());
+        let (dir, c, _) = crate::sonic_index::tests::fixture();
+        let key = track_key(&dir.path().to_string_lossy(), "00000.mp3");
+        let same = || {
+            let exact = matches_query(&c, true, &key, 50, false).unwrap();
+            let indexed = matches_query(&c, true, &key, 50, true).unwrap();
+            assert_eq!(
+                serde_json::to_value(exact).unwrap(),
+                serde_json::to_value(indexed).unwrap()
+            );
         };
-        same();c.execute("UPDATE tracks SET id=id+10000 WHERE id>100",[]).unwrap();
-        c.execute("UPDATE tracks SET love='B' WHERE filename='00001.mp3'",[]).unwrap();
-        c.execute("DELETE FROM tracks WHERE filename='00002.mp3'",[]).unwrap();
-        fs::write(dir.path().join("00003.mp3"),[9;257]).unwrap();same();
+        same();
+        c.execute("UPDATE tracks SET id=id+10000 WHERE id>100", [])
+            .unwrap();
+        c.execute("UPDATE tracks SET love='B' WHERE filename='00001.mp3'", [])
+            .unwrap();
+        c.execute("DELETE FROM tracks WHERE filename='00002.mp3'", [])
+            .unwrap();
+        fs::write(dir.path().join("00003.mp3"), [9; 257]).unwrap();
+        same();
     }
 }

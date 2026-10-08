@@ -1,5 +1,11 @@
 # Music Library
 
+Music Library 0.185.1 fixes audio analysis of MP3s with ID3 tags and large
+embedded covers. Retry the interrupted or cancelled analysis job in Activity
+Center to retain completed checkpoints and retry failed files. Remaining time
+uses successful new analyses, excluding cached skips, failures and idle waits;
+it appears after three samples. Repeated failures stop with a visible explanation.
+
 Music Library 0.185.0 and Aurora 0.33.0 share **Smart playlists**. Use **Playlist
 Builder → Create Smart playlist** for local song or album rules, sorting, a song
 limit, and automatic/manual refresh. **Edit rules** preserves existing advanced

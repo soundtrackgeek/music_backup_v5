@@ -32,6 +32,22 @@ continues to handle other Activity Center jobs while analysis waits. Pause,
 resume, cancel, and retry in Activity Center. Completed files survive pauses,
 restarts, cancellation, and failed batches; retry retains completed checkpoints.
 
+### Remaining time and failures
+
+The estimate measures successful new analysis in the current run. Cached skips,
+failed files and previous checkpoints do not increase the measured processing
+rate. It appears after three successful samples and clears while waiting for
+idle/scheduled hours or after a failure. Resume starts a fresh measurement.
+The estimate describes active processing time; it does not predict when the
+computer will next be idle. Remaining queued files are conservatively treated
+as needing analysis until checked, so more cached results can shorten the run.
+
+Ten failed attempts without successful new analysis stop the job with the last
+file/error in Activity Center. Completed results and unprocessed checkpoints
+remain saved. Check the analyzer or affected files, then **Retry** the same job.
+Music Library 0.185.1 enables MP3 metadata readers for ID3 tags and large covers;
+this fix reuses existing features and does not require a full reanalysis.
+
 ## Results you can use immediately
 
 In Music Library's **Discovery → Because You Played / Loved**, sound neighbors
