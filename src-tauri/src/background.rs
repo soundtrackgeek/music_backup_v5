@@ -175,7 +175,21 @@ mod desktop {
         let overlay_app = app.clone();
         let update_app = app.clone();
         let catalog_app = app.clone();
+        let backup_app = app.clone();
         let tasks = vec![
+            tauri::async_runtime::spawn(async move {
+                let mut timer = tokio::time::interval(Duration::from_secs(60));
+                timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    timer.tick().await;
+                    let app = backup_app.clone();
+                    let outcome = tauri::async_runtime::spawn_blocking(move || {
+                        crate::sonic_backup_schedule::run_due_at(&crate::sonic::directory(&app)?, chrono::Utc::now().timestamp_millis())
+                    }).await;
+                    if let Err(error) = outcome { eprintln!("Automatic analysis backup task failed: {error}"); }
+                    // Export failures are persisted for the Tools panel; retry has a durable deadline.
+                }
+            }),
             tauri::async_runtime::spawn(run_schedule(doctor_config, true, move || {
                 let app = doctor_app.clone();
                 async move {

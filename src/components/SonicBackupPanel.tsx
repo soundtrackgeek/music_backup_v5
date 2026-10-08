@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { analysisBackupFolder, chooseAnalysisBackup, chooseAnalysisBackupFolder, exportAnalysisBackup, inspectAnalysisBackup, restoreAnalysisBackup, type AnalysisBackup } from "../backend/sonicBackup";
+import { SonicAutomaticBackup } from "./SonicAutomaticBackup";
 
 export function SonicBackupPanel({ onVerify }: { onVerify: () => Promise<void> }) {
   const [folder, setFolder] = useState("");
@@ -33,6 +34,7 @@ export function SonicBackupPanel({ onVerify }: { onVerify: () => Promise<void> }
       <p>Merge with this computer’s results. Existing compatible results are backed up locally first. Pause audio analysis in Activity Center before restoring.</p>
       <button type="button" disabled={busy} onClick={() => void perform(async () => { const result = await restoreAnalysisBackup(review); if (live.current) { setReview(null); setMessage(`Merged ${result.added.toLocaleString()} audio results; ${result.alreadyPresent.toLocaleString()} already present.${result.safetyBackup ? ` Safety backup: ${result.safetyBackup}.` : ""} Run Verify reused analysis to match these results to your local files.`); } })}>Merge this backup</button>
     </div>}
+    <SonicAutomaticBackup folder={folder} disabled={busy} />
     <div className="sonic-analysis-actions"><button type="button" disabled={busy} onClick={() => void perform(onVerify)}>Verify reused analysis</button></div>
     <p>Verification checks cataloged MP3 fingerprints without decoding. It follows your idle schedule and supports pause, resume and cancel in Activity Center. Each verified track becomes available to Aurora immediately. Normal analysis also reuses restored results.</p>
     <p>Catalog and music files must be available on this computer. Restoring preserves local settings and jobs. No music files are included.</p>

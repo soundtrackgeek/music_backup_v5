@@ -202,8 +202,39 @@ ready. Normal analysis also uses the cache, so an existing paused job can simply
 resume after restore. Cancel leaves merged features and verified checkpoints
 intact. A cloud upload or real second-computer transfer is not confirmed merely
 by successful local export. Use these archives instead of copying live SQLite
-or WAL files. Backup creation is manual; this release does not schedule backups
-or prune older archives automatically.
+or WAL files.
+
+### Automatic backups (0.182.0)
+
+In the same panel, enable **Automatic backups**, set **Backup every (hours)**
+(1–168, default **6**) and **Backups to keep** (1–1000, default **7**), and
+select **Save automatic backup settings**. They use the folder shown above,
+normally **OneDrive\\_musicbackup\\sonic-analysis**. Save again after choosing
+a different folder. Automatic backup is initially off until you enable it.
+
+Music Library must be open. The native scheduler checks once a minute;
+enabling it or changing its folder/interval makes the first backup due immediately.
+After a successful backup, the next deadline is the configured number of hours
+after that run started. Deadlines survive restarts and sleep: an overdue backup
+runs once when the app is available, rather than replaying every missed interval.
+There is no Windows scheduled task or background service while the app is closed.
+The analyzer can continue running during export, independently of its idle/hours
+settings. Export failures (including no completed results or an unavailable
+destination) keep existing archives and retry after five minutes; last/next backup
+and errors are visible here. Disabling automatic backups stops future runs;
+an export already in progress may finish.
+
+After a new archive succeeds, retention keeps the newest configured number of
+**this computer's automatic archives in the saved folder**. Ownership receipts
+and full checksum/schema validation are required before pruning. Changed,
+manual and other computers' archives are preserved, as are backups in previous
+folders. Lowering retention takes effect after the next successful backup.
+Modified or unreadable archives are released from automatic management and
+preserved; the panel reports this so they do not block future retention.
+Settings, deadlines and ownership records live in device-local
+`sonic-backup-state.sqlite3`, excluded from portable archives. Manual backups
+remain available and do not reset the automatic deadline. OneDrive's own client
+performs upload; a locally saved backup still does not confirm cloud upload.
 
 ## Development and licensing
 

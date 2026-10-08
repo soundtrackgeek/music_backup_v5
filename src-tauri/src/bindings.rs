@@ -13,6 +13,7 @@ use tauri_specta::{Builder, ErrorHandlingMode};
 use super::{
     sonic,
     sonic_backup,
+    sonic_backup_schedule,
     acknowledge_catalog_revision,
     refresh_lastfm_artist_images,
     search_wish_list_musicbrainz,
@@ -197,6 +198,8 @@ fn builder() -> Builder<Wry> {
         sonic_backup::sonic_backup_export,
         sonic_backup::sonic_backup_inspect,
         sonic_backup::sonic_backup_restore,
+        sonic_backup_schedule::sonic_backup_status,
+        sonic_backup_schedule::sonic_backup_configure,
         sonic::sonic_configure,
         sonic::sonic_seeds,
         sonic::sonic_journey,

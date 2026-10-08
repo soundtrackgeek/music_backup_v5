@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.182.0] - 2026-10-08
+
+### Added
+- Configurable automatic audio analysis backups in Tools, with a six-hour interval and seven archives preselected. Saved deadlines survive sleep and restarts; the native scheduler runs while Music Library is open and retries failures after five minutes.
+- A **Backups to keep** field and automatic retention after successful publication. Only validated automatic archives owned by this computer in the configured folder are pruned; manual, changed and other computers' backups are preserved. The panel shows last/next backup, progress and errors.
+
+### Changed
+- Manual and automatic exports share a backup lock to avoid overlapping snapshot work. Automatic backup settings and ownership receipts remain device-local and are excluded from portable analysis archives.
+
 ## [0.181.0] - 2026-10-08
 
 ### Added

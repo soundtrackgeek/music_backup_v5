@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SonicBackupPanel } from "./SonicBackupPanel";
 import * as backend from "../backend/sonicBackup";
-vi.mock("../backend/sonicBackup", () => ({ analysisBackupFolder: vi.fn(), chooseAnalysisBackup: vi.fn(), chooseAnalysisBackupFolder: vi.fn(), exportAnalysisBackup: vi.fn(), inspectAnalysisBackup: vi.fn(), restoreAnalysisBackup: vi.fn() }));
+vi.mock("../backend/sonicBackup", () => ({ analysisBackupFolder: vi.fn(), chooseAnalysisBackup: vi.fn(), chooseAnalysisBackupFolder: vi.fn(), exportAnalysisBackup: vi.fn(), inspectAnalysisBackup: vi.fn(), restoreAnalysisBackup: vi.fn(), analysisBackupStatus: vi.fn(), configureAnalysisBackup: vi.fn() }));
+beforeEach(() => vi.mocked(backend.analysisBackupStatus).mockResolvedValue({ schedule: { enabled: false, intervalHours: 6, backupsToKeep: 7, folder: "OneDrive/_musicbackup/sonic-analysis" }, lastBackup: null, nextBackupAt: null, lastError: null, running: false }));
 afterEach(() => vi.resetAllMocks());
 const archive: backend.AnalysisBackup = { path: "OneDrive/archive.sonic-backup", createdAt: "2026-10-08T12:00:00Z", archiveVersion: 1, profile: "test", dimensions: 23, audioCount: 12345, databaseBytes: 1024*1024, sha256: "reviewed-digest" };
 it("preselects OneDrive and reviews the selected archive before a guarded merge", async () => {

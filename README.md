@@ -1,6 +1,13 @@
 # Music Library
 
-Music Library 0.181.0 adds **Tools → Audio analysis → Backup and cross-PC reuse**.
+Music Library 0.182.0 adds configurable **Automatic backups** under
+**Tools → Audio analysis → Backup and cross-PC reuse**. Enable them, set
+**Backup every (hours)** (default 6) and **Backups to keep** (default 7), then save.
+Music Library must be running; missed backups catch up after sleep or restart.
+Retention removes only this computer's validated automatic archives after a
+new backup succeeds. Manual and other computers' backups remain available.
+
+Music Library also provides **Tools → Audio analysis → Backup and cross-PC reuse**.
 Backups default to **OneDrive\\_musicbackup\\sonic-analysis**. Save a checksummed
 archive of completed features, merge it on another computer, then run **Verify
 reused analysis** to fingerprint local MP3s without decoding them again. Verified

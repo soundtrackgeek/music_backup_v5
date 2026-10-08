@@ -8,7 +8,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -156,7 +156,7 @@ fn features(hash: &str, json: &str, weights: &[f32]) -> Result<Vec<f32>> {
     Ok(values)
 }
 
-fn digest(path: &Path) -> Result<String> {
+pub(crate) fn digest(path: &Path) -> Result<String> {
     let mut f = File::open(path)?;
     let mut hash = Sha256::new();
     let mut buffer = [0; 65536];
@@ -171,9 +171,29 @@ fn digest(path: &Path) -> Result<String> {
 }
 
 pub(crate) fn export_at(dir: &Path, folder: &Path) -> Result<AnalysisBackup> {
+    export_named_at(dir, folder, "analysis")
+}
+
+pub(crate) fn export_named_at(dir: &Path, folder: &Path, prefix: &str) -> Result<AnalysisBackup> {
+    if prefix.is_empty()
+        || !prefix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        bail!("Invalid analysis backup name");
+    }
     if !folder.is_absolute() {
         bail!("Choose an absolute backup folder, normally OneDrive/_musicbackup/sonic-analysis");
     }
+    let guard = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(dir.join("sonic-backup.lock"))?;
+    guard
+        .try_lock()
+        .context("An analysis backup is already being created; try again shortly")?;
     let source = reader(&dir.join("music-analysis.sqlite3"))
         .context("Analyze some music before backing up results")?;
     let file = tempfile::NamedTempFile::new_in(dir)?;
@@ -223,7 +243,7 @@ pub(crate) fn export_at(dir: &Path, folder: &Path) -> Result<AnalysisBackup> {
     let created = chrono::Utc::now();
     fs::create_dir_all(folder)?;
     let path = folder.join(format!(
-        "analysis-{}-{}.sonic-backup",
+        "{prefix}-{}-{}.sonic-backup",
         created.format("%Y%m%dT%H%M%S%.9fZ"),
         std::process::id()
     ));

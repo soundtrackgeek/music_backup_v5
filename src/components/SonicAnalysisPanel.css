@@ -17,3 +17,5 @@
 .sonic-backup summary { cursor:pointer; font-weight:600; }
 .sonic-backup-path { overflow-wrap:anywhere; }
 .sonic-backup-review { border:1px solid var(--color-border); border-radius:8px; padding:12px; }
+.sonic-backup-automatic { margin: 1rem 0; padding: 1rem; min-width: 0; border: 1px solid var(--border-color, #344540); border-radius: .6rem; }
+.sonic-backup-automatic input[type="number"] { width: 5rem; }

@@ -10,6 +10,8 @@ export const commands = {
 	sonicBackupExport: (folder: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_export", { folder }),
 	sonicBackupInspect: (path: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_inspect", { path }),
 	sonicBackupRestore: (path: string, sha256: string) => __TAURI_INVOKE<AnalysisRestore>("sonic_backup_restore", { path, sha256 }),
+	sonicBackupStatus: () => __TAURI_INVOKE<BackupStatus>("sonic_backup_status"),
+	sonicBackupConfigure: (schedule: BackupSchedule) => __TAURI_INVOKE<BackupStatus>("sonic_backup_configure", { schedule }),
 	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
 	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
 	sonicJourney: (request: JourneyRequest) => __TAURI_INVOKE<JourneyResponse>("sonic_journey", { request }),
@@ -910,6 +912,21 @@ export type Assessment = {
 	builder: Score,
 	breather: Score,
 	closer: Score,
+};
+
+export type BackupSchedule = {
+	enabled: boolean,
+	intervalHours: number,
+	backupsToKeep: number,
+	folder: string,
+};
+
+export type BackupStatus = {
+	schedule: BackupSchedule,
+	lastBackup: AnalysisBackup | null,
+	nextBackupAt: string | null,
+	lastError: string | null,
+	running: boolean,
 };
 
 export type BillboardImportSummary = {

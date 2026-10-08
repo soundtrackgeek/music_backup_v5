@@ -29,6 +29,7 @@ mod musicbrainz_sync;
 mod published_charts;
 mod sonic;
 mod sonic_backup;
+mod sonic_backup_schedule;
 mod sonic_albums;
 mod sonic_journey;
 #[cfg(test)]

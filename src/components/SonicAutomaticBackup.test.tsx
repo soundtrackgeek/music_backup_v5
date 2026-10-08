@@ -1,0 +1,44 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SonicAutomaticBackup } from "./SonicAutomaticBackup";
+import * as backend from "../backend/sonicBackup";
+vi.mock("../backend/sonicBackup", () => ({ analysisBackupStatus: vi.fn(), configureAnalysisBackup: vi.fn() }));
+const initial: backend.BackupStatus = { schedule: { enabled: false, intervalHours: 6, backupsToKeep: 7, folder: "OneDrive/backups" }, lastBackup: null, nextBackupAt: null, lastError: null, running: false };
+beforeEach(() => vi.mocked(backend.analysisBackupStatus).mockResolvedValue(initial));
+afterEach(() => vi.resetAllMocks());
+it("loads six hours and seven archives and persists edited retention with the chosen folder", async () => {
+  vi.mocked(backend.configureAnalysisBackup).mockImplementation(async schedule => ({ ...initial, schedule, nextBackupAt: "2026-10-08T20:00:00Z" }));
+  render(<SonicAutomaticBackup folder="OneDrive/chosen" disabled={false} />);
+  await waitFor(() => expect(screen.getByLabelText("Backups to keep")).toBeEnabled());
+  expect(screen.getByLabelText("Backup every (hours)")).toHaveValue(6);
+  expect(screen.getByLabelText("Backups to keep")).toHaveValue(7);
+  fireEvent.click(screen.getByLabelText("Enable automatic analysis backups"));
+  fireEvent.change(screen.getByLabelText("Backups to keep"), { target: { value: "3" } });
+  fireEvent.change(screen.getByLabelText("Backup every (hours)"), { target: { value: "12" } });
+  fireEvent.click(screen.getByText("Save automatic backup settings"));
+  await waitFor(() => expect(backend.configureAnalysisBackup).toHaveBeenCalledWith({ enabled: true, intervalHours: 12, backupsToKeep: 3, folder: "OneDrive/chosen" }));
+  expect(await screen.findByText(/Automatic backup settings saved/)).toBeInTheDocument();
+  expect(screen.getByText(/Next automatic backup:/)).toBeInTheDocument();
+});
+it("can disable saved automatic backups and retains edits after a failed save", async () => {
+  vi.mocked(backend.analysisBackupStatus).mockResolvedValue({ ...initial, schedule: { ...initial.schedule, enabled: true, backupsToKeep: 4 } });
+  vi.mocked(backend.configureAnalysisBackup).mockRejectedValueOnce(new Error("Could not save settings")).mockImplementation(async schedule => ({ ...initial, schedule }));
+  render(<SonicAutomaticBackup folder="OneDrive/backups" disabled={false} />);
+  await waitFor(() => expect(screen.getByLabelText("Enable automatic analysis backups")).toBeChecked());
+  fireEvent.click(screen.getByLabelText("Enable automatic analysis backups"));
+  fireEvent.click(screen.getByText("Save automatic backup settings"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not save settings");
+  expect(screen.getByLabelText("Enable automatic analysis backups")).not.toBeChecked();
+  expect(screen.getByLabelText("Backups to keep")).toHaveValue(4);
+  fireEvent.click(screen.getByText("Save automatic backup settings"));
+  expect(await screen.findByText("Automatic backups disabled.")).toBeInTheDocument();
+});
+it("shows scheduler failures and last successful backup while preserving in-progress controls", async () => {
+  vi.mocked(backend.analysisBackupStatus).mockResolvedValue({ ...initial, running: true, lastError: "Destination unavailable", lastBackup: { path: "OneDrive/success.sonic-backup", createdAt: "2026-10-08T10:00:00Z", archiveVersion: 1, profile: "test", dimensions: 23, audioCount: 500, databaseBytes: 1000, sha256: "test" } });
+  const { rerender } = render(<SonicAutomaticBackup folder="OneDrive/backups" disabled={false} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Destination unavailable");
+  expect(screen.getByText("Automatic analysis backup is running.")).toBeInTheDocument();
+  expect(screen.getByText(/Last automatic backup:.*500 results/)).toBeInTheDocument();
+  rerender(<SonicAutomaticBackup folder="OneDrive/backups" disabled={true} />);
+  expect(screen.getByText("Save automatic backup settings")).toBeDisabled();
+});
