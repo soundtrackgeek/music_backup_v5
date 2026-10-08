@@ -752,6 +752,14 @@ async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+async fn save_smart_playlist(app: AppHandle, input: ai::SaveSmartPlaylistRequest) -> Result<ai::SavedPlaylist, String> {
+    tauri::async_runtime::spawn_blocking(move || db::save_smart_playlist_for_app(&app, input))
+        .await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 async fn set_playlist_automation(
     app: AppHandle,
     input: ai::SetPlaylistAutomationRequest,

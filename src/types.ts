@@ -331,7 +331,8 @@ import type {
 export type Complete<T> = T extends readonly unknown[]
   ? { [K in keyof T]: Complete<T[K]> }
   : T extends object
-    ? { [K in keyof T as [Exclude<T[K], undefined>] extends [never] ? never : K]-?: Complete<T[K]> }
+    ? { [K in keyof T as K extends "smartSettings" ? never : [Exclude<T[K], undefined>] extends [never] ? never : K]-?: Complete<T[K]> }
+      & { [K in keyof T as K extends "smartSettings" ? K : never]?: Complete<T[K]> }
     : T;
 
 export type {

@@ -3970,6 +3970,13 @@ export async function listSavedPlaylists(): Promise<SavedPlaylist[]> {
   return commands.listSavedPlaylists().then(completed);
 }
 
+export async function saveSmartPlaylist(input: import("./bindings").SaveSmartPlaylistRequest): Promise<SavedPlaylist> {
+  if (isTauriRuntime()) return commands.saveSmartPlaylist(input).then(completed);
+  const draft = await buildPlaylist({ prompt: input.name, sourceRequest: input.request as BrowseRequest });
+  const saved = await savePlaylist({ id: input.id ?? null, name: input.name, playlist: { ...draft, request: input.request as BrowseRequest, smartSettings: input.settings } });
+  return setPlaylistAutomation({ id: saved.id, smart: true });
+}
+
 export async function savePlaylist(input: SavePlaylistRequest): Promise<SavedPlaylist> {
   if (!isTauriRuntime()) {
     const now = new Date().toISOString();

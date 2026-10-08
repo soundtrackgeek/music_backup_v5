@@ -1521,6 +1521,8 @@ pub(super) fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
     let field = if is_tracks {
         match sort.field.as_str() {
             "title" => "LOWER(COALESCE(t.title, ''))",
+            "added" => "t.import_run_id",
+            "releaseYear" => "t.release_year",
             "displayArtist" => "LOWER(COALESCE(t.display_artist, ''))",
             "artist" => "LOWER(COALESCE(t.album_artist_display, ''))",
             "year" => "t.year",
@@ -1551,6 +1553,8 @@ pub(super) fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
     } else {
         match sort.field.as_str() {
             "artist" => "LOWER(COALESCE(a.album_artist_display, ''))",
+            "added" => "a.import_run_id",
+            "releaseYear" => "a.release_year",
             "year" => "a.year",
             "genre" => "LOWER(COALESCE(a.genre_normalized, ''))",
             "originCountry" => "LOWER(COALESCE(origin.country_name, origin.country_code, ''))",
@@ -1574,15 +1578,17 @@ pub(super) fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
     };
 
     if is_tracks && sort.field == "trackNumber" {
-        return format!("ORDER BY {field} {direction}, t.track_number {direction}, t.title ASC");
+        return format!(
+            "ORDER BY {field} {direction}, t.track_number {direction}, t.title ASC, t.id ASC"
+        );
     }
 
     if is_tracks {
         format!(
-            "ORDER BY {field} {direction}, LOWER(COALESCE(t.album, '')) ASC, t.disc_number ASC, t.track_number ASC"
+            "ORDER BY {field} {direction}, LOWER(COALESCE(t.album, '')) ASC, t.disc_number ASC, t.track_number ASC, t.id ASC"
         )
     } else {
-        format!("ORDER BY {field} {direction}, LOWER(COALESCE(a.album_artist_display, '')) ASC")
+        format!("ORDER BY {field} {direction}, LOWER(COALESCE(a.album_artist_display, '')) ASC, a.id ASC")
     }
 }
 

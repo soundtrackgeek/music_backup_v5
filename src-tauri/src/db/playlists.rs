@@ -129,6 +129,7 @@ pub(super) fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<
     let total_seconds = tracks.iter().map(|track| track.seconds.max(0)).sum::<i64>();
 
     Ok(AiPlaylist {
+        smart_settings: None,
         mixtape: None,
         prompt: plan.prompt,
         name: plan.name,
@@ -150,6 +151,9 @@ pub(super) fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<
 
 pub(super) fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist> {
     crate::jev::validate_playlist(&playlist)?;
+    if let Some(settings) = &playlist.smart_settings {
+        validate_smart_settings(settings)?;
+    }
     if playlist.prompt.trim().is_empty() || playlist.prompt.chars().count() > 2_000 {
         bail!("A saved playlist requires its original prompt")
     }
@@ -159,7 +163,8 @@ pub(super) fn normalize_playlist(mut playlist: AiPlaylist) -> Result<AiPlaylist>
     if playlist.description.trim().is_empty() || playlist.description.chars().count() > 500 {
         bail!("Playlist descriptions must contain 1 to 500 characters")
     }
-    if playlist.request.view != "tracks"
+    if (playlist.request.view != "tracks"
+        && !(playlist.request.view == "albums" && playlist.smart_settings.is_some()))
         || !matches!(
             playlist.strategy.as_str(),
             "ranked" | "variety" | "discovery" | "random"
@@ -289,7 +294,7 @@ pub(super) fn save_playlist(
             }
         }
     }
-    if playlist.tracks.is_empty() {
+    if playlist.tracks.is_empty() && playlist.smart_settings.is_none() {
         bail!("Add at least one track before saving the playlist")
     }
     let playlist_json =
@@ -357,6 +362,11 @@ pub(super) fn delete_saved_playlist(conn: &Connection, id: i64) -> Result<()> {
 }
 
 pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
+    let transaction = if conn.is_autocommit() {
+        Some(conn.unchecked_transaction()?)
+    } else {
+        None
+    };
     let mut saved = load_saved_playlist(conn, id)?;
     if saved.playlist.mixtape.is_some() {
         bail!("A mixtape cannot be refreshed as a Smart playlist")
@@ -371,7 +381,11 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
     }
 
     let mut request = saved.playlist.request.clone();
-    request.view = "tracks".to_string();
+    let track_limit = saved
+        .playlist
+        .smart_settings
+        .as_ref()
+        .map(|s| s.track_limit as usize);
     request.offset = 0;
     request.limit = 1_000;
     if request.sort.field == "random" {
@@ -388,7 +402,43 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
         }
         let page_count = response.rows.len();
         for row in response.rows {
-            playlist_tracks.push(playlist_track_from_row(row)?);
+            if request.view == "albums" {
+                let mut album_request = BrowseRequest {
+                    view: "tracks".into(),
+                    limit: 1_000,
+                    sort: BrowseSort {
+                        field: "trackNumber".into(),
+                        direction: "asc".into(),
+                    },
+                    ..Default::default()
+                };
+                album_request.filters.album_ids = vec![row.album_id];
+                loop {
+                    let page = search_library(conn, album_request.clone(), 1_000)?;
+                    let count = page.rows.len();
+                    for track in page.rows {
+                        playlist_tracks.push(playlist_track_from_row(track)?);
+                        if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+                            break;
+                        }
+                    }
+                    album_request.offset += count as u32;
+                    if count == 0
+                        || i64::from(album_request.offset) >= page.total
+                        || track_limit.is_some_and(|limit| playlist_tracks.len() >= limit)
+                    {
+                        break;
+                    }
+                }
+            } else {
+                playlist_tracks.push(playlist_track_from_row(row)?);
+            }
+            if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+                break;
+            }
+        }
+        if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+            break;
         }
         if page_count == 0 {
             break;
@@ -399,6 +449,9 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
         }
     }
 
+    if request.view == "albums" {
+        desired_count = playlist_tracks.len() as i64;
+    }
     let refreshed_at = Utc::now().to_rfc3339();
     saved.playlist.tracks = playlist_tracks;
     saved.playlist.total_seconds = saved
@@ -444,7 +497,11 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
         params![refreshed_at, desired_count, id],
     )?;
 
-    load_saved_playlist(conn, id)
+    let result = load_saved_playlist(conn, id)?;
+    if let Some(transaction) = transaction {
+        transaction.commit()?;
+    }
+    Ok(result)
 }
 
 pub(super) fn set_playlist_automation(
@@ -485,6 +542,15 @@ pub(crate) fn refresh_all_smart_playlists_for_connection(conn: &Connection) -> R
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut refreshed = 0;
     for id in ids {
+        let saved = load_saved_playlist(conn, id)?;
+        if saved
+            .playlist
+            .smart_settings
+            .as_ref()
+            .is_some_and(|s| s.refresh_policy == "manual")
+        {
+            continue;
+        }
         match evaluate_smart_playlist(conn, id) {
             Ok(_) => refreshed += 1,
             Err(error) => {
@@ -496,6 +562,222 @@ pub(crate) fn refresh_all_smart_playlists_for_connection(conn: &Connection) -> R
         }
     }
     Ok(refreshed)
+}
+
+fn validate_smart_settings(settings: &crate::ai::SmartPlaylistSettings) -> Result<()> {
+    if !(1..=10_000).contains(&settings.track_limit)
+        || !matches!(settings.refresh_policy.as_str(), "library" | "manual")
+    {
+        bail!("Smart playlists require a limit from 1 to 10000 and a library or manual refresh policy")
+    }
+    Ok(())
+}
+
+pub(crate) fn save_smart_playlist_on(
+    conn: &Connection,
+    input: crate::ai::SaveSmartPlaylistRequest,
+) -> Result<SavedPlaylist> {
+    validate_smart_settings(&input.settings)?;
+    if !matches!(input.request.view.as_str(), "tracks" | "albums")
+        || !input.request.filters.track_ids.is_empty()
+        || input.request.sort.field == "random"
+    {
+        bail!("Smart playlists need reusable track filters and a stable sort")
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut playlist = if let Some(id) = input.id {
+        let saved = load_saved_playlist(&tx, id)?;
+        if input
+            .expected_updated_at
+            .as_ref()
+            .is_some_and(|expected| expected != &saved.updated_at)
+        {
+            bail!("This playlist was edited in the other app. Reload its rules before saving")
+        }
+        if saved.playlist.mixtape.is_some() || !saved.playlist.request.filters.track_ids.is_empty()
+        {
+            bail!("An ordered mixtape or exact selection cannot be replaced by Smart rules")
+        }
+        saved.playlist
+    } else {
+        build_playlist(
+            &tx,
+            AiPlaylistPlan {
+                prompt: "Shared local Smart playlist rules".into(),
+                name: input.name.clone(),
+                description: "Reusable library filters shared by Aurora and Music Library.".into(),
+                request: input.request.clone(),
+                strategy: "ranked".into(),
+                target_track_count: 1,
+                target_minutes: 0,
+                max_tracks_per_artist: 10,
+                max_tracks_per_album: 10,
+                model: "Local rules".into(),
+                usage: crate::ai::AiUsage {
+                    input_tokens: None,
+                    cached_input_tokens: None,
+                    output_tokens: None,
+                },
+            },
+        )?
+    };
+    playlist.name = input.name.clone();
+    playlist.request = input.request;
+    playlist.request.offset = 0;
+    playlist.smart_settings = Some(input.settings);
+    let saved = save_playlist(
+        &tx,
+        SavePlaylistRequest {
+            id: input.id,
+            name: input.name,
+            playlist,
+        },
+    )?;
+    let saved = set_playlist_automation(
+        &tx,
+        SetPlaylistAutomationRequest {
+            id: saved.id,
+            smart: true,
+        },
+    )?;
+    tx.commit()?;
+    Ok(saved)
+}
+
+pub(crate) fn playlist_bridge_at(
+    dir: &Path,
+    operation: &str,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let conn = super::open_path(&dir.join("music-library.sqlite3"))?;
+    let result = match operation {
+        "playlistSaveSmart" => save_smart_playlist_on(&conn, serde_json::from_value(payload)?)?,
+        "playlistRefresh" => {
+            let id = payload["id"].as_i64().context("Playlist ID is required")?;
+            let tx = conn.unchecked_transaction()?;
+            let saved = evaluate_smart_playlist(&tx, id)?;
+            tx.commit()?;
+            saved
+        }
+        "playlistSaveSelection" => save_playlist_selection(&conn, payload)?,
+        _ => bail!("Unsupported playlist operation"),
+    };
+    Ok(serde_json::json!({"id": result.id}))
+}
+
+fn save_playlist_selection(conn: &Connection, payload: serde_json::Value) -> Result<SavedPlaylist> {
+    let name = payload["name"]
+        .as_str()
+        .context("Name the playlist")?
+        .to_owned();
+    let tx = conn.unchecked_transaction()?;
+    let mut ids = Vec::<i64>::new();
+    if let Some(tracks) = payload["tracks"].as_array() {
+        if tracks.len() > 1_000 {
+            bail!("Select at most 1000 songs")
+        }
+        for track in tracks {
+            let id: i64 = tx
+                .query_row(
+                    "SELECT id FROM tracks WHERE id=?1 AND file_path=?2 AND filename=?3",
+                    params![
+                        track["id"].as_i64(),
+                        track["filePath"].as_str(),
+                        track["filename"].as_str()
+                    ],
+                    |r| r.get(0),
+                )
+                .context("A selected song changed identity. Refresh before saving")?;
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    if let Some(albums) = payload["albumIds"].as_array() {
+        if albums.len() > 100 {
+            bail!("Select at most 100 albums")
+        }
+        for album in albums {
+            let mut stmt = tx.prepare("SELECT id FROM tracks WHERE album_id=?1 ORDER BY COALESCE(disc_number,1),COALESCE(track_number,0),filename,id LIMIT 1001")?;
+            let album_ids = stmt
+                .query_map([album.as_str().context("Invalid album ID")?], |r| {
+                    r.get::<_, i64>(0)
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            if album_ids.is_empty() {
+                bail!("A selected album is no longer in the catalog")
+            }
+            for id in album_ids {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+            if ids.len() > 1_000 {
+                bail!("The selection exceeds 1000 songs. Save fewer albums")
+            }
+        }
+    }
+    if ids.is_empty() {
+        bail!("Select songs or albums before saving")
+    }
+    let mut request = BrowseRequest {
+        view: "tracks".into(),
+        limit: 1_000,
+        ..Default::default()
+    };
+    request.filters.track_ids = ids.clone();
+    let response = search_library(&tx, request.clone(), 1_000)?;
+    let mut rows = response.rows;
+    rows.sort_by_key(|r| ids.iter().position(|id| Some(*id) == r.track_id));
+    if rows.len() != ids.len() {
+        bail!("The selected songs changed. Refresh before saving")
+    }
+    let tracks = rows
+        .into_iter()
+        .map(playlist_track_from_row)
+        .collect::<Result<Vec<_>>>()?;
+    let playlist = AiPlaylist {
+        smart_settings: None,
+        mixtape: None,
+        prompt: "Selected songs and albums from Aurora".into(),
+        name: name.clone(),
+        description: "Selected songs and albums, in their reviewed order.".into(),
+        request,
+        strategy: "ranked".into(),
+        target_track_count: ids.len() as u32,
+        target_minutes: 0,
+        max_tracks_per_artist: 10,
+        max_tracks_per_album: 10,
+        matching_track_count: ids.len() as i64,
+        candidate_count: ids.len(),
+        total_seconds: tracks.iter().map(|t| t.seconds).sum(),
+        tracks,
+        model: "Local selection".into(),
+        usage: crate::ai::AiUsage {
+            input_tokens: None,
+            cached_input_tokens: None,
+            output_tokens: None,
+        },
+    };
+    let saved = save_playlist(
+        &tx,
+        SavePlaylistRequest {
+            id: None,
+            name,
+            playlist,
+        },
+    )?;
+    tx.commit()?;
+    Ok(saved)
+}
+
+#[cfg(not(test))]
+pub fn save_smart_playlist_for_app(
+    app: &AppHandle,
+    input: crate::ai::SaveSmartPlaylistRequest,
+) -> Result<SavedPlaylist> {
+    let (conn, _) = open(app)?;
+    save_smart_playlist_on(&conn, input)
 }
 
 pub(super) fn playlist_track_file(track: &AiPlaylistTrack) -> Option<PathBuf> {
@@ -564,7 +846,26 @@ pub fn list_saved_playlists_for_app(app: &AppHandle) -> Result<Vec<SavedPlaylist
 #[cfg(not(test))]
 pub fn save_playlist_for_app(app: &AppHandle, input: SavePlaylistRequest) -> Result<SavedPlaylist> {
     let (conn, _) = open(app)?;
-    save_playlist(&conn, input)
+    save_playlist_snapshot(&conn, input)
+}
+
+// Editing the displayed order must not restore rules superseded in the other app.
+fn save_playlist_snapshot(conn: &Connection, input: SavePlaylistRequest) -> Result<SavedPlaylist> {
+    let tx = conn.unchecked_transaction()?;
+    if let Some(id) = input.id {
+        let current = load_saved_playlist(&tx, id)?;
+        if (current.playlist.smart_settings.is_some() || input.playlist.smart_settings.is_some())
+            && (serde_json::to_value(&current.playlist.request)?
+                != serde_json::to_value(&input.playlist.request)?
+                || serde_json::to_value(&current.playlist.smart_settings)?
+                    != serde_json::to_value(&input.playlist.smart_settings)?)
+        {
+            bail!("This playlist's rules changed in the other app. Reopen it before updating the saved order")
+        }
+    }
+    let saved = save_playlist(&tx, input)?;
+    tx.commit()?;
+    Ok(saved)
 }
 
 #[cfg(not(test))]
@@ -655,6 +956,251 @@ pub fn export_playlist_for_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_smart_rules_roundtrip_limits_manual_refresh_and_empty_matches() {
+        let conn = seeded_connection();
+        for i in 2..=4 {
+            conn.execute("INSERT INTO tracks (id,import_run_id,album_id,title,canonical_genre,genre_normalized,normalized_rating,file_path,filename,row_hash) VALUES (?1,1,'mb:test',?2,'Synthpop','synthpop',90,'D:\\Music',?3,?4)",params![i,format!("Song {i}"),format!("{i}.mp3"),format!("hash-{i}")]).unwrap();
+        }
+        rebuild_search_indexes(&conn).unwrap();
+        let request = test_playlist_plan().request;
+        let saved = save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: None,
+                expected_updated_at: None,
+                name: "Shared".into(),
+                request: request.clone(),
+                settings: crate::ai::SmartPlaylistSettings {
+                    track_limit: 1,
+                    refresh_policy: "manual".into(),
+                },
+            },
+        )
+        .unwrap();
+        assert!(saved.automation.smart);
+        assert_eq!(saved.playlist.tracks.len(), 1);
+        assert_eq!(saved.playlist.matching_track_count, 4);
+        let json = serde_json::to_value(&saved.playlist).unwrap();
+        assert_eq!(json["smartSettings"]["trackLimit"], 1);
+        conn.execute(
+            "UPDATE tracks SET canonical_genre='Other',genre_normalized='other'",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            refresh_all_smart_playlists_for_connection(&conn).unwrap(),
+            0
+        );
+        assert_eq!(
+            load_saved_playlist(&conn, saved.id)
+                .unwrap()
+                .playlist
+                .tracks
+                .len(),
+            1
+        );
+        let next = evaluate_smart_playlist(&conn, saved.id).unwrap();
+        assert_eq!(next.playlist.tracks.len(), 0);
+        let reopened = save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: Some(saved.id),
+                expected_updated_at: None,
+                name: "Renamed".into(),
+                request,
+                settings: crate::ai::SmartPlaylistSettings {
+                    track_limit: 10,
+                    refresh_policy: "library".into(),
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(reopened.id, saved.id);
+        assert_eq!(reopened.name, "Renamed");
+        assert_eq!(reopened.playlist.tracks.len(), 0);
+        assert_eq!(
+            refresh_all_smart_playlists_for_connection(&conn).unwrap(),
+            1
+        );
+        let mut stale = crate::ai::SaveSmartPlaylistRequest {
+            id: Some(saved.id),
+            expected_updated_at: Some("outdated".into()),
+            name: "Overwrite".into(),
+            request: test_playlist_plan().request,
+            settings: crate::ai::SmartPlaylistSettings {
+                track_limit: 1,
+                refresh_policy: "library".into(),
+            },
+        };
+        assert!(save_smart_playlist_on(&conn, stale.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("other app"));
+        assert_eq!(
+            load_saved_playlist(&conn, saved.id).unwrap().name,
+            "Renamed"
+        );
+        stale.id = None;
+        stale.expected_updated_at = None;
+        stale.name = "Empty new rules".into();
+        assert!(save_smart_playlist_on(&conn, stale)
+            .unwrap()
+            .playlist
+            .tracks
+            .is_empty());
+    }
+
+    #[test]
+    fn shared_album_rules_include_all_songs_and_static_selection_checks_identity() {
+        let conn = seeded_connection();
+        conn.execute(
+            "UPDATE tracks SET disc_number=1,track_number=2 WHERE id=1",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO tracks (id,import_run_id,album_id,title,disc_number,track_number,file_path,filename,row_hash) VALUES (2,1,'mb:test','First',1,1,'D:\\Music','first.mp3','first'),(3,1,'mb:test','Disc Two',2,1,'D:\\Music','disc2.mp3','disc2')",[]).unwrap();
+        rebuild_search_indexes(&conn).unwrap();
+        let mut request = BrowseRequest {
+            view: "albums".into(),
+            ..Default::default()
+        };
+        request.filters.album_ids = vec!["mb:test".into()];
+        let saved = save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: None,
+                expected_updated_at: None,
+                name: "Albums".into(),
+                request,
+                settings: crate::ai::SmartPlaylistSettings {
+                    track_limit: 100,
+                    refresh_policy: "library".into(),
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.playlist.request.view, "albums");
+        assert_eq!(
+            saved
+                .playlist
+                .tracks
+                .iter()
+                .map(|t| t.track_id)
+                .collect::<Vec<_>>(),
+            vec![2, 1, 3]
+        );
+        let albums=save_playlist_selection(&conn,serde_json::json!({"name":"Album selection","albumIds":["mb:test","mb:test"],"tracks":[]})).unwrap();
+        assert_eq!(
+            albums
+                .playlist
+                .tracks
+                .iter()
+                .map(|t| t.track_id)
+                .collect::<Vec<_>>(),
+            vec![2, 1, 3]
+        );
+        let ref_track = &saved.playlist.tracks[0];
+        let selection = serde_json::json!({"name":"Selection","tracks":[{"id":ref_track.track_id,"filePath":ref_track.file_path,"filename":ref_track.filename}],"albumIds":[]});
+        let selected = save_playlist_selection(&conn, selection.clone()).unwrap();
+        assert_eq!(selected.playlist.tracks[0].track_id, ref_track.track_id);
+        assert!(selected.playlist.smart_settings.is_none());
+        assert!(!selected.automation.smart);
+        let before = list_saved_playlists(&conn).unwrap().len();
+        let mut wrong = selection;
+        wrong["tracks"][0]["filename"] = serde_json::json!("wrong.mp3");
+        assert!(save_playlist_selection(&conn, wrong).is_err());
+        assert_eq!(list_saved_playlists(&conn).unwrap().len(), before);
+    }
+
+    #[test]
+    fn bridge_dispatch_saves_and_refreshes_an_empty_shared_recipe() {
+        let dir = tempfile::tempdir().unwrap();
+        drop(super::super::open_path(&dir.path().join("music-library.sqlite3")).unwrap());
+        let input = crate::ai::SaveSmartPlaylistRequest {
+            id: None,
+            expected_updated_at: None,
+            name: "Future songs".into(),
+            request: BrowseRequest {
+                view: "tracks".into(),
+                ..Default::default()
+            },
+            settings: crate::ai::SmartPlaylistSettings {
+                track_limit: 10,
+                refresh_policy: "manual".into(),
+            },
+        };
+        let result = playlist_bridge_at(
+            dir.path(),
+            "playlistSaveSmart",
+            serde_json::json!({"id":null,"name":input.name,"request":input.request,"settings":input.settings}),
+        )
+        .unwrap();
+        let id = result["id"].as_i64().unwrap();
+        assert_eq!(
+            playlist_bridge_at(dir.path(), "playlistRefresh", serde_json::json!({"id":id}))
+                .unwrap()["id"],
+            id
+        );
+        let conn = super::super::open_path(&dir.path().join("music-library.sqlite3")).unwrap();
+        let saved = load_saved_playlist(&conn, id).unwrap();
+        assert_eq!(saved.name, "Future songs");
+        assert!(saved.automation.smart);
+        assert!(saved.playlist.tracks.is_empty());
+    }
+
+    #[test]
+    fn snapshot_edits_cannot_restore_shared_rules_changed_by_another_app() {
+        let conn = seeded_connection();
+        let saved = save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: None,
+                expected_updated_at: None,
+                name: "Shared".into(),
+                request: test_playlist_plan().request,
+                settings: crate::ai::SmartPlaylistSettings {
+                    track_limit: 10,
+                    refresh_policy: "manual".into(),
+                },
+            },
+        )
+        .unwrap();
+        let mut request = saved.playlist.request.clone();
+        request.filters.year_from = Some(1980);
+        save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: Some(saved.id),
+                expected_updated_at: Some(saved.updated_at),
+                name: saved.name.clone(),
+                request,
+                settings: saved.playlist.smart_settings.clone().unwrap(),
+            },
+        )
+        .unwrap();
+        assert!(save_playlist_snapshot(
+            &conn,
+            SavePlaylistRequest {
+                id: Some(saved.id),
+                name: saved.name,
+                playlist: saved.playlist
+            }
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("other app"));
+        assert_eq!(
+            load_saved_playlist(&conn, saved.id)
+                .unwrap()
+                .playlist
+                .request
+                .filters
+                .year_from,
+            Some(1980)
+        );
+    }
     use crate::db::test_support::*;
 
     #[test]

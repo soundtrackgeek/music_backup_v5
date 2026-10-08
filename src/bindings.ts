@@ -263,6 +263,7 @@ export const commands = {
 	exportAiMarkdown: (input: AiMarkdownExportRequest) => __TAURI_INVOKE<ExportResult>("export_ai_markdown", { input }),
 	listSavedPlaylists: () => __TAURI_INVOKE<SavedPlaylist_Serialize[]>("list_saved_playlists"),
 	savePlaylist: (input: SavePlaylistRequest_Deserialize) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_playlist", { input }),
+	saveSmartPlaylist: (input: SaveSmartPlaylistRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_smart_playlist", { input }),
 	deleteSavedPlaylist: (id: number) => __TAURI_INVOKE<null>("delete_saved_playlist", { id }),
 	setPlaylistAutomation: (input: SetPlaylistAutomationRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("set_playlist_automation", { input }),
 	refreshSmartPlaylist: (id: number) => __TAURI_INVOKE<SmartPlaylistRefreshResult_Serialize>("refresh_smart_playlist", { id }),
@@ -503,6 +504,7 @@ export type AiPlaylistTrack = {
 };
 
 export type AiPlaylist_Deserialize = {
+	smartSettings?: SmartPlaylistSettings | null,
 	mixtape?: MixtapeDraft | null,
 	prompt: string,
 	name: string,
@@ -522,6 +524,7 @@ export type AiPlaylist_Deserialize = {
 };
 
 export type AiPlaylist_Serialize = {
+	smartSettings?: SmartPlaylistSettings | null,
 	mixtape?: MixtapeDraft | null,
 	prompt: string,
 	name: string,
@@ -3812,6 +3815,14 @@ export type SaveSearchRequest = {
 	request: BrowseRequest,
 };
 
+export type SaveSmartPlaylistRequest = {
+	id: number | null,
+	expectedUpdatedAt?: string | null,
+	name: string,
+	request: BrowseRequest,
+	settings: SmartPlaylistSettings,
+};
+
 export type SaveUsenetProfileRequest = {
 	profile: UsenetProfile,
 	prowlarrApiKey: string | null,
@@ -4007,6 +4018,11 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	desiredCount: number,
 	previewCount: number,
 	refreshedAt: string,
+};
+
+export type SmartPlaylistSettings = {
+	trackLimit: number,
+	refreshPolicy: string,
 };
 
 export type SonicAlbum = {

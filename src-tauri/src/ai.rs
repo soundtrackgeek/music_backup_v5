@@ -410,6 +410,8 @@ pub struct AiPlaylistTrack {
 #[serde(rename_all = "camelCase")]
 pub struct AiPlaylist {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smart_settings: Option<SmartPlaylistSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mixtape: Option<crate::jev::MixtapeDraft>,
     pub prompt: String,
     pub name: String,
@@ -427,6 +429,24 @@ pub struct AiPlaylist {
     pub tracks: Vec<AiPlaylistTrack>,
     pub model: String,
     pub usage: AiUsage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartPlaylistSettings {
+    pub track_limit: u32,
+    pub refresh_policy: String,
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSmartPlaylistRequest {
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub expected_updated_at: Option<String>,
+    pub name: String,
+    pub request: BrowseRequest,
+    pub settings: SmartPlaylistSettings,
 }
 
 #[derive(Debug, Clone, Deserialize, specta::Type)]

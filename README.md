@@ -1,5 +1,17 @@
 # Music Library
 
+Music Library 0.185.0 and Aurora 0.33.0 share **Smart playlists**. Use **Playlist
+Builder → Create Smart playlist** for local song or album rules, sorting, a song
+limit, and automatic/manual refresh. **Edit rules** preserves existing advanced
+filters. Album rules include all songs of matching albums. Empty Smart results
+remain saved and can acquire songs later.
+
+Aurora can create ordered playlists from selected Songs or Albums and author or
+refresh the same Smart recipes through the versioned Music Library bridge. Existing
+saved playlists and legacy Smart behavior are retained. Music Library remains the
+catalog writer; no files are moved or retagged. Update both apps before editing
+the new `smartSettings` recipe fields. See [the shared contract](docs/shared-playlists.md).
+
 The ["Sounds like" roadmap item](docs/app-review-2026-10.md#4-sounds-like-similarity---done)
 is complete through Music Library 0.184.0 and Aurora 0.32.0, including the shared
 index and scale benchmarks. See the [sonic guide](docs/sonic-analysis.md) for use.

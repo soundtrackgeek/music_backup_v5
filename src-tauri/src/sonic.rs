@@ -736,6 +736,7 @@ pub(crate) fn save_journey_at(
     // Exact identities also make the existing Smart-refresh guard apply.
     request.filters.track_ids = tracks.iter().map(|t| t.track_id).collect();
     let playlist = crate::ai::AiPlaylist {
+        smart_settings: None,
         mixtape: None,
         prompt: format!("Sonic journey through {} chosen stops, in the reviewed order.", input.journey.stop_keys.len()),
         name: input.name.trim().into(),
@@ -1063,6 +1064,7 @@ pub async fn sonic_save_playlist(
         let total_seconds = tracks.iter().map(|t| t.seconds).sum();
         let count = tracks.len();
         let playlist = crate::ai::AiPlaylist {
+            smart_settings: None,
             mixtape: None,
             prompt: String::new(),
             name: name.trim().into(),

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.185.0] - 2026-10-08
+
+### Added
+- Shared Smart playlist creation/editing in Playlist Builder and the Aurora bridge: native song/album rules, sorting, song limits, automatic/manual refresh and valid empty results.
+- Atomic playlist creation from Aurora song/album selections, preserving order and validating current file identities. The companion advertises `smartPlaylistAuthoring` to prevent writes through incompatible builds.
+
+### Changed
+- Legacy Smart recipes retain their refresh behavior; new manual recipes skip import/list refresh. Album rules include complete matching albums before applying the song limit, and recipe edits retain advanced native filters.
+
 ## [0.184.1] - 2026-10-08
 
 ### Changed

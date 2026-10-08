@@ -1,4 +1,5 @@
 import { VirtualList } from "../components/VirtualList";
+import { SmartPlaylistRules } from "../components/SmartPlaylistRules";
 import { SonicJourneyPanel } from "../components/SonicJourneyPanel";
 import { useSonicJourney } from "../components/useSonicJourney";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -99,6 +100,7 @@ export function PlaylistBuilderWorkspace({
   const [name, setName] = useState("");
   const [activeSavedId, setActiveSavedId] = useState<number | null>(null);
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
+  const [smartEditor, setSmartEditor] = useState<"new" | "edit" | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +135,7 @@ export function PlaylistBuilderWorkspace({
 
   useEffect(() => {
     let disposed = false;
-    void listSavedPlaylists()
+    const refresh = () => { void listSavedPlaylists()
       .then((saved) => {
         if (!disposed) setSavedPlaylists(saved);
       })
@@ -143,9 +145,12 @@ export function PlaylistBuilderWorkspace({
             loadError instanceof Error ? loadError.message : String(loadError),
           );
         }
-      });
+      }); };
+    refresh();
+    window.addEventListener("focus", refresh);
     return () => {
       disposed = true;
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 
@@ -499,6 +504,8 @@ export function PlaylistBuilderWorkspace({
         </PageLunaCommandArea>
       )}
 
+      <button type="button" className="secondary-button" onClick={()=>setSmartEditor("new")} disabled={!isAvailable}>Create Smart playlist</button>
+      {smartEditor && <SmartPlaylistRules key={smartEditor === "edit" ? activeSavedId : "new"} saved={smartEditor === "edit" ? activeSavedPlaylist??undefined : undefined} onCancel={()=>setSmartEditor(null)} onSaved={saved=>{replaceSavedPlaylist(saved);openSaved(saved);setSmartEditor(null);}} />}
       <div className={`playlist-content-grid${mode === "journey" ? " journey-content-grid" : ""}`}>
         <section className="playlist-result-panel" aria-label="Playlist review" hidden={mode === "journey"}>
           {playlist && mode !== "journey" ? (
@@ -612,17 +619,19 @@ export function PlaylistBuilderWorkspace({
                       />
                       <span>
                         <strong>Smart playlist</strong>
-                        <small>Rebuild from the saved filters as the library changes.</small>
+                        <small>{playlist.smartSettings?.refreshPolicy === "manual" ? "Refresh the saved rules manually." : "Rebuild from the saved filters as the library changes."}</small>
                       </span>
                     </label>
                   </div>
                   <div className="playlist-automation-status">
+                    {playlist.smartSettings && <span>Up to {playlist.smartSettings.trackLimit.toLocaleString()} songs · {playlist.smartSettings.refreshPolicy === "manual" ? "Manual refresh" : "Library refresh"}</span>}
                     <span>
                       <strong>{activeSavedPlaylist.automation.desiredCount.toLocaleString()}</strong>
                       matching locally
                     </span>
                   </div>
                   <div className="playlist-automation-actions">
+                    {playlist.request.filters.trackIds.length===0 && <button className="secondary-button" type="button" disabled={busyAutomation!==null} onClick={()=>setSmartEditor("edit")}>Edit rules</button>}
                     <button
                       className="secondary-button"
                       type="button"
