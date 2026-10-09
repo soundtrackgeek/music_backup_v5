@@ -402,7 +402,7 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("sonicAnalyze requires trackKey")?;
             crate::sonic::analyze_headless(&app_data_dir, key)
         }
-        "playlistSaveSmart" | "playlistRefresh" | "playlistSaveSelection" => {
+        "playlistSaveSmart" | "playlistRefresh" | "playlistSaveSelection" | "playlistAuthor" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             db::playlist_bridge_at(&app_data_dir, &request.operation, request.payload)
         }
@@ -536,6 +536,7 @@ fn capabilities() -> Result<Value> {
             "verifiedTrackDeletionSync": true,
             "sonicJourneyPlaylists": true,
             "smartPlaylistAuthoring": true,
+            "playlistAuthoring": true,
         },
     }))
 }

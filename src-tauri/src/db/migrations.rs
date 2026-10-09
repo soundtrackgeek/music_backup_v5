@@ -1886,6 +1886,7 @@ mod tests {
             let saved = save_playlist(
                 &conn,
                 SavePlaylistRequest {
+                    expected_updated_at: None,
                     id: None,
                     name: "Living Synthpop".to_string(),
                     playlist: playlist.clone(),
@@ -1895,6 +1896,7 @@ mod tests {
             let snapshot = save_playlist(
                 &conn,
                 SavePlaylistRequest {
+                    expected_updated_at: None,
                     id: None,
                     name: "Fixed snapshot".to_string(),
                     playlist,

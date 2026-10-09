@@ -1,5 +1,13 @@
 # Music Library
 
+Music Library **0.186.1** extends Aurora's shared playlist bridge with regular
+playlist creation, rename/delete, ordered append, move and remove. Queue and M3U8
+imports retain repeated songs. Edits validate the opened revision and current file
+identities in one transaction, keep missing entries and unknown recipe fields, and
+protect Smart rules and mixtape sides. Update Aurora to **0.34.0** for its authoring
+controls. Music Library's **Update saved** also rejects drafts superseded in Aurora.
+See [Shared playlists](docs/shared-playlists.md).
+
 Music Library 0.186.0 adds **Tools → Audio analysis → Failed tracks** with saved
 filenames, folders, reasons, CSV export, and **Retry failed tracks**. A retry
 queues only unresolved failures, follows your schedule, and keeps completed work.

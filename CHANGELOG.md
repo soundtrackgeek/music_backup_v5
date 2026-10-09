@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.186.1] - 2026-10-09
+
+### Added
+- Protocol-1 `playlistAuthor` bridge operation and `playlistAuthoring` capability for Aurora 0.34.0: empty regular playlists, rename/delete, ordered append, move and remove, preserving duplicate songs and unavailable entries.
+
+### Fixed
+- Reject stale Music Library snapshot updates as well as Aurora edits using the opened playlist revision. Validate appended song identities transactionally, retain future JSON fields, and prevent manual song edits from changing Smart recipes or mixtape sides.
+
 ## [0.186.0] - 2026-10-09
 
 ### Added

@@ -3840,12 +3840,14 @@ export type SavePlaylistRequest = SavePlaylistRequest_Serialize | SavePlaylistRe
 
 export type SavePlaylistRequest_Deserialize = {
 	id?: number | null,
+	expectedUpdatedAt?: string | null,
 	name: string,
 	playlist: AiPlaylist_Deserialize,
 };
 
 export type SavePlaylistRequest_Serialize = {
 	id: number | null,
+	expectedUpdatedAt: string | null,
 	name: string,
 	playlist: AiPlaylist_Serialize,
 };

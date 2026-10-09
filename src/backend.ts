@@ -3973,7 +3973,7 @@ export async function listSavedPlaylists(): Promise<SavedPlaylist[]> {
 export async function saveSmartPlaylist(input: import("./bindings").SaveSmartPlaylistRequest): Promise<SavedPlaylist> {
   if (isTauriRuntime()) return commands.saveSmartPlaylist(input).then(completed);
   const draft = await buildPlaylist({ prompt: input.name, sourceRequest: input.request as BrowseRequest });
-  const saved = await savePlaylist({ id: input.id ?? null, name: input.name, playlist: { ...draft, request: input.request as BrowseRequest, smartSettings: input.settings } });
+  const saved = await savePlaylist({ id: input.id ?? null, expectedUpdatedAt: input.expectedUpdatedAt ?? null, name: input.name, playlist: { ...draft, request: input.request as BrowseRequest, smartSettings: input.settings } });
   return setPlaylistAutomation({ id: saved.id, smart: true });
 }
 
@@ -3983,6 +3983,7 @@ export async function savePlaylist(input: SavePlaylistRequest): Promise<SavedPla
     const existing = input.id == null
       ? null
       : mockSavedPlaylists.find((playlist) => playlist.id === input.id) ?? null;
+    if (input.id != null && (!existing || input.expectedUpdatedAt !== existing.updatedAt)) throw new Error("This playlist changed in another app. Reopen it before updating the saved order");
     const saved = {
       id:
         existing?.id ??

@@ -99,6 +99,7 @@ export function PlaylistBuilderWorkspace({
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
   const [name, setName] = useState("");
   const [activeSavedId, setActiveSavedId] = useState<number | null>(null);
+  const [activeSavedRevision, setActiveSavedRevision] = useState<string | null>(null);
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
   const [smartEditor, setSmartEditor] = useState<"new" | "edit" | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
@@ -218,12 +219,14 @@ export function PlaylistBuilderWorkspace({
     try {
       const saved = await savePlaylist({
         id: activeSavedId,
+        expectedUpdatedAt: activeSavedRevision,
         name: name.trim(),
         playlist: { ...playlist, name: name.trim() },
       });
       setPlaylist(saved.playlist);
       setName(saved.name);
       setActiveSavedId(saved.id);
+      setActiveSavedRevision(saved.updatedAt);
       setSavedPlaylists((previous) => [
         saved,
         ...previous.filter((entry) => entry.id !== saved.id),
@@ -245,6 +248,7 @@ export function PlaylistBuilderWorkspace({
     setPrompt(saved.playlist.prompt);
     setName(saved.name);
     setActiveSavedId(saved.id);
+      setActiveSavedRevision(saved.updatedAt);
     setError(null);
     setSavedError(null);
     setAutomationMessage(null);
@@ -279,6 +283,7 @@ export function PlaylistBuilderWorkspace({
       ...previous.filter((entry) => entry.id !== saved.id),
     ]);
     if (activeSavedId === saved.id) {
+      setActiveSavedRevision(saved.updatedAt);
       setPlaylist(saved.playlist);
       setName(saved.name);
     }

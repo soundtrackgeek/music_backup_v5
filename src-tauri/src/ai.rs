@@ -454,6 +454,8 @@ pub struct SaveSmartPlaylistRequest {
 pub struct SavePlaylistRequest {
     #[serde(default)]
     pub id: Option<i64>,
+    #[serde(default)]
+    pub expected_updated_at: Option<String>,
     pub name: String,
     pub playlist: AiPlaylist,
 }

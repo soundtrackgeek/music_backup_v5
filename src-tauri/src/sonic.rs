@@ -861,6 +861,7 @@ pub(crate) fn save_journey_at(
     let saved = crate::db::save_journey_playlist(
         &tx,
         crate::ai::SavePlaylistRequest {
+            expected_updated_at: None,
             id: None,
             name: input.name.trim().into(),
             playlist,
@@ -1223,6 +1224,7 @@ pub async fn sonic_save_playlist(
         crate::db::save_playlist_for_app(
             &app,
             crate::ai::SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: name.trim().into(),
                 playlist,

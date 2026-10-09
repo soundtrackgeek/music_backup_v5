@@ -628,6 +628,7 @@ pub(crate) fn save_smart_playlist_on(
     let saved = save_playlist(
         &tx,
         SavePlaylistRequest {
+            expected_updated_at: None,
             id: input.id,
             name: input.name,
             playlist,
@@ -660,9 +661,220 @@ pub(crate) fn playlist_bridge_at(
             saved
         }
         "playlistSaveSelection" => save_playlist_selection(&conn, payload)?,
+        "playlistAuthor" => return author_playlist(&conn, payload),
         _ => bail!("Unsupported playlist operation"),
     };
     Ok(serde_json::json!({"id": result.id}))
+}
+
+// Edit the stored JSON directly so missing entries and future recipe fields survive.
+// All identity checks and revision checks share the write transaction.
+fn author_playlist(conn: &Connection, payload: serde_json::Value) -> Result<serde_json::Value> {
+    let tx = conn.unchecked_transaction()?;
+    let action = payload["action"]
+        .as_str()
+        .context("Playlist action is required")?;
+    let now = Utc::now().to_rfc3339();
+    if action == "create" {
+        let name = author_name(&payload)?;
+        let tracks = author_tracks(&tx, &payload)?;
+        let mut request = BrowseRequest {
+            view: "tracks".into(),
+            limit: 1000,
+            ..Default::default()
+        };
+        request.filters.track_ids = tracks.iter().map(|t| t.track_id).collect();
+        let playlist = AiPlaylist {
+            smart_settings: None,
+            mixtape: None,
+            prompt: "Authored in Aurora".into(),
+            name: name.clone(),
+            description: "An ordered playlist shared with Aurora.".into(),
+            request,
+            strategy: "ranked".into(),
+            target_track_count: tracks.len().max(1) as u32,
+            target_minutes: 0,
+            max_tracks_per_artist: 10,
+            max_tracks_per_album: 10,
+            matching_track_count: tracks.len() as i64,
+            candidate_count: tracks.len(),
+            total_seconds: tracks.iter().map(|t| t.seconds).sum(),
+            tracks,
+            model: "Local selection".into(),
+            usage: crate::ai::AiUsage {
+                input_tokens: None,
+                cached_input_tokens: None,
+                output_tokens: None,
+            },
+        };
+        let (run, imported, albums, songs) = current_library_snapshot_state(&tx)?;
+        tx.execute("INSERT INTO saved_playlists (name,prompt,playlist_json,library_import_run_id,library_imported_at,library_album_count,library_track_count,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?8)",params![name,playlist.prompt,serde_json::to_string(&playlist)?,run,imported,albums,songs,now])?;
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        return Ok(serde_json::json!({"id":id}));
+    }
+    let id = payload["id"]
+        .as_i64()
+        .filter(|id| *id > 0)
+        .context("Playlist ID is required")?;
+    let expected = payload["expectedUpdatedAt"]
+        .as_str()
+        .context("Reopen this playlist before editing")?;
+    let (raw, revision, smart): (String,String,bool) = tx.query_row("SELECT playlist_json,updated_at,COALESCE((SELECT smart FROM playlist_automations WHERE saved_playlist_id=saved_playlists.id),0) FROM saved_playlists WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).context("This playlist no longer exists. Refresh the list")?;
+    if expected != revision {
+        bail!("This playlist changed in another app. Refresh before editing")
+    }
+    if action == "delete" {
+        delete_saved_playlist(&tx, id)?;
+    } else {
+        let mut value: serde_json::Value = serde_json::from_str(&raw)?;
+        if action == "rename" {
+            let name = author_name(&payload)?;
+            value["name"] = serde_json::json!(name);
+            tx.execute(
+                "UPDATE saved_playlists SET name=?1,playlist_json=?2,updated_at=?3 WHERE id=?4",
+                params![name, serde_json::to_string(&value)?, now, id],
+            )?;
+        } else {
+            if smart || !value["mixtape"].is_null() {
+                bail!("Song edits require a regular playlist. Smart rules and mixtape sides keep their own order")
+            }
+            let tracks = value["tracks"]
+                .as_array_mut()
+                .context("Invalid saved song list")?;
+            match action {
+                "append" => tracks.extend(
+                    author_tracks(&tx, &payload)?
+                        .into_iter()
+                        .map(serde_json::to_value)
+                        .collect::<serde_json::Result<Vec<_>>>()?,
+                ),
+                "move" | "remove" => {
+                    let from = payload["from"]
+                        .as_u64()
+                        .context("Song position is required")?
+                        as usize;
+                    if from >= tracks.len() {
+                        bail!("The song position is no longer available")
+                    }
+                    if action == "remove" {
+                        tracks.remove(from);
+                    } else {
+                        let to = payload["to"]
+                            .as_u64()
+                            .context("Destination position is required")?
+                            as usize;
+                        if to >= tracks.len() {
+                            bail!("Invalid destination position")
+                        }
+                        let track = tracks.remove(from);
+                        tracks.insert(to, track);
+                    }
+                }
+                _ => bail!("Unsupported playlist edit"),
+            }
+            if tracks.len() > 10_000 {
+                bail!("A playlist supports at most 10000 songs")
+            }
+            let count = tracks.len();
+            let seconds: i64 = tracks
+                .iter()
+                .map(|t| t["seconds"].as_i64().unwrap_or(0).max(0))
+                .sum();
+            let ids: Vec<_> = tracks
+                .iter()
+                .filter_map(|t| t["trackId"].as_i64())
+                .collect();
+            value["totalSeconds"] = serde_json::json!(seconds);
+            value["targetTrackCount"] = serde_json::json!(count.max(1));
+            value["candidateCount"] = serde_json::json!(count);
+            value["matchingTrackCount"] = serde_json::json!(count);
+            value["request"]["filters"]["trackIds"] = serde_json::json!(ids);
+            tx.execute(
+                "UPDATE saved_playlists SET playlist_json=?1,updated_at=?2 WHERE id=?3",
+                params![serde_json::to_string(&value)?, now, id],
+            )?;
+        }
+    }
+    tx.commit()?;
+    Ok(serde_json::json!({"id":id}))
+}
+
+fn author_name(payload: &serde_json::Value) -> Result<String> {
+    let name = payload["name"]
+        .as_str()
+        .context("Name the playlist")?
+        .trim();
+    if name.is_empty() || name.chars().count() > 120 {
+        bail!("Playlist names must contain 1 to 120 characters")
+    }
+    Ok(name.into())
+}
+
+fn author_tracks(conn: &Connection, payload: &serde_json::Value) -> Result<Vec<AiPlaylistTrack>> {
+    let mut ids = Vec::new();
+    if let Some(tracks) = payload["tracks"].as_array() {
+        if tracks.len() > 1000 {
+            bail!("Add at most 1000 songs at a time")
+        }
+        for track in tracks {
+            let id = conn
+                .query_row(
+                    "SELECT id FROM tracks WHERE id=?1 AND file_path=?2 AND filename=?3",
+                    params![
+                        track["id"].as_i64(),
+                        track["filePath"].as_str(),
+                        track["filename"].as_str()
+                    ],
+                    |r| r.get::<_, i64>(0),
+                )
+                .context("A selected song changed identity. Refresh before saving")?;
+            ids.push(id); // Queue and M3U8 order may deliberately repeat a song.
+        }
+    }
+    if let Some(albums) = payload["albumIds"].as_array() {
+        if albums.len() > 100 {
+            bail!("Add at most 100 albums at a time")
+        }
+        for album in albums {
+            let mut stmt = conn.prepare("SELECT id FROM tracks WHERE album_id=?1 ORDER BY COALESCE(disc_number,1),COALESCE(track_number,0),filename,id LIMIT 1001")?;
+            let album_ids = stmt
+                .query_map([album.as_str().context("Invalid album ID")?], |r| {
+                    r.get::<_, i64>(0)
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            if album_ids.is_empty() {
+                bail!("A selected album is no longer in the catalog")
+            }
+            ids.extend(album_ids);
+            if ids.len() > 1000 {
+                bail!("The selection exceeds 1000 songs. Add fewer albums")
+            }
+        }
+    }
+    let mut request = BrowseRequest {
+        view: "tracks".into(),
+        limit: 1000,
+        ..Default::default()
+    };
+    request.filters.track_ids = ids.clone();
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = search_library(conn, request, 1000)?
+        .rows
+        .into_iter()
+        .map(playlist_track_from_row)
+        .collect::<Result<Vec<_>>>()?;
+    let by_id: HashMap<_, _> = rows.into_iter().map(|t| (t.track_id, t)).collect();
+    ids.into_iter()
+        .map(|id| {
+            by_id
+                .get(&id)
+                .cloned()
+                .context("The selected songs changed. Refresh before saving")
+        })
+        .collect()
 }
 
 fn save_playlist_selection(conn: &Connection, payload: serde_json::Value) -> Result<SavedPlaylist> {
@@ -762,6 +974,7 @@ fn save_playlist_selection(conn: &Connection, payload: serde_json::Value) -> Res
     let saved = save_playlist(
         &tx,
         SavePlaylistRequest {
+            expected_updated_at: None,
             id: None,
             name,
             playlist,
@@ -854,6 +1067,9 @@ fn save_playlist_snapshot(conn: &Connection, input: SavePlaylistRequest) -> Resu
     let tx = conn.unchecked_transaction()?;
     if let Some(id) = input.id {
         let current = load_saved_playlist(&tx, id)?;
+        if input.expected_updated_at.as_deref() != Some(current.updated_at.as_str()) {
+            bail!("This playlist changed in another app. Reopen it before updating the saved order")
+        }
         if (current.playlist.smart_settings.is_some() || input.playlist.smart_settings.is_some())
             && (serde_json::to_value(&current.playlist.request)?
                 != serde_json::to_value(&input.playlist.request)?
@@ -1151,6 +1367,136 @@ mod tests {
     }
 
     #[test]
+    fn authoring_preserves_repeats_missing_entries_and_unknown_fields_and_rejects_stale_edits() {
+        let conn = seeded_connection();
+        let track=conn.query_row("SELECT id,file_path,filename FROM tracks WHERE id=1",[],|r|Ok(serde_json::json!({"id":r.get::<_,i64>(0)?,"filePath":r.get::<_,String>(1)?,"filename":r.get::<_,String>(2)?}))).unwrap();
+        let id = author_playlist(
+            &conn,
+            serde_json::json!({"action":"create","name":"Queue","tracks":[track,track]}),
+        )
+        .unwrap()["id"]
+            .as_i64()
+            .unwrap();
+        let saved = load_saved_playlist(&conn, id).unwrap();
+        assert_eq!(saved.playlist.tracks.len(), 2);
+        let mut value: serde_json::Value = serde_json::from_str(
+            &conn
+                .query_row(
+                    "SELECT playlist_json FROM saved_playlists WHERE id=?1",
+                    [id],
+                    |r| r.get::<_, String>(0),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        value["futureField"] = serde_json::json!({"keep":true});
+        value["tracks"][0]["filename"] = serde_json::json!("missing.mp3");
+        conn.execute(
+            "UPDATE saved_playlists SET playlist_json=?1 WHERE id=?2",
+            params![value.to_string(), id],
+        )
+        .unwrap();
+        author_playlist(&conn,serde_json::json!({"action":"rename","id":id,"expectedUpdatedAt":saved.updated_at,"name":"Renamed"})).unwrap();
+        assert!(author_playlist(
+            &conn,
+            serde_json::json!({"action":"delete","id":id,"expectedUpdatedAt":saved.updated_at})
+        )
+        .is_err());
+        let renamed = load_saved_playlist(&conn, id).unwrap();
+        author_playlist(&conn,serde_json::json!({"action":"move","id":id,"expectedUpdatedAt":renamed.updated_at,"from":1,"to":0})).unwrap();
+        let moved = load_saved_playlist(&conn, id).unwrap();
+        assert_eq!(
+            moved.playlist.tracks[1].filename.as_deref(),
+            Some("missing.mp3")
+        );
+        author_playlist(&conn,serde_json::json!({"action":"append","id":id,"expectedUpdatedAt":moved.updated_at,"tracks":[track]})).unwrap();
+        let appended = load_saved_playlist(&conn, id).unwrap();
+        let mut wrong = track;
+        wrong["filename"] = serde_json::json!("wrong.mp3");
+        assert!(author_playlist(&conn,serde_json::json!({"action":"append","id":id,"expectedUpdatedAt":appended.updated_at,"tracks":[wrong]})).is_err());
+        assert_eq!(
+            load_saved_playlist(&conn, id).unwrap().updated_at,
+            appended.updated_at
+        );
+        let raw: String = conn
+            .query_row(
+                "SELECT playlist_json FROM saved_playlists WHERE id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&raw).unwrap()["futureField"]["keep"],
+            true
+        );
+        for _ in 0..3 {
+            let revision = load_saved_playlist(&conn, id).unwrap().updated_at;
+            author_playlist(&conn,serde_json::json!({"action":"remove","id":id,"expectedUpdatedAt":revision,"from":0})).unwrap();
+        }
+        let empty = load_saved_playlist(&conn, id).unwrap();
+        assert!(empty.playlist.tracks.is_empty());
+        author_playlist(
+            &conn,
+            serde_json::json!({"action":"delete","id":id,"expectedUpdatedAt":empty.updated_at}),
+        )
+        .unwrap();
+        assert!(load_saved_playlist(&conn, id).is_err());
+    }
+
+    #[test]
+    fn authoring_allows_empty_creation_but_protects_smart_rules_and_album_order() {
+        let conn = seeded_connection();
+        let id = author_playlist(&conn, serde_json::json!({"action":"create","name":"Empty"}))
+            .unwrap()["id"]
+            .as_i64()
+            .unwrap();
+        let empty = load_saved_playlist(&conn, id).unwrap();
+        assert!(empty.playlist.tracks.is_empty());
+        author_playlist(&conn,serde_json::json!({"action":"append","id":id,"expectedUpdatedAt":empty.updated_at,"albumIds":["mb:test"]})).unwrap();
+        let saved = load_saved_playlist(&conn, id).unwrap();
+        assert_eq!(saved.playlist.tracks.len(), 1);
+        conn.execute("INSERT INTO playlist_automations (saved_playlist_id,smart,desired_count) VALUES (?1,1,1)",[id]).unwrap();
+        assert!(author_playlist(&conn,serde_json::json!({"action":"remove","id":id,"expectedUpdatedAt":saved.updated_at,"from":0})).is_err());
+        author_playlist(&conn,serde_json::json!({"action":"rename","id":id,"expectedUpdatedAt":saved.updated_at,"name":"Smart renamed"})).unwrap();
+        assert!(load_saved_playlist(&conn, id).unwrap().automation.smart);
+    }
+
+    #[test]
+    fn music_library_snapshot_updates_require_the_opened_revision() {
+        let conn = seeded_connection();
+        let selected = save_playlist_selection(
+            &conn,
+            serde_json::json!({"name":"Original","albumIds":["mb:test"]}),
+        )
+        .unwrap();
+        let current = save_playlist_snapshot(
+            &conn,
+            SavePlaylistRequest {
+                id: Some(selected.id),
+                expected_updated_at: Some(selected.updated_at.clone()),
+                name: "Current".into(),
+                playlist: selected.playlist.clone(),
+            },
+        )
+        .unwrap();
+        assert_ne!(current.updated_at, selected.updated_at);
+        assert!(save_playlist_snapshot(
+            &conn,
+            SavePlaylistRequest {
+                id: Some(selected.id),
+                expected_updated_at: Some(selected.updated_at),
+                name: "Stale".into(),
+                playlist: selected.playlist
+            }
+        )
+        .is_err());
+        assert_eq!(
+            load_saved_playlist(&conn, current.id).unwrap().name,
+            "Current"
+        );
+    }
+
+    #[test]
     fn snapshot_edits_cannot_restore_shared_rules_changed_by_another_app() {
         let conn = seeded_connection();
         let saved = save_smart_playlist_on(
@@ -1183,6 +1529,7 @@ mod tests {
         assert!(save_playlist_snapshot(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: Some(saved.id),
                 name: saved.name,
                 playlist: saved.playlist
@@ -1229,6 +1576,7 @@ mod tests {
         let saved = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Friday Night".to_string(),
                 playlist,
@@ -1244,6 +1592,7 @@ mod tests {
         let updated = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: Some(saved.id),
                 name: "Friday Night, edited".to_string(),
                 playlist: saved.playlist,
@@ -1264,6 +1613,7 @@ mod tests {
         let saved = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Two sides".into(),
                 playlist,
@@ -1311,6 +1661,7 @@ mod tests {
         assert!(save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Two sides".into(),
                 playlist
@@ -1353,6 +1704,7 @@ mod tests {
         let saved = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Living Synthpop".to_string(),
                 playlist,
@@ -1446,6 +1798,7 @@ mod tests {
         let saved = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Snapshot".to_string(),
                 playlist,
@@ -1486,6 +1839,7 @@ mod tests {
         let saved = save_playlist(
             &conn,
             SavePlaylistRequest {
+                expected_updated_at: None,
                 id: None,
                 name: "Long Search playlist".to_string(),
                 playlist,
