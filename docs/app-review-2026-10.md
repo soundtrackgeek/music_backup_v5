@@ -473,6 +473,8 @@ visible, and saved editions preserve their original recommendations until refres
 A persistent exact weighted tree index shipped in Music Library 0.184.0 and Aurora
 0.32.0, with background rebuilding, current-data validation and full-scale
 comparison against the streamed baseline. See [index and scale proof](sonic-index-performance.md).
+Music Library 0.186.0 adds durable failed-track reasons, complete CSV exports,
+failed-only retry queues, and a master-catalog coverage check for remaining gaps.
 
 **Implemented approach.** A standalone GPL-3.0 Bliss analyzer saves local MP3
 features in SQLite. Both apps reuse the same analysis and exact weighted tree

@@ -163,7 +163,7 @@ pub(crate) fn results(dir: &Path) -> Result<Connection> {
     Ok(c)
 }
 
-fn work(dir: &Path) -> Result<Connection> {
+pub(crate) fn work(dir: &Path) -> Result<Connection> {
     let c = Connection::open(dir.join("sonic-work.sqlite3"))?;
     c.busy_timeout(Duration::from_secs(5))?;
     c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
@@ -171,6 +171,7 @@ fn work(dir: &Path) -> Result<Connection> {
       CREATE TABLE IF NOT EXISTS sonic_items(batch_id TEXT NOT NULL,track_key TEXT NOT NULL,directory TEXT NOT NULL,filename TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT,PRIMARY KEY(batch_id,track_key));
       CREATE INDEX IF NOT EXISTS sonic_items_next ON sonic_items(batch_id,state,track_key);
       CREATE TABLE IF NOT EXISTS sonic_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL);")?;
+    crate::sonic_failures::install(&c)?;
     Ok(c)
 }
 
@@ -401,7 +402,9 @@ fn analyze_one_mode(
     let store = results(dir)?;
     let saved: Option<(u64, String)> = store
         .query_row(
-            "SELECT size,modified FROM sonic_tracks WHERE track_key=?1 AND profile=?2",
+            "SELECT s.size,s.modified FROM sonic_tracks s JOIN sonic_audio a
+                ON a.audio_hash=s.audio_hash AND a.profile=s.profile
+                WHERE s.track_key=?1 AND s.profile=?2",
             params![track_key(directory, filename), PROFILE],
             |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)),
         )
@@ -490,6 +493,7 @@ pub(crate) fn analyze_headless(dir: &Path, key: &str) -> Result<serde_json::Valu
         bail!("The requested seed is absent or ambiguous in this catalog");
     }
     analyze_one(dir, &rows[0].0, &rows[0].1, &|| false)?;
+    crate::sonic_failures::record(&work(dir)?, key, &rows[0].0, &rows[0].1, None, true)?;
     Ok(serde_json::json!({"analyzed":true}))
 }
 
@@ -546,7 +550,11 @@ fn run_at(
         [&batch],
         |r| r.get(0),
     )?;
-    if !prepared {
+    if !prepared && request.scope == "failed" {
+        let tx = w.transaction()?;
+        crate::sonic_failures::prepare_retry(&tx, &batch)?;
+        tx.commit()?;
+    } else if !prepared {
         let c = catalog(dir)?;
         let filter = match request.scope.as_str() {
             "all" | "reuse" => "1=1",
@@ -644,6 +652,9 @@ fn run_at(
             started.elapsed(),
             reuse_only,
         );
+        let ready = outcome
+            .as_ref()
+            .is_ok_and(|work| *work != AnalysisWork::Unmatched);
         let (state, error) = match outcome {
             Ok(work) => {
                 if work == AnalysisWork::Extracted || reuse_only && work != AnalysisWork::Cached {
@@ -657,10 +668,13 @@ fn run_at(
                 ("failed", Some(format!("{e:#}")))
             }
         };
-        w.execute(
+        let tx = w.transaction()?;
+        tx.execute(
             "UPDATE sonic_items SET state=?3,error=?4 WHERE batch_id=?1 AND track_key=?2",
             params![batch, key, state, error],
         )?;
+        crate::sonic_failures::record(&tx, &key, &directory, &filename, error.as_deref(), ready)?;
+        tx.commit()?;
         completed += 1;
         if reported.elapsed() >= Duration::from_secs(2)
             || completed == total
@@ -756,7 +770,7 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
     let w = work(dir)?;
     let batch = active_sonic_batch(dir)?;
     let pending=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=COALESCE(?1,(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1)) AND state='pending'",[&batch],|r|r.get(0))?;
-    let failed=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=COALESCE(?1,(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1)) AND state='failed'",[&batch],|r|r.get(0))?;
+    let failed = w.query_row("SELECT count(*) FROM sonic_failures", [], |r| r.get(0))?;
     Ok(SonicStatus {
         analyzed,
         total,
@@ -1099,7 +1113,7 @@ pub async fn sonic_matches(
 pub async fn sonic_analyze(app: AppHandle, mut request: AnalyzeRequest) -> Result<i64, String> {
     if !matches!(
         request.scope.as_str(),
-        "all" | "favorites" | "album" | "reuse"
+        "all" | "favorites" | "album" | "reuse" | "failed"
     ) {
         return Err("Unknown analysis scope".into());
     }
@@ -1223,6 +1237,97 @@ pub async fn sonic_save_playlist(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_only_run_retains_the_library_queue_and_resolves_successful_retries() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        let folder = dir.path().to_string_lossy();
+        let key = track_key(&folder, "1.mp3");
+        crate::sonic_failures::record(&w, &key, &folder, "1.mp3", Some("Old decoder error"), false)
+            .unwrap();
+        let missing_key = track_key(&folder, "missing.mp3");
+        crate::sonic_failures::record(
+            &w,
+            &missing_key,
+            &folder,
+            "missing.mp3",
+            Some("Old missing file error"),
+            false,
+        )
+        .unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('library',1);
+            INSERT INTO sonic_items VALUES('library','pending','folder','pending.mp3','pending',NULL);").unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..Default::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        let result = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "failed".into(),
+                album_id: None,
+                batch_id: Some("retry".into()),
+            },
+            &|| false,
+            &|_, _, _, _| {},
+            &|| Some(0),
+            &|| 12,
+        )
+        .unwrap();
+        assert_eq!(result["total"], 2);
+        assert_eq!(result["failedCount"], 1);
+        assert_eq!(
+            w.query_row(
+                "SELECT state FROM sonic_items WHERE batch_id='library'",
+                [],
+                |r| r.get::<_, String>(0)
+            )
+            .unwrap(),
+            "pending"
+        );
+        let failures = crate::sonic_failures::list_at(dir.path(), None).unwrap();
+        assert_eq!(failures.total, 1);
+        assert_eq!(failures.rows[0].filename, "missing.mp3");
+        assert_ne!(failures.rows[0].error, "Old missing file error");
+        assert!(failures.rows[0].last_failed_at.is_some());
+        assert_eq!(status_at(dir.path()).unwrap().failed, 1);
+        assert_eq!(status_at(dir.path()).unwrap().analyzed, 3);
+        let key = track_key(&folder, "3.mp3");
+        crate::sonic_failures::record(&w, &key, &folder, "3.mp3", Some("Earlier failure"), false)
+            .unwrap();
+        analyze_headless(dir.path(), &key).unwrap();
+        assert_eq!(
+            crate::sonic_failures::list_at(dir.path(), None)
+                .unwrap()
+                .total,
+            1
+        );
+    }
+
+    #[test]
+    fn missing_audio_features_are_not_treated_as_completed_cached_analysis() {
+        let dir = fixture();
+        let s = results(dir.path()).unwrap();
+        s.execute("DELETE FROM sonic_audio WHERE audio_hash='hash1'", [])
+            .unwrap();
+        assert_eq!(
+            analyze_one_mode(
+                dir.path(),
+                &dir.path().to_string_lossy(),
+                "1.mp3",
+                &|| false,
+                true
+            )
+            .unwrap(),
+            AnalysisWork::Unmatched
+        );
+    }
 
     #[test]
     fn estimate_uses_new_successes_and_excludes_cache_failures_and_waits() {

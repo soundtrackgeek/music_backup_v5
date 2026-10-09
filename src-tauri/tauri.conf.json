@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.185.1",
+  "version": "0.186.0",
   "identifier": "com.local.musiclibrary",
   "build": {
     "beforeDevCommand": "npm run sonic:prepare && npm run dev",

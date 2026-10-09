@@ -12,6 +12,8 @@ use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
     sonic,
+    sonic_failures,
+    sonic_coverage,
     sonic_backup,
     sonic_backup_schedule,
     acknowledge_catalog_revision,
@@ -195,6 +197,10 @@ macro_rules! specta_commands {
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         sonic::sonic_status,
+        sonic_failures::sonic_failed_tracks,
+        sonic_failures::sonic_export_failed_tracks,
+        sonic_coverage::sonic_check_coverage,
+        sonic_coverage::sonic_export_missing_analysis,
         sonic_backup::sonic_backup_folder,
         sonic_backup::sonic_backup_export,
         sonic_backup::sonic_backup_inspect,

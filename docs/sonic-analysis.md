@@ -48,6 +48,46 @@ remain saved. Check the analyzer or affected files, then **Retry** the same job.
 Music Library 0.185.1 enables MP3 metadata readers for ID3 tags and large covers;
 this fix reuses existing features and does not require a full reanalysis.
 
+## Failed tracks and coverage check
+
+Music Library 0.186.0 adds **Tools → Audio analysis → Failed tracks**. It lists
+unresolved filenames, folders, the latest saved failure reason and time, with
+50 tracks per page. Older errors are imported on upgrade; their original failure
+time was not recorded. The failed count covers all runs, including cancelled jobs.
+Starting a new library batch does not hide these errors.
+
+**Retry failed tracks** creates a separate queue containing only the current
+unresolved failures. It saves your visible schedule before queueing and supports
+Activity Center pause, resume, cancel and retry. Finish or cancel an existing
+audio analysis job first, including a paused job, before creating another one.
+Pending tracks in the original library queue are preserved. Completed features
+are reused. A failure's reason stays visible while queued or paused and is
+replaced on another failure; successful analysis or verified reuse removes it.
+The list stores the latest unresolved outcome, not an attempt-by-attempt history.
+
+**Export failed tracks CSV** opens a Save dialog and exports the complete current
+list, including pages not visible on screen. The UTF-8 CSV includes filename,
+folder, reason, last failed UTC timestamp and track key. Quoted/multiline errors
+are preserved and spreadsheet formula prefixes are escaped. Cancelling the
+dialog does nothing. Export never retries tracks or changes music files.
+
+Run **Analysis coverage check → Check analysis coverage** after your full scan,
+or whenever you want to check progress against the master catalog. The reference
+is Music Library's active `music-library.sqlite3`, not just the last job's queue.
+Every cataloged MP3 is compared by folder and filename with completed results
+and audio features for the current profile. The report shows analyzed and
+missing totals, separating recorded failures from tracks needing analysis:
+no saved result, an older analysis profile, or missing saved audio features.
+Failures for tracks no longer in the master catalog remain in Failed tracks but
+are excluded from catalog coverage. Non-MP3 tracks are excluded.
+
+The check reads catalog and analysis databases without decoding or opening each
+music file. It reports saved coverage, not a filesystem-integrity or corruption
+audit. A check can run while analysis is working; recheck to see later results.
+**Export missing analysis CSV** exports all current gaps with their status,
+reason and catalog track ID. Use **Retry failed tracks** for recorded failures;
+**Analyze library** picks up other gaps while reusing completed work.
+
 ## Results you can use immediately
 
 In Music Library's **Discovery → Because You Played / Loved**, sound neighbors

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.186.0] - 2026-10-09
+
+### Added
+- **Failed tracks** in Tools → Audio analysis: bounded pages with filename, folder, saved reason and latest failure time, complete CSV export through a Save dialog, and a **Retry failed tracks** action that queues only unresolved failures.
+- **Analysis coverage check** reconciles every cataloged MP3 in Music Library's master database with saved current-profile audio features. It distinguishes recorded failures, absent analysis, older profiles and missing feature records, with paged results and a complete missing-analysis CSV export.
+
+### Changed
+- Preserve unresolved failures across jobs, retries and restarts, importing existing saved errors on upgrade and removing entries after successful analysis or reuse. Retry preparation retains reasons until a new result is recorded; Tools' failed count covers unresolved errors from all runs.
+- Reports run away from the UI thread, use indexed pagination and stream CSV rows from consistent database snapshots. CSV publication is atomic, supports Unicode/quoted multiline errors, and neutralizes spreadsheet formulas.
+
 ## [0.185.1] - 2026-10-08
 
 ### Fixed

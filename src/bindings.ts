@@ -6,6 +6,10 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
+	sonicFailedTracks: (after: string | null) => __TAURI_INVOKE<FailedTracksPage>("sonic_failed_tracks", { after }),
+	sonicExportFailedTracks: (path: string) => __TAURI_INVOKE<FailedTracksExport>("sonic_export_failed_tracks", { path }),
+	sonicCheckCoverage: (after: number | null) => __TAURI_INVOKE<AnalysisCoverage>("sonic_check_coverage", { after }),
+	sonicExportMissingAnalysis: (path: string) => __TAURI_INVOKE<FailedTracksExport>("sonic_export_missing_analysis", { path }),
 	sonicBackupFolder: () => __TAURI_INVOKE<string | null>("sonic_backup_folder"),
 	sonicBackupExport: (folder: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_export", { folder }),
 	sonicBackupInspect: (path: string) => __TAURI_INVOKE<AnalysisBackup>("sonic_backup_inspect", { path }),
@@ -663,6 +667,15 @@ export type AnalysisBackup = {
 	audioCount: number,
 	databaseBytes: number,
 	sha256: string,
+};
+
+export type AnalysisCoverage = {
+	rows: MissingAnalysis[],
+	total: number,
+	analyzed: number,
+	missing: number,
+	failed: number,
+	nextCursor: number | null,
 };
 
 export type AnalysisRestore = {
@@ -2002,6 +2015,25 @@ export type ExternalDiscoveryResponse = {
 
 export type ExternalDiscoveryResponseSource = "MusicBrainz";
 
+export type FailedTrack = {
+	trackKey: string,
+	directory: string,
+	filename: string,
+	error: string,
+	lastFailedAt: string | null,
+};
+
+export type FailedTracksExport = {
+	path: string,
+	rowCount: number,
+};
+
+export type FailedTracksPage = {
+	rows: FailedTrack[],
+	total: number,
+	nextCursor: string | null,
+};
+
 export type GenreListRequest = {
 	searchText?: string,
 	sort?: BrowseSort,
@@ -2766,6 +2798,14 @@ export type MetadataCoverageMetric = {
 	scope: string,
 	coveredCount: number,
 	totalCount: number,
+};
+
+export type MissingAnalysis = {
+	trackId: number,
+	directory: string,
+	filename: string,
+	reason: string,
+	failed: boolean,
 };
 
 export type MixtapeConfig = {

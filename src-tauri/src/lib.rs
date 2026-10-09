@@ -28,6 +28,8 @@ mod musicbrainz;
 mod musicbrainz_sync;
 mod published_charts;
 mod sonic;
+mod sonic_failures;
+mod sonic_coverage;
 mod sonic_backup;
 mod sonic_backup_schedule;
 mod sonic_albums;

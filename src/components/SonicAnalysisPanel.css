@@ -19,3 +19,10 @@
 .sonic-backup-review { border:1px solid var(--color-border); border-radius:8px; padding:12px; }
 .sonic-backup-automatic { margin: 1rem 0; padding: 1rem; min-width: 0; border: 1px solid var(--border-color, #344540); border-radius: .6rem; }
 .sonic-backup-automatic input[type="number"] { width: 5rem; }
+.sonic-diagnostics { margin-top:16px; padding-top:12px; border-top:1px solid var(--color-border); min-width:0; }
+.sonic-diagnostics summary { cursor:pointer; font-weight:600; }
+.sonic-diagnostic-list { list-style:none; padding:0; margin:12px 0; }
+.sonic-diagnostic-list li { display:flex; flex-direction:column; gap:5px; padding:12px 0; border-top:1px solid var(--color-border); overflow-wrap:anywhere; }
+.sonic-diagnostic-list li span,.sonic-diagnostic-list li small { font-size:12px; opacity:0.8; }
+.sonic-diagnostic-list li p { margin:0; white-space:pre-wrap; }
+.sonic-diagnostics .sonic-analysis-actions { align-items:center; }

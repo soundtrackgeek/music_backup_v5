@@ -3,6 +3,8 @@ import { configureSonicSchedule, findSonicMatches, getSonicSeeds, getSonicStatus
 import { listenToActivityJobs } from "../backend/activity";
 import "./SonicAnalysisPanel.css";
 import { SonicBackupPanel } from "./SonicBackupPanel";
+import { SonicFailuresPanel } from "./SonicFailuresPanel";
+import { SonicCoveragePanel } from "./SonicCoveragePanel";
 export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
   const [status, setStatus] = useState<SonicStatus | null>(null);
   const [seeds, setSeeds] = useState<SonicTrack[]>([]);
@@ -12,11 +14,12 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<SonicSchedule | null>(null);
+  const [diagnosticsRevision, setDiagnosticsRevision] = useState(0);
   const dirty = useRef(false);
   const serial = useRef(0);
   const selected = useRef(seed); selected.current = seed;
   const live = useRef(true);
-  async function refresh() { const [next, items] = await Promise.all([getSonicStatus(), getSonicSeeds()]); if (!live.current) return; setStatus(next); setSeeds(items); if (!dirty.current) setSchedule(next.schedule); }
+  async function refresh() { const [next, items] = await Promise.all([getSonicStatus(), getSonicSeeds()]); if (!live.current) return; setStatus(next); setSeeds(items); setDiagnosticsRevision(n => n + 1); if (!dirty.current) setSchedule(next.schedule); }
   useEffect(() => {
     live.current = true; let disposed = false; let release: (() => void) | undefined; let last = 0; let previous = "";
     void refresh().catch((e: unknown) => { if (!disposed) setError(String(e)); });
@@ -38,7 +41,7 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (live.current) setBusy(false); }
   }
-  async function analyze(scope: "all" | "favorites" | "album" | "reuse") {
+  async function analyze(scope: "all" | "favorites" | "album" | "reuse" | "failed") {
     setBusy(true); setError(null); setMessage(null);
     try { if (!await persistSchedule()) return; await startSonicAnalysis(scope, albumId ?? null); if (!live.current) return; setMessage(`${scope === "reuse" ? "Verification" : "Analysis"} queued. Use Activity Center to pause, resume, cancel, or retry.`); await refresh(); }
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
@@ -75,6 +78,7 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
     {matches?.seedReady && !matches.tracks.length && <p>No eligible matches yet. Analyze more music.</p>}
     {matches?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}</span></div>)}
     {!albumId && <SonicBackupPanel onVerify={() => analyze("reuse")} />}
+    {!albumId && <><SonicFailuresPanel disabled={busy || !schedule} revision={diagnosticsRevision} onRetry={() => analyze("failed")} /><SonicCoveragePanel /></>}
     {message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}
   </section>;
 }

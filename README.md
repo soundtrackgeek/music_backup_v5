@@ -1,5 +1,16 @@
 # Music Library
 
+Music Library 0.186.0 adds **Tools → Audio analysis → Failed tracks** with saved
+filenames, folders, reasons, CSV export, and **Retry failed tracks**. A retry
+queues only unresolved failures, follows your schedule, and keeps completed work.
+Reasons remain visible until a track succeeds, including across new runs and restarts.
+
+Use **Analysis coverage check → Check analysis coverage** after a library scan
+to compare MP3s in Music Library's master catalog with saved current-profile results.
+The report distinguishes recorded failures from other missing analysis and exports
+every missing track to CSV. It checks database coverage without decoding audio.
+See [failure recovery and coverage](docs/sonic-analysis.md#failed-tracks-and-coverage-check).
+
 Music Library 0.185.1 fixes audio analysis of MP3s with ID3 tags and large
 embedded covers. Retry the interrupted or cancelled analysis job in Activity
 Center to retain completed checkpoints and retry failed files. Remaining time
