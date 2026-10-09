@@ -238,6 +238,8 @@ struct StoredPlan {
     format_version: u32,
     plan_id: String,
     session_id: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    expected_changed_albums: Option<i64>,
     source_path: String,
     category: String,
     category_label: String,
@@ -283,6 +285,30 @@ struct StoredAlbum {
     inventory: FolderInventory,
     #[serde(default)]
     existing_inventory: Option<FolderInventory>,
+}
+
+impl StoredAlbum {
+    fn identical_track_files(&self) -> bool {
+        let Some(existing) = &self.existing_inventory else {
+            return false;
+        };
+        let mp3_files = |inventory: &FolderInventory| {
+            inventory
+                .files
+                .iter()
+                .filter(|file| {
+                    Path::new(&file.relative_path)
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("mp3"))
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let incoming = mp3_files(&self.inventory);
+        self.action == BatchAlbumAction::Replace
+            && !incoming.is_empty()
+            && incoming == mp3_files(existing)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -718,24 +744,37 @@ fn preview_selection_once(
         .iter()
         .filter(|album| album.action == BatchAlbumAction::Add)
         .count() as i64;
-    let replaced_album_count = snapshot
+    let replacement_ids = snapshot
         .albums
         .iter()
         .filter(|album| album.action == BatchAlbumAction::Replace)
-        .count() as i64;
+        .map(|album| album.album_unique_id.as_str())
+        .collect::<Vec<_>>();
     let expected_track_delta = snapshot
         .albums
         .iter()
         .map(|album| album.track_count as i64 - album.existing_track_count as i64)
         .sum::<i64>();
-    if preview.added_tracks - preview.removed_tracks != expected_track_delta
-        || preview.added_albums != added_album_count
-        || preview.changed_albums != replaced_album_count
-        || preview.removed_albums != 0
-    {
+    // Replacing files can leave the album summary unchanged, including when only
+    // track titles change. Compare the planned identities with the same album
+    // comparison used by the importer; unrelated album changes must still fail.
+    let expected_changed_albums = importer::bridge_replacement_changed_album_count(
+        &conn,
+        preview.session_id,
+        &replacement_ids,
+    );
+    let delta_matches_plan = expected_changed_albums.as_ref().is_ok_and(|expected| {
+        preview.added_tracks - preview.removed_tracks == expected_track_delta
+            && preview.added_albums == added_album_count
+            && preview.changed_albums == *expected
+            && preview.removed_albums == 0
+    });
+    if !delta_matches_plan {
         let _ = importer::discard_bridge_import_preview(&conn, preview.session_id);
         folder_sync::cleanup_generated_snapshot(snapshot_path.to_string_lossy().as_ref());
         let _ = fs::remove_dir_all(&plan_directory);
+        expected_changed_albums
+            .context("Could not validate the prepared intake replacement plan")?;
         bail!(
             "The prepared intake delta did not match its add/replace plan: +{}/~{}/-{} tracks and +{}/~{}/-{} albums",
             preview.added_tracks,
@@ -789,6 +828,7 @@ fn preview_selection_once(
         removal_scope: None,
         plan_id: plan_id.clone(),
         session_id: preview.session_id,
+        expected_changed_albums: Some(expected_changed_albums?),
         source_path: display_path(&source),
         category: if destination_roots.len() > 1 {
             "mixed".to_owned()
@@ -850,6 +890,7 @@ fn preview_selection_once(
             "matchedTrackCount": album.matched_track_count,
             "existingRatedTrackCount": album.existing_rated_track_count,
             "existingLovedTrackCount": album.existing_loved_track_count,
+            "identicalTrackFiles": album.identical_track_files(),
         })).collect::<Vec<_>>(),
         "canApply": preview.status == "ready" && !preview.source_changed,
     }))
@@ -1002,6 +1043,7 @@ fn preview_album_removal(
         session_id: preview.session_id,
         source_path: display_path(&source),
         category: "inbox".to_owned(),
+        expected_changed_albums: None,
         category_label: "Aurora Inbox".to_owned(),
         destination_root: display_path(&inbox),
         snapshot_path: display_path(&snapshot_path),
@@ -1100,6 +1142,7 @@ fn preview_scoped_album_removal(
         session_id,
         source_path: display_path(source),
         category: "inbox".to_owned(),
+        expected_changed_albums: None,
         category_label: "Aurora Inbox".to_owned(),
         destination_root: display_path(root),
         snapshot_path: display_path(&marker),
@@ -2354,7 +2397,10 @@ fn validate_plan_session_binding(
     if state.added_tracks - state.removed_tracks != expected_track_delta
         || state.changed_tracks < 0
         || state.added_albums != added_album_count
-        || state.changed_albums != replaced_album_count
+        || plan
+            .expected_changed_albums
+            .is_some_and(|count| count < 0 || count > replaced_album_count)
+        || state.changed_albums != plan.expected_changed_albums.unwrap_or(replaced_album_count)
         || state.removed_albums != removed_album_count
     {
         bail!("The Aurora session no longer matches its add, replace, and move-back plan");
@@ -4570,6 +4616,232 @@ mod tests {
     }
 
     #[test]
+    fn selected_batch_unchanged_replacements_keep_review_and_recovery() {
+        let fixture = SelectionFixture::new();
+        let first = fixture.apply(&fixture.preview()).unwrap();
+        let originals = first["albums"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|album| {
+                let source = Path::new(album["sourcePath"].as_str().unwrap());
+                let destination = Path::new(album["destinationPath"].as_str().unwrap());
+                fs::create_dir_all(source).unwrap();
+                let bytes = fs::read(destination.join("01.mp3")).unwrap();
+                fs::write(source.join("01.mp3"), &bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>();
+        let target = &fixture.targets[0];
+        fs::write(
+            Path::new(&target.source_path).join("readme.txt"),
+            b"New sidecar",
+        )
+        .unwrap();
+        let single = preview_batch(
+            &bridge_app_data_dir().unwrap(),
+            PreviewBatchRequest {
+                source_path: display_path(Path::new(&target.source_path).parent().unwrap()),
+                category: target.category.clone(),
+            },
+            &mut BridgeProgressReporter::disabled("previewBatch"),
+        )
+        .unwrap();
+        assert_eq!(single["albumCount"], 1);
+        assert_eq!(single["delta"]["changedAlbums"], 0);
+        assert_eq!(single["albums"][0]["action"], "replace");
+        assert_eq!(single["albums"][0]["identicalTrackFiles"], true);
+        let preview = fixture.preview();
+        assert_eq!(preview["delta"]["addedAlbums"], 0);
+        assert_eq!(preview["delta"]["changedAlbums"], 0);
+        assert_eq!(preview["delta"]["changedTracks"], 0);
+        assert_eq!(preview["canApply"], true);
+        assert!(preview["albums"].as_array().unwrap().iter().all(|album| {
+            album["action"] == "replace"
+                && album["existingTrackCount"] == 1
+                && album["identicalTrackFiles"] == true
+        }));
+        let receipt = fixture.apply(&preview).unwrap();
+        for (index, album) in receipt["albums"].as_array().unwrap().iter().enumerate() {
+            let recovery = Path::new(album["recoveryPath"].as_str().unwrap());
+            let destination = Path::new(album["destinationPath"].as_str().unwrap());
+            assert_eq!(fs::read(recovery.join("01.mp3")).unwrap(), originals[index]);
+            assert_eq!(
+                fs::read(destination.join("01.mp3")).unwrap(),
+                originals[index]
+            );
+            assert!(!Path::new(album["sourcePath"].as_str().unwrap()).exists());
+        }
+    }
+
+    #[test]
+    fn different_audio_with_unchanged_catalog_metadata_still_previews_and_recovers() {
+        let fixture = SelectionFixture::new();
+        let request = PreviewSelectionRequest {
+            targets: fixture.targets[..1].to_vec(),
+        };
+        let app_data_dir = bridge_app_data_dir().unwrap();
+        let initial = preview_selection(
+            &app_data_dir,
+            PreviewSelectionRequest {
+                targets: request.targets.clone(),
+            },
+            &mut BridgeProgressReporter::disabled("previewSelection"),
+        )
+        .unwrap();
+        let first = fixture.apply(&initial).unwrap();
+        let source = Path::new(&fixture.targets[0].source_path);
+        let destination = Path::new(first["albums"][0]["destinationPath"].as_str().unwrap());
+        let original = fs::read(destination.join("01.mp3")).unwrap();
+        let mut incoming = original.clone();
+        *incoming.last_mut().unwrap() ^= 1;
+        fs::create_dir_all(source).unwrap();
+        fs::write(source.join("01.mp3"), &incoming).unwrap();
+        let preview = preview_selection(
+            &app_data_dir,
+            request,
+            &mut BridgeProgressReporter::disabled("previewSelection"),
+        )
+        .unwrap();
+        assert_eq!(preview["delta"]["changedAlbums"], 0);
+        assert_eq!(preview["delta"]["changedTracks"], 0);
+        assert_eq!(preview["albums"][0]["identicalTrackFiles"], false);
+        let receipt = fixture.apply(&preview).unwrap();
+        let recovery = Path::new(receipt["albums"][0]["recoveryPath"].as_str().unwrap());
+        assert_eq!(fs::read(recovery.join("01.mp3")).unwrap(), original);
+        assert_eq!(fs::read(destination.join("01.mp3")).unwrap(), incoming);
+        assert!(!source.exists());
+        let replay = fixture.apply(&preview).unwrap();
+        assert_eq!(replay["importRunId"], receipt["importRunId"]);
+    }
+
+    #[test]
+    fn selected_batch_mixes_additions_and_changed_and_unchanged_replacements() {
+        use id3::TagLike;
+        let fixture = SelectionFixture::new();
+        let initial = preview_selection(
+            &bridge_app_data_dir().unwrap(),
+            PreviewSelectionRequest {
+                targets: fixture.targets[..3].to_vec(),
+            },
+            &mut BridgeProgressReporter::disabled("previewSelection"),
+        )
+        .unwrap();
+        let first = fixture.apply(&initial).unwrap();
+        for (index, album) in first["albums"].as_array().unwrap().iter().enumerate() {
+            let source = Path::new(album["sourcePath"].as_str().unwrap());
+            let destination = Path::new(album["destinationPath"].as_str().unwrap());
+            fs::create_dir_all(source).unwrap();
+            fs::copy(destination.join("01.mp3"), source.join("01.mp3")).unwrap();
+            if index == 1 {
+                let mut tags = id3::Tag::read_from_path(source.join("01.mp3")).unwrap();
+                tags.set_title("Corrected track title");
+                tags.write_to_path(source.join("01.mp3"), id3::Version::Id3v24)
+                    .unwrap();
+            } else if index == 2 {
+                fs::copy(source.join("01.mp3"), source.join("02.mp3")).unwrap();
+                let mut tags = id3::Tag::read_from_path(source.join("02.mp3")).unwrap();
+                tags.set_title("Bonus track");
+                tags.set_track(2);
+                tags.write_to_path(source.join("02.mp3"), id3::Version::Id3v24)
+                    .unwrap();
+            }
+        }
+        let preview = fixture.preview();
+        assert_eq!(preview["albumCount"], 6);
+        assert_eq!(preview["delta"]["addedAlbums"], 3);
+        assert_eq!(preview["delta"]["changedAlbums"], 1);
+        assert_eq!(preview["delta"]["addedTracks"], 4);
+        assert_eq!(preview["delta"]["changedTracks"], 1);
+        assert_eq!(preview["albums"][0]["identicalTrackFiles"], true);
+        assert_eq!(preview["albums"][1]["identicalTrackFiles"], false);
+        assert_eq!(preview["albums"][2]["identicalTrackFiles"], false);
+        let receipt = fixture.apply(&preview).unwrap();
+        assert_eq!(receipt["albumCount"], 6);
+        assert_eq!(receipt["movedAlbumCount"], 6);
+        let conn = open_database(&fixture.temp.path().join("music-library.sqlite3")).unwrap();
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM tracks WHERE album = 'Album 1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "Corrected track title");
+        assert_eq!(
+            conn.query_row(
+                "SELECT total_tracks FROM albums WHERE album = 'Album 2'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn unchanged_replacement_does_not_allow_an_unrelated_album_delta() {
+        let fixture = SelectionFixture::new();
+        let initial = preview_selection(
+            &bridge_app_data_dir().unwrap(),
+            PreviewSelectionRequest {
+                targets: fixture.targets[..2].to_vec(),
+            },
+            &mut BridgeProgressReporter::disabled("previewSelection"),
+        )
+        .unwrap();
+        let first = fixture.apply(&initial).unwrap();
+        let album = &first["albums"][0];
+        let source = Path::new(album["sourcePath"].as_str().unwrap());
+        let destination = Path::new(album["destinationPath"].as_str().unwrap());
+        fs::create_dir_all(source).unwrap();
+        fs::copy(destination.join("01.mp3"), source.join("01.mp3")).unwrap();
+        let app_data_dir = bridge_app_data_dir().unwrap();
+        let conn = open_database(&app_data_dir.join("music-library.sqlite3")).unwrap();
+        conn.execute(
+            "UPDATE albums SET total_seconds = total_seconds + 1 WHERE album = 'Album 1'",
+            [],
+        )
+        .unwrap();
+        let error = preview_selection(
+            &app_data_dir,
+            PreviewSelectionRequest {
+                targets: vec![fixture.targets[0].clone(), fixture.targets[2].clone()],
+            },
+            &mut BridgeProgressReporter::disabled("previewSelection"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("+1/~1/-0 albums"), "{error:#}");
+        assert!(source.join("01.mp3").exists());
+        assert!(destination.join("01.mp3").exists());
+        assert_eq!(
+            conn.query_row(
+                "SELECT total_seconds FROM albums WHERE album = 'Album 1'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM import_sessions WHERE status = 'ready'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+        assert!(!fs::read_dir(app_data_dir.join("album-folder-imports"))
+            .unwrap()
+            .any(|entry| entry
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|ext| ext == "tsv")));
+    }
+
+    #[test]
     fn selected_batch_replacements_preserve_originals_in_each_destination_root() {
         use id3::TagLike;
         let fixture = SelectionFixture::new();
@@ -4672,6 +4944,7 @@ mod tests {
             removal_scope: None,
             plan_id: "0123456789abcdef01234567".to_owned(),
             session_id: 1,
+            expected_changed_albums: None,
             source_path: display_path(source),
             category: "scores".to_owned(),
             category_label: "Movie / TV / game music".to_owned(),

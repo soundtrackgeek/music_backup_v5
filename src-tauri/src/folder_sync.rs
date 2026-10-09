@@ -166,6 +166,8 @@ impl Default for BatchAlbumAction {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BatchAlbumMetadata {
+    #[serde(skip)]
+    pub album_unique_id: String,
     pub source_path: String,
     pub destination_path: String,
     pub artist: String,
@@ -1054,6 +1056,7 @@ pub(crate) fn build_batch_snapshot(
                 .ok_or_else(|| anyhow!("A prepared album contains no tracks"))?;
             let matched_track_count = matching_track_count(scan, &prepared.existing_records);
             metadata.push(BatchAlbumMetadata {
+                album_unique_id,
                 source_path: display_path(&scan.canonical_folder),
                 destination_path: display_path(destination),
                 artist: first.album_artist.clone(),

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.186.2] - 2026-10-09
+
+### Fixed
+- Accept reviewed album replacements that leave the catalog album summary unchanged. Compare staged replacement identities with the importer's normal album comparison instead of requiring every replaced folder to increment the changed-album count.
+- Persist the verified expected count through apply, preview cleanup, and recovery, retaining compatibility with older plans and rejection of unrelated album changes.
+
+### Added
+- Intake preview reports whether every incoming MP3 matches the existing relative filename, size, and SHA-256 digest. Aurora 0.34.1 distinguishes identical copies from different files before replacement confirmation; sidecar differences do not claim that the music differs.
+
 ## [0.186.1] - 2026-10-09
 
 ### Added

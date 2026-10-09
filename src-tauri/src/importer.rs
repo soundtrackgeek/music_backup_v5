@@ -24,7 +24,7 @@ use std::sync::{
 use std::time::Instant;
 use std::time::UNIX_EPOCH;
 #[cfg(not(test))]
-use tauri::{AppHandle, };
+use tauri::AppHandle;
 use tauri_specta::Event as _;
 
 const IMPORT_STAGE_BATCH_SIZE: usize = 5_000;
@@ -590,6 +590,37 @@ pub(crate) fn prepare_bridge_import_preview(
         &|_, _, _, _, _, _| {},
         ImportPreviewScope::Bridge,
     )
+}
+
+pub(crate) fn bridge_replacement_changed_album_count(
+    conn: &Connection,
+    session_id: i64,
+    album_unique_ids: &[&str],
+) -> Result<i64> {
+    if album_unique_ids.is_empty() {
+        return Ok(0);
+    }
+    let album_ids = album_unique_ids
+        .iter()
+        .map(|id| album_identity(id, "", "", None, ""))
+        .collect::<HashSet<_>>();
+    if album_ids.len() != album_unique_ids.len() {
+        bail!("The replacement plan contains the same catalog album identity more than once");
+    }
+    let encoded_ids = serde_json::to_string(&album_ids)?;
+    let staged = load_stage_final_albums_for_ids(conn, session_id, Some(&encoded_ids))?;
+    if staged.len() != album_ids.len() {
+        bail!("The replacement plan did not preserve every staged catalog album identity");
+    }
+    let mut previous_albums = load_previous_albums(conn)?;
+    let match_index = build_previous_album_match_index(&previous_albums);
+    let mut changed = 0;
+    for album in staged {
+        let previous = take_matching_previous_album(&mut previous_albums, &match_index, &album)
+            .context("A staged replacement plan no longer matches an existing catalog album")?;
+        changed += i64::from(album_changed(&previous, &album));
+    }
+    Ok(changed)
 }
 
 #[derive(Debug)]
@@ -3439,6 +3470,14 @@ fn persist_import_delta(
 }
 
 fn load_stage_final_albums(conn: &Connection, session_id: i64) -> Result<Vec<FinalAlbum>> {
+    load_stage_final_albums_for_ids(conn, session_id, None)
+}
+
+fn load_stage_final_albums_for_ids(
+    conn: &Connection,
+    session_id: i64,
+    album_ids: Option<&str>,
+) -> Result<Vec<FinalAlbum>> {
     let mut stmt = conn.prepare(
         "
         SELECT album_id, album_unique_id, album, final_album_artist_display,
@@ -3449,10 +3488,11 @@ fn load_stage_final_albums(conn: &Connection, session_id: i64) -> Result<Vec<Fin
                album_artist_display_inferred
         FROM import_stage_albums
         WHERE session_id = ?1
+          AND (?2 IS NULL OR album_id IN (SELECT value FROM json_each(?2)))
         ORDER BY album_id
         ",
     )?;
-    let rows = stmt.query_map(params![session_id], |row| {
+    let rows = stmt.query_map(params![session_id, album_ids], |row| {
         Ok(FinalAlbum {
             album_id: row.get(0)?,
             album_unique_id: row.get(1)?,
@@ -5432,14 +5472,15 @@ fn emit_progress(
     message: &str,
 ) {
     let _ = crate::events::ImportProgressEvent(ImportProgress {
-            status: status.to_string(),
-            session_id,
-            processed_rows,
-            processed_bytes,
-            total_bytes,
-            album_count,
-            message: message.to_string(),
-        }).emit(app);
+        status: status.to_string(),
+        session_id,
+        processed_rows,
+        processed_bytes,
+        total_bytes,
+        album_count,
+        message: message.to_string(),
+    })
+    .emit(app);
 }
 
 #[cfg(test)]

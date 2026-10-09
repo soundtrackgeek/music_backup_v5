@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library **0.186.2** fixes Aurora intake previews for replacements whose
+catalog album summary is unchanged, including identical copies and track-only
+metadata edits. Preview, apply, and recovery retain the validated change count;
+unexpected changes outside the reviewed albums still stop the batch. Aurora
+**0.34.1** shows whether every incoming MP3 file matches the existing release
+byte for byte. Replacements still require review and preserve the old files.
+
 Music Library **0.186.1** extends Aurora's shared playlist bridge with regular
 playlist creation, rename/delete, ordered append, move and remove. Queue and M3U8
 imports retain repeated songs. Edits validate the opened revision and current file
