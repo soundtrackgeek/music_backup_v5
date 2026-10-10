@@ -10,7 +10,7 @@ import {
 import { useReducer } from "react";
 type StatisticsState = {
   yearLedgerSelection: YearLedgerSelection;
-  statisticsView: "overview" | "rating";
+  statisticsView: "overview" | "rating" | "listening";
   statisticsCohort: InsightCohort | null;
   statistics: StatisticsResponse | null;
   statsError: string | null;
@@ -25,7 +25,7 @@ function createInitialState(): StatisticsState {
     excludedGenres: [],
     selectedYear: null,
   };
-  const statisticsView: "overview" | "rating" = "overview";
+  const statisticsView: "overview" | "rating" | "listening" = "overview";
   const statisticsCohort: InsightCohort | null = null;
   const statistics: StatisticsResponse | null = null;
   const statsError: string | null = null;

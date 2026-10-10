@@ -11,6 +11,7 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    listening,
     sonic,
     sonic_failures,
     sonic_coverage,
@@ -196,6 +197,11 @@ macro_rules! specta_commands {
 
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
+        listening::listening_overview,
+        listening::listening_list,
+        listening::listening_configure_source,
+        listening::listening_clear_source,
+        listening::listening_sync,
         sonic::sonic_status,
         sonic_failures::sonic_failed_tracks,
         sonic_failures::sonic_export_failed_tracks,

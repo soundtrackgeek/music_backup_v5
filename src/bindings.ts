@@ -5,6 +5,11 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
+	listeningList: (request: ListeningListRequest) => __TAURI_INVOKE<ListeningRow[]>("listening_list", { request }),
+	listeningConfigureSource: (request: ListeningSourceRequest) => __TAURI_INVOKE<ListeningOverview>("listening_configure_source", { request }),
+	listeningClearSource: (source: string) => __TAURI_INVOKE<ListeningOverview>("listening_clear_source", { source }),
+	listeningSync: (source: string) => __TAURI_INVOKE<ListeningSyncResult>("listening_sync", { source }),
 	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
 	sonicFailedTracks: (after: string | null) => __TAURI_INVOKE<FailedTracksPage>("sonic_failed_tracks", { after }),
 	sonicExportFailedTracks: (path: string) => __TAURI_INVOKE<FailedTracksExport>("sonic_export_failed_tracks", { path }),
@@ -2763,6 +2768,74 @@ export type LibraryUpdateSummary = {
 	new: number,
 	changed: number,
 	removed: number,
+};
+
+export type ListeningList = "topTracks" | "topAlbums" | "topArtists" | "recent" | "rediscover" | "neverPlayedFavorites" | "leastPlayedAlbums" | "unmatched";
+
+export type ListeningListRequest = {
+	list: ListeningList,
+	periodDays?: number | null,
+	limit?: number | null,
+};
+
+export type ListeningMonth = {
+	month: string,
+	plays: number,
+};
+
+export type ListeningOverview = {
+	sources: ListeningSourceStatus[],
+	totalPlays: number,
+	matchedPlays: number,
+	playedTracks: number,
+	firstPlayedAt: number | null,
+	lastPlayedAt: number | null,
+	playsLast30Days: number,
+	playsLast365Days: number,
+	months: ListeningMonth[],
+};
+
+export type ListeningRow = {
+	key: string,
+	title: string,
+	artist: string,
+	album: string | null,
+	albumId: string | null,
+	trackId: number | null,
+	rating: number | null,
+	plays: number,
+	lastPlayedAt: number | null,
+	source: string | null,
+};
+
+export type ListeningSource = "lastfm" | "listenbrainz" | "aurora";
+
+export type ListeningSourceRequest = {
+	source: ListeningSource,
+	username: string,
+	token?: string | null,
+	clearToken?: boolean,
+};
+
+export type ListeningSourceStatus = {
+	source: ListeningSource,
+	label: string,
+	username: string,
+	tokenConfigured: boolean,
+	plays: number,
+	newestPlayedAt: number | null,
+	lastSyncedAt: string | null,
+	lastError: string | null,
+};
+
+export type ListeningSyncResult = {
+	source: ListeningSource,
+	fetched: number,
+	inserted: number,
+	duplicates: number,
+	totalPlays: number,
+	matchedPlays: number,
+	message: string,
 };
 
 export type LocalSharesSnapshot = {

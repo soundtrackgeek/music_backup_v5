@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.187.0] - 2026-10-10
+
+### Added
+- **Statistics → Listening** imports listening history from Last.fm (`user.getRecentTracks`) and ListenBrainz (optional user token in the system keychain), and from Aurora through the new protocol-1 `recordPlays` bridge operation and `recordPlays` capability.
+- Most played tracks, albums, and artists for all time or the last 30, 90, or 365 days; recent plays; plays per month; **Rediscover** (5★ tracks not played in three years); **Unplayed 5★**; **Least played 4★+** albums; and **Not in library** plays.
+- Syncs run as cancellable Activity Center jobs. The first sync imports the whole account and later syncs read only newer plays. Plays from two sources within ten minutes count once, and each source's plays can be removed and imported again.
+- Schema 63 stores plays with loose artist and title keys and links them to the current catalog tracks. Links are rebuilt automatically after imports, preferring an exact Aurora file path, then the album named by the play, then the song artist's own album.
+
 ## [0.186.3] - 2026-10-10
 
 ### Fixed

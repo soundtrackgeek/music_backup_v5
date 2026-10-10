@@ -412,6 +412,7 @@ fn host_interval(host: &str) -> Duration {
         "musicbrainz.org" | "www.musicbrainz.org" => Duration::from_millis(1100),
         "api.discogs.com" | "coverartarchive.org" | "i.discogs.com" => Duration::from_millis(1200),
         "ws.audioscrobbler.com" => Duration::from_millis(350),
+        "api.listenbrainz.org" => Duration::from_millis(500),
         "api.deezer.com" => Duration::from_millis(200),
         "archive.org" => Duration::from_millis(1200),
         host if host.ends_with(".archive.org") => Duration::from_millis(1200),

@@ -162,6 +162,17 @@ const HANDLERS: &[Registration] = &[
         }
     ),
     registration!(
+        "listeningSync",
+        "Listening history sync",
+        false,
+        true,
+        true,
+        |app, p| encode(crate::listening::sync_for_app(
+            app,
+            p["source"].as_str().unwrap_or_default()
+        )?)
+    ),
+    registration!(
         "wishListSearch",
         "Wish List MusicBrainz search",
         false,

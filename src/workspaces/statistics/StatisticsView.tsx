@@ -14,7 +14,9 @@ import {
   Gauge,
   ChevronRight,
   FileSearch,
+  Headphones,
 } from "lucide-react";
+import { ListeningHistory } from "./ListeningHistory";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import {
   YearProgressExplorer,
@@ -82,6 +84,7 @@ export function StatisticsView({
     | "isStatsLoading"
     | "ratingAlbumTotal"
     | "ratingTrackTotal"
+    | "openTimelineAlbum"
   >;
 }) {
   const {
@@ -104,6 +107,7 @@ export function StatisticsView({
     isStatsLoading,
     ratingAlbumTotal,
     ratingTrackTotal,
+    openTimelineAlbum,
   } = model;
   return (
     <section
@@ -144,6 +148,17 @@ export function StatisticsView({
             <Activity size={16} />
             Rating progress
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="statistics-listening-tab"
+            aria-controls="statistics-listening"
+            aria-selected={statisticsView === "listening"}
+            onClick={() => setStatisticsView("listening")}
+          >
+            <Headphones size={16} />
+            Listening
+          </button>
         </div>
         <div className="topbar-actions">
           <button
@@ -157,6 +172,15 @@ export function StatisticsView({
         </div>
       </header>
 
+      {statisticsView === "listening" ? (
+        <section
+          id="statistics-listening"
+          role="tabpanel"
+          aria-labelledby="statistics-listening-tab"
+        >
+          <ListeningHistory onOpenAlbum={openTimelineAlbum} />
+        </section>
+      ) : null}
       <TransitionRegion>
         <section
           id="statistics-rating"

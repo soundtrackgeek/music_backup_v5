@@ -406,7 +406,9 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 
 ---
 
-### 1. Listening history
+### 1. Listening history - DONE
+
+**Implemented in 0.187.0 (2026-10-10):** **Statistics → Listening** imports plays from Last.fm `user.getRecentTracks`, ListenBrainz `/1/user/{user}/listens` (optional token in the system keychain), and Aurora's new `recordPlays` bridge operation. Schema 63 stores plays by `identity::loose_key` artist and `edition_title_key` title (catalog track IDs change on import) in `listening_plays`, with per-source state in `listening_sources`. A derived `listening_identity_links` table maps each play identity to one current track and is rebuilt when the catalog revision or the play set changes. Plays from two sources within ten minutes are counted once. Syncs are cancellable `listeningSync` jobs, and the sync point only moves forward after a sync completes. The tab shows most played tracks, albums, and artists by period, recent plays, monthly plays, "5★ not played in 3 years", unplayed 5★ tracks, least-played 4★+ albums, and plays not in the library. Not yet built: play-weighted Album Score and a Daily Edition "rediscover" shelf.
 
 **Why:** the app knows what you **own** and how you **rated** it, but not what you **play**. That is the biggest missing signal in a ratings-and-discovery app. It would enable:
 - most and least played lists,

@@ -20,6 +20,7 @@ mod importer;
 mod jev;
 mod jobs;
 mod lastfm;
+mod listening;
 mod library_completion;
 mod models;
 mod music_doctor;

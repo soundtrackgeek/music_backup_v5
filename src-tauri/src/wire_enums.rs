@@ -819,3 +819,33 @@ pub enum MusicBrainzReleaseDecision {
     #[serde(rename = "auto-not-official")]
     AutoNotOfficial,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum ListeningSource {
+    #[serde(rename = "lastfm")]
+    Lastfm,
+    #[serde(rename = "listenbrainz")]
+    Listenbrainz,
+    #[serde(rename = "aurora")]
+    Aurora,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub enum ListeningList {
+    #[serde(rename = "topTracks")]
+    TopTracks,
+    #[serde(rename = "topAlbums")]
+    TopAlbums,
+    #[serde(rename = "topArtists")]
+    TopArtists,
+    #[serde(rename = "recent")]
+    Recent,
+    #[serde(rename = "rediscover")]
+    Rediscover,
+    #[serde(rename = "neverPlayedFavorites")]
+    NeverPlayedFavorites,
+    #[serde(rename = "leastPlayedAlbums")]
+    LeastPlayedAlbums,
+    #[serde(rename = "unmatched")]
+    Unmatched,
+}

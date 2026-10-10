@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 62;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 63;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -161,7 +161,20 @@ const MIGRATIONS: &[Migration] = &[
         up: sonic_index_generation,
         verify: Some(phase_sixty_two_schema_exists),
     },
+    Migration {
+        version: 63,
+        description: "listening history plays, sources, and track links",
+        up: listening_history,
+        verify: Some(phase_sixty_three_schema_exists),
+    },
 ];
+
+fn listening_history(conn: &Connection) -> Result<()> {
+    crate::listening::install_schema(conn)
+}
+fn phase_sixty_three_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(crate::listening::schema_exists(conn)? && phase_sixty_two_schema_exists(conn)?)
+}
 
 fn sonic_index_generation(conn: &Connection) -> Result<()> {
     crate::sonic_index::install_catalog(conn).map_err(anyhow::Error::msg)

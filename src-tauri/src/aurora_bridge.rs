@@ -439,6 +439,7 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             serde_json::to_value(crate::sonic::save_journey_at(&app_data_dir, input)?)
                 .map_err(Into::into)
         }
+        "recordPlays" => crate::listening::record_bridge_plays_at(&app_data_dir, request.payload),
         "previewBatch" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
             let payload: PreviewBatchRequest = serde_json::from_value(request.payload)
@@ -563,6 +564,7 @@ fn capabilities() -> Result<Value> {
             "sonicJourneyPlaylists": true,
             "smartPlaylistAuthoring": true,
             "playlistAuthoring": true,
+            "recordPlays": true,
         },
     }))
 }

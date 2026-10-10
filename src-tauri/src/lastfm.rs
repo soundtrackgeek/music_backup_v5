@@ -722,6 +722,38 @@ pub fn delete_api_key() -> Result<LastFmCredentialStatus> {
     credential_status()
 }
 
+/// One `user.getRecentTracks` page for listening history import. `from` and
+/// `to` are Unix seconds; Last.fm returns the newest scrobbles first.
+pub(crate) fn recent_tracks_page(
+    username: &str,
+    page: u32,
+    limit: u32,
+    from: Option<i64>,
+    to: i64,
+) -> Result<serde_json::Value> {
+    let api_key = require_api_key()?;
+    let mut url = Url::parse(LASTFM_API_BASE)?;
+    {
+        let mut query = url.query_pairs_mut();
+        query
+            .append_pair("method", "user.getrecenttracks")
+            .append_pair("user", username)
+            .append_pair("api_key", api_key.as_str())
+            .append_pair("format", "json")
+            .append_pair("limit", &limit.to_string())
+            .append_pair("page", &page.to_string())
+            .append_pair("to", &to.to_string());
+        if let Some(from) = from {
+            query.append_pair("from", &from.to_string());
+        }
+    }
+    let response = lastfm_json(&url, 0)?;
+    if let Some((code, message)) = lastfm_error(&response.payload) {
+        bail!("Last.fm error {code}: {message}")
+    }
+    Ok(response.payload)
+}
+
 pub fn test_connection() -> Result<LastFmConnectionTest> {
     let api_key = require_api_key()?;
     connection_test_with(api_key.as_str())
