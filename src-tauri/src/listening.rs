@@ -631,11 +631,17 @@ pub(crate) fn list(
              GROUP BY a.id ORDER BY 8 DESC, 9 DESC, a.id LIMIT ?2"
         ),
         "topArtists" => format!(
-            "{played} SELECT COALESCE(t.album_artist_display, ''), COALESCE(t.album_artist_display, ''),
-                    COALESCE(t.album_artist_display, ''), NULL, NULL, NULL, NULL,
-                    SUM(played.plays), MAX(played.last_played), NULL
-             FROM played JOIN tracks t ON t.id = played.track_id
-             GROUP BY COALESCE(t.album_artist_display, '') ORDER BY 8 DESC, 9 DESC LIMIT ?2"
+            // Rank the track's own Artist so compilations do not collapse
+            // into their Album Artist ("Various Artists").
+            "{played}, artist_plays AS (
+                SELECT COALESCE(NULLIF(t.display_artist, ''), t.album_artist_display, '') AS artist,
+                       played.plays, played.last_played
+                FROM played JOIN tracks t ON t.id = played.track_id
+             )
+             SELECT artist, artist, artist, NULL, NULL, NULL, NULL,
+                    SUM(plays), MAX(last_played), NULL
+             FROM artist_plays
+             GROUP BY artist ORDER BY 8 DESC, 9 DESC LIMIT ?2"
         ),
         "recent" => format!(
             "SELECT CAST(p.id AS TEXT), p.title, p.artist, p.album, t.album_id, t.id,

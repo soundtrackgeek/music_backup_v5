@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.187.1] - 2026-10-10
+
+### Fixed
+- **Statistics → Listening → Top artists** now ranks plays by each matched track's Artist, falling back to the Album Artist only when the track has none, so compilation plays no longer pile up under "Various Artists". Already-imported plays are re-ranked automatically. Top albums still group by album.
+
 ## [0.187.0] - 2026-10-10
 
 ### Added

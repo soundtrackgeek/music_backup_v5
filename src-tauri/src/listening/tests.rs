@@ -466,3 +466,30 @@ fn bridge_records_plays_with_unix_or_rfc3339_times() {
     assert_eq!(newest, 1_789_990_000);
     assert!(record_bridge_plays(&conn, json!({ "plays": "nope" })).is_err());
 }
+
+#[test]
+fn top_artists_use_the_track_artist_instead_of_album_artist() {
+    let conn = seeded();
+    insert_plays(
+        &conn,
+        "aurora",
+        &[
+            PlayInput {
+                file_path: Some("D:/Music/VA/Best/07.mp3".into()),
+                ..play(
+                    "Various Artists",
+                    "Running Up That Hill",
+                    Some("Best of the 80s"),
+                    NOW - DAY,
+                )
+            },
+            play("Sigur Rós", "Svefn-g-englar", None, NOW - 2 * DAY),
+            play("Kate Bush", "Cloudbusting", None, NOW - 3 * DAY),
+        ],
+    )
+    .expect("insert plays");
+    refresh_links(&conn).expect("refresh links");
+
+    let artists = list(&conn, &request("topArtists"), NOW).expect("top artists");
+    assert_eq!(titles(&artists), vec![("Kate Bush", 2), ("Sigur Rós", 1)]);
+}

@@ -310,7 +310,7 @@ The Listening tab shows total and matched plays, plays per month, and these list
 
 | List | Shows |
 | --- | --- |
-| Most played, Top albums, Top artists | Ranked by plays for all time or the last 30, 90, or 365 days |
+| Most played, Top albums, Top artists | Ranked by plays for all time or the last 30, 90, or 365 days. Top artists use each track's Artist, not its Album Artist |
 | Recent plays | Every imported play with its source |
 | Rediscover | 5★ tracks last played more than three years ago |
 | Unplayed 5★ | 5★ tracks with no play in the imported history |
