@@ -42,11 +42,21 @@ The estimate describes active processing time; it does not predict when the
 computer will next be idle. Remaining queued files are conservatively treated
 as needing analysis until checked, so more cached results can shorten the run.
 
-Ten failed attempts without successful new analysis stop the job with the last
-file/error in Activity Center. Completed results and unprocessed checkpoints
-remain saved. Check the analyzer or affected files, then **Retry** the same job.
-Music Library 0.185.1 enables MP3 metadata readers for ID3 tags and large covers;
-this fix reuses existing features and does not require a full reanalysis.
+Music Library 0.186.3 saves individual file failures and continues the queue,
+including consecutive failures within an album. Missing, unreadable, corrupt,
+unsupported or timed-out files remain in **Failed tracks** for later retry.
+An analyzer launch failure, unexpected process exit, invalid response or database
+fault stops the job immediately with the last error in Activity Center. Completed
+results and remaining checkpoints remain saved. Fix the reported problem, then
+**Retry** the same job. A completed scan with failed tracks still needs attention.
+
+The decoder supports MPEG layers I, II and III inside cataloged `.mp3` files and
+ID3/APE metadata, including large covers. For a finite file without a readable
+header duration, it decodes audio packets to EOF using the same mono conversion
+and resampling as the normal decoder. The fallback bounds PCM input to 256 MiB
+and fails rather than silently analyzing a truncated prefix. The host retains
+its three-minute per-track timeout. No source files are converted or rewritten.
+The existing feature profile stays compatible; completed work is reused.
 
 ## Failed tracks and coverage check
 

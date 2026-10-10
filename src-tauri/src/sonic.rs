@@ -15,6 +15,28 @@ use std::{
 };
 use tauri::AppHandle;
 
+/// A problem with this file may be saved and skipped. Launch, protocol and
+/// database failures must stop the job instead of poisoning the whole queue.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct TrackAnalysisError(String);
+
+fn track_error(error: impl std::fmt::Display) -> anyhow::Error {
+    TrackAnalysisError(error.to_string()).into()
+}
+
+fn analyzer_failure(code: Option<i32>, message: &str) -> anyhow::Error {
+    let message = format!(
+        "Analyzer failed: {}",
+        message.chars().take(500).collect::<String>()
+    );
+    if code == Some(2) {
+        track_error(message)
+    } else {
+        anyhow::anyhow!(message)
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SonicStatus {
@@ -302,7 +324,9 @@ fn extract(path: &Path, stop: &impl Fn() -> bool) -> Result<Analysis> {
         if stop() || started.elapsed() > Duration::from_secs(180) {
             let _ = child.kill();
             let _ = child.wait();
-            bail!("Analysis interrupted or exceeded the three-minute per-track limit");
+            return Err(track_error(
+                "Analysis interrupted or exceeded the three-minute per-track limit",
+            ));
         }
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -316,10 +340,7 @@ fn extract(path: &Path, stop: &impl Fn() -> bool) -> Result<Analysis> {
     };
     if !status.success() {
         let message = fs::read_to_string(errors.path()).unwrap_or_default();
-        bail!(
-            "Analyzer failed: {}",
-            message.chars().take(500).collect::<String>()
-        );
+        return Err(analyzer_failure(status.code(), &message));
     }
     if output.as_file().metadata()?.len() > 64 * 1024 {
         bail!("Analyzer response exceeded its limit");
@@ -395,10 +416,10 @@ fn analyze_one_mode(
     )?;
     drop(c);
     if !exists {
-        bail!("The file is no longer in the catalog");
+        return Err(track_error("The file is no longer in the catalog"));
     }
-    let path = audio_path(directory, filename)?;
-    let before = signature(&path)?;
+    let path = audio_path(directory, filename).map_err(track_error)?;
+    let before = signature(&path).map_err(track_error)?;
     let store = results(dir)?;
     let saved: Option<(u64, String)> = store
         .query_row(
@@ -412,7 +433,7 @@ fn analyze_one_mode(
     if saved.as_ref() == Some(&before) {
         return Ok(AnalysisWork::Cached);
     }
-    let hash = audio_hash_with_stop(&path, stop)?;
+    let hash = audio_hash_with_stop(&path, stop).map_err(track_error)?;
     let existing: Option<String> = store
         .query_row(
             "SELECT features FROM sonic_audio WHERE audio_hash=?1 AND profile=?2",
@@ -426,8 +447,12 @@ fn analyze_one_mode(
             return Ok(AnalysisWork::Unmatched);
         }
         let analysis = extract(&path, stop)?;
-        if before != signature(&path)? || hash != audio_hash_with_stop(&path, stop)? {
-            bail!("The audio changed during analysis; retry the track");
+        if before != signature(&path).map_err(track_error)?
+            || hash != audio_hash_with_stop(&path, stop).map_err(track_error)?
+        {
+            return Err(track_error(
+                "The audio changed during analysis; retry the track",
+            ));
         }
         let weights = serde_json::to_string(&analysis.weights)?;
         let prior: Option<String> = store
@@ -449,8 +474,10 @@ fn analyze_one_mode(
             params![hash, PROFILE, serde_json::to_string(&analysis.features)?],
         )?;
     }
-    if stop() || before != signature(&path)? {
-        bail!("The track changed or analysis was stopped before publication");
+    if stop() || before != signature(&path).map_err(track_error)? {
+        return Err(track_error(
+            "The track changed or analysis was stopped before publication",
+        ));
     }
     let c = catalog(dir)?;
     if !c.query_row(
@@ -458,7 +485,7 @@ fn analyze_one_mode(
         params![directory, filename],
         |r| r.get::<_, bool>(0),
     )? {
-        bail!("The track was removed during analysis");
+        return Err(track_error("The track was removed during analysis"));
     }
     store.execute("INSERT INTO sonic_tracks VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(track_key) DO UPDATE SET directory=excluded.directory,filename=excluded.filename,audio_hash=excluded.audio_hash,profile=excluded.profile,size=excluded.size,modified=excluded.modified,analyzed_at=excluded.analyzed_at",params![track_key(directory,filename),directory,filename,hash,PROFILE,before.0 as i64,before.1,chrono::Utc::now().to_rfc3339()])?;
     Ok(if existing.is_none() {
@@ -603,7 +630,6 @@ fn run_at(
     let mut waiting = false;
     let reuse_only = request.scope == "reuse";
     let mut estimate = AnalysisEstimate::default();
-    let mut unsuccessful_attempts = 0;
     let mut failed_this_run = 0;
     loop {
         if stop() {
@@ -655,17 +681,12 @@ fn run_at(
         let ready = outcome
             .as_ref()
             .is_ok_and(|work| *work != AnalysisWork::Unmatched);
-        let (state, error) = match outcome {
-            Ok(work) => {
-                if work == AnalysisWork::Extracted || reuse_only && work != AnalysisWork::Cached {
-                    unsuccessful_attempts = 0;
-                }
-                ("done", None)
-            }
+        let (state, error, fatal) = match outcome {
+            Ok(_) => ("done", None, false),
             Err(e) => {
-                unsuccessful_attempts += 1;
                 failed_this_run += 1;
-                ("failed", Some(format!("{e:#}")))
+                let fatal = !e.is::<TrackAnalysisError>();
+                ("failed", Some(format!("{e:#}")), fatal)
             }
         };
         let tx = w.transaction()?;
@@ -676,10 +697,7 @@ fn run_at(
         crate::sonic_failures::record(&tx, &key, &directory, &filename, error.as_deref(), ready)?;
         tx.commit()?;
         completed += 1;
-        if reported.elapsed() >= Duration::from_secs(2)
-            || completed == total
-            || unsuccessful_attempts >= 10
-        {
+        if reported.elapsed() >= Duration::from_secs(2) || completed == total || fatal {
             let message = match &error {
                 Some(error) => {
                     format!("{failed_this_run} files failed. Last file: {filename}. {error}")
@@ -694,8 +712,8 @@ fn run_at(
             );
             reported = Instant::now();
         }
-        if unsuccessful_attempts >= 10 {
-            bail!("Stopped after 10 failed files without successful new analysis. Last file: {filename}. {} Completed analysis is saved; check the analyzer or files, then retry this job.", error.as_deref().unwrap_or_default());
+        if fatal {
+            bail!("Audio analysis stopped because the analyzer or its storage failed. Last file: {filename}. {} Completed analysis and remaining checkpoints are saved. Fix the reported problem, then retry this job.", error.as_deref().unwrap_or_default());
         }
     }
     let failed: i64 = w.query_row(
@@ -1370,7 +1388,7 @@ mod tests {
     }
 
     #[test]
-    fn repeated_failures_stop_with_saved_errors_and_unprocessed_checkpoints() {
+    fn file_failures_are_saved_without_stopping_remaining_tracks() {
         let dir = fixture();
         let w = work(dir.path()).unwrap();
         w.execute_batch("INSERT INTO sonic_batches VALUES('broken-decoder',1);")
@@ -1388,12 +1406,12 @@ mod tests {
             let filename = format!("missing-{i:02}.mp3");
             w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![filename, dir.path().to_string_lossy(), filename]).unwrap();
         }
-        // Existing analysis between failures must not disguise a broken decoder.
+        // A cluster of file failures must not prevent other tracks from finishing.
         for i in 1..=3 {
             w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![format!("missing-{:02}-cached", i * 2), dir.path().to_string_lossy(), format!("{i}.mp3")]).unwrap();
         }
         let reports = std::cell::RefCell::new(Vec::new());
-        let error = run_at(
+        let result = run_at(
             dir.path(),
             AnalyzeRequest {
                 scope: "all".into(),
@@ -1409,8 +1427,8 @@ mod tests {
             &|| None,
             &|| 12,
         )
-        .unwrap_err();
-        assert!(error.to_string().contains("Stopped after 10 failed files"));
+        .unwrap();
+        assert_eq!(result["failedCount"], 12);
         assert_eq!(
             w.query_row(
                 "SELECT count(*) FROM sonic_items WHERE state='failed'",
@@ -1418,7 +1436,7 @@ mod tests {
                 |r| r.get::<_, i64>(0)
             )
             .unwrap(),
-            10
+            12
         );
         assert_eq!(
             w.query_row(
@@ -1427,17 +1445,153 @@ mod tests {
                 |r| r.get::<_, i64>(0)
             )
             .unwrap(),
-            2
+            0
         );
         assert!(reports.borrow().iter().all(|(_, _, eta)| eta.is_none()));
-        assert_eq!(reports.borrow().last().unwrap().0, 13);
+        assert_eq!(reports.borrow().last().unwrap().0, 15);
         assert!(reports
             .borrow()
             .last()
             .unwrap()
             .1
-            .contains("10 files failed"));
+            .contains("12 files failed"));
         assert_eq!(status_at(dir.path()).unwrap().analyzed, 3);
+        assert_eq!(
+            crate::sonic_failures::list_at(dir.path(), None)
+                .unwrap()
+                .total,
+            12
+        );
+    }
+
+    #[test]
+    fn database_failure_stops_immediately_and_preserves_remaining_queue() {
+        let dir = fixture();
+        let w = work(dir.path()).unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('storage-failure',1);")
+            .unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..Default::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        for key in ["a", "b"] {
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('storage-failure',?1,'folder','track.mp3')", [key]).unwrap();
+        }
+        let catalog = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        catalog
+            .execute_batch("ALTER TABLE tracks RENAME COLUMN file_path TO old_file_path;")
+            .unwrap();
+        let error = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "all".into(),
+                album_id: None,
+                batch_id: Some("storage-failure".into()),
+            },
+            &|| false,
+            &|_, _, _, _| {},
+            &|| None,
+            &|| 12,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("analyzer or its storage failed"));
+        assert_eq!(
+            w.query_row(
+                "SELECT count(*) FROM sonic_items WHERE state='pending'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            crate::sonic_failures::list_at(dir.path(), None)
+                .unwrap()
+                .total,
+            1
+        );
+    }
+
+    #[test]
+    fn analyzer_file_exit_is_distinct_from_crashes_and_protocol_failures() {
+        assert!(analyzer_failure(Some(2), "Unsupported audio codec").is::<TrackAnalysisError>());
+        assert!(!analyzer_failure(Some(1), "Missing argument").is::<TrackAnalysisError>());
+        assert!(!analyzer_failure(None, "Process crashed").is::<TrackAnalysisError>());
+    }
+
+    #[test]
+    fn decoder_failures_in_an_album_do_not_block_a_later_mpeg_layer_two_track() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        catalog
+            .execute_batch("CREATE TABLE tracks(file_path TEXT,filename TEXT);")
+            .unwrap();
+        let w = work(dir.path()).unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('decode-errors',1);")
+            .unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..Default::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        let folder = dir.path().to_string_lossy();
+        for i in 0..13 {
+            let name = if i < 12 {
+                format!("bad-{i:02}.mp3")
+            } else {
+                "z-layer-two.mp3".into()
+            };
+            let data: &[u8] = if i < 12 {
+                b"Not an audio stream"
+            } else {
+                include_bytes!("../../Tools/sonic-analyzer/tests/fixtures/mpeg-layer2.mp3")
+            };
+            fs::write(dir.path().join(&name), data).unwrap();
+            catalog
+                .execute("INSERT INTO tracks VALUES(?1,?2)", params![folder, name])
+                .unwrap();
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('decode-errors',?1,?2,?3)", params![name, folder, name]).unwrap();
+        }
+        let result = run_at(
+            dir.path(),
+            AnalyzeRequest {
+                scope: "all".into(),
+                album_id: None,
+                batch_id: Some("decode-errors".into()),
+            },
+            &|| false,
+            &|_, _, _, _| {},
+            &|| None,
+            &|| 12,
+        )
+        .unwrap();
+        assert_eq!(result["total"], 13);
+        assert_eq!(result["failedCount"], 12);
+        assert_eq!(status_at(dir.path()).unwrap().analyzed, 1);
+        assert_eq!(
+            crate::sonic_failures::list_at(dir.path(), None)
+                .unwrap()
+                .total,
+            12
+        );
+        assert_eq!(
+            w.query_row(
+                "SELECT count(*) FROM sonic_items WHERE state='pending'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
     }
 
     #[test]

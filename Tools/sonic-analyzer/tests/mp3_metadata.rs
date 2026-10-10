@@ -62,3 +62,37 @@ fn packaged_smoke_fixture_produces_the_current_valid_profile() {
     fs::write(&path, include_bytes!("fixtures/large-id3.mp3")).unwrap();
     extract(&path);
 }
+
+#[test]
+fn mp2_audio_in_an_mp3_filename_is_supported() {
+    extract(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mpeg-layer2.mp3"));
+}
+
+#[test]
+fn missing_duration_decodes_all_packets_with_unchanged_features() {
+    use bliss_audio::decoder::{symphonia::SymphoniaDecoder, Decoder};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let path = root.join("no-duration.mp3");
+    let error = SymphoniaDecoder::decode(&path).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("duration is either unknown or infinite"));
+    let actual = extract(&path);
+    let expected = extract(&root.join("noise.mp3"));
+    assert_eq!(actual.features, expected.features);
+    assert_eq!(actual.weights, expected.weights);
+}
+
+#[test]
+fn invalid_audio_uses_the_recoverable_file_exit_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bad.mp3");
+    fs::write(&path, b"This is not audio").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_music-sonic-analyzer"))
+        .arg(path)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(!output.stderr.is_empty());
+    assert!(output.stdout.is_empty());
+}

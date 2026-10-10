@@ -21,7 +21,7 @@ function fixture(t, platform) {
     } else if (command === "lipo") {
       fs.writeFileSync(args[4], `${fs.readFileSync(args[1], "utf8")}+${fs.readFileSync(args[2], "utf8")}`);
     } else if (command.includes("music-sonic-analyzer")) {
-      assert.ok(args[0].endsWith("large-id3.mp3"));
+      assert.ok(["large-id3.mp3", "mpeg-layer2.mp3", "no-duration.mp3"].includes(path.basename(args[0])));
       return JSON.stringify({ profile: "bliss-0.13.0-symphonia-0.6.1-v2-full-mp3", features: Array(23).fill(0.5), weights: Array(23 * 23).fill(1) });
     } else {
       assert.fail(`Unexpected build command: ${command}`);
@@ -61,8 +61,20 @@ test("a sidecar that cannot decode tagged MP3s blocks Windows bundling", t => {
 test("an invalid analyzer profile blocks bundling", t => {
   const options = fixture(t, "win32");
   const run = (command, args, execution) => command === "cargo" ? options.run(command, args, execution) : JSON.stringify({ profile: "old", features: [], weights: [] });
-  assert.throws(() => prepareSonicAnalyzer({ ...options, run, target: "x86_64-pc-windows-msvc" }), /tagged-MP3 smoke test/);
+  assert.throws(() => prepareSonicAnalyzer({ ...options, run, target: "x86_64-pc-windows-msvc" }), /smoke test/);
 });
+
+for (const brokenFixture of ["mpeg-layer2.mp3", "no-duration.mp3"]) {
+  test(`failure to decode ${brokenFixture} blocks bundling`, t => {
+    const options = fixture(t, "win32");
+    const run = (command, args, execution) => {
+      if (command !== "cargo" && path.basename(args[0]) === brokenFixture) throw new Error(`Cannot decode ${brokenFixture}`);
+      return options.run(command, args, execution);
+    };
+    assert.throws(() => prepareSonicAnalyzer({ ...options, run, target: "x86_64-pc-windows-msvc" }), /Cannot decode/);
+    assert.equal(fs.existsSync(path.join(options.root, "src-tauri/binaries/music-sonic-analyzer-x86_64-pc-windows-msvc.exe")), false);
+  });
+}
 
 test("cross-compiling does not execute a foreign architecture", t => {
   const options = fixture(t, "darwin");

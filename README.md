@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library **0.186.3** fixes overnight audio analysis stopping on MP2 audio
+stored with `.mp3` filenames and valid MP3s without a readable header duration.
+Individual file errors are saved in **Failed tracks** while the queue continues;
+analyzer launch, crash, protocol and database faults stop with saved checkpoints.
+After updating, use **Retry** on the interrupted Activity Center job to continue
+the same queue and recheck failed tracks. Completed analysis remains compatible.
+
 Music Library **0.186.2** fixes Aurora intake previews for replacements whose
 catalog album summary is unchanged, including identical copies and track-only
 metadata edits. Preview, apply, and recovery retain the validated change count;
@@ -30,7 +37,7 @@ Music Library 0.185.1 fixes audio analysis of MP3s with ID3 tags and large
 embedded covers. Retry the interrupted or cancelled analysis job in Activity
 Center to retain completed checkpoints and retry failed files. Remaining time
 uses successful new analyses, excluding cached skips, failures and idle waits;
-it appears after three samples. Repeated failures stop with a visible explanation.
+it appears after three samples. Analyzer or storage faults stop with a visible explanation.
 
 Music Library 0.185.0 and Aurora 0.33.0 share **Smart playlists**. Use **Playlist
 Builder → Create Smart playlist** for local song or album rules, sorting, a song

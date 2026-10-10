@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.186.3] - 2026-10-10
+
+### Fixed
+- Enable MPEG layer I/II decoding for audio stored under `.mp3` filenames. Add a bounded packet-to-EOF fallback for valid MP3s whose header duration is unavailable, matching the normal mono conversion and resampling without changing the saved analysis profile.
+- Continue library analysis after individual file errors instead of stopping at ten failures in an album. Save every failure for later retry; stop immediately on analyzer launch/crash/protocol or database faults, preserving completed results and remaining checkpoints.
+- Gate analyzer packaging on tagged MP3, MPEG layer II and missing-duration fixtures. Regression coverage verifies complete fallback features, recoverable error exits and queue continuation.
+
 ## [0.186.2] - 2026-10-09
 
 ### Fixed

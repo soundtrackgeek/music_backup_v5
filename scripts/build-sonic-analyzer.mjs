@@ -13,14 +13,16 @@ export function prepareSonicAnalyzer({ root, target, platform = process.platform
     return resolve(root, `Tools/sonic-analyzer/target/${triple}/release/music-sonic-analyzer${suffix}`);
   }
   function smoke(binary) {
-    const output = run(binary, [resolve(root, "Tools/sonic-analyzer/tests/fixtures/large-id3.mp3")], {
-      cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024, windowsHide: true,
-    });
-    const value = JSON.parse(output);
-    if (value.profile !== "bliss-0.13.0-symphonia-0.6.1-v2-full-mp3"
-      || !Array.isArray(value.features) || value.features.length !== 23 || !value.features.every(Number.isFinite)
-      || !Array.isArray(value.weights) || value.weights.length !== 23 * 23 || !value.weights.every(Number.isFinite)) {
-      throw new Error("Built audio analyzer failed the tagged-MP3 smoke test");
+    for (const fixture of ["large-id3.mp3", "mpeg-layer2.mp3", "no-duration.mp3"]) {
+      const output = run(binary, [resolve(root, `Tools/sonic-analyzer/tests/fixtures/${fixture}`)], {
+        cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024, windowsHide: true,
+      });
+      const value = JSON.parse(output);
+      if (value.profile !== "bliss-0.13.0-symphonia-0.6.1-v2-full-mp3"
+        || !Array.isArray(value.features) || value.features.length !== 23 || !value.features.every(Number.isFinite)
+        || !Array.isArray(value.weights) || value.weights.length !== 23 * 23 || !value.weights.every(Number.isFinite)) {
+        throw new Error(`Built audio analyzer failed the ${fixture} smoke test`);
+      }
     }
   }
   if (target === "universal-apple-darwin") {
