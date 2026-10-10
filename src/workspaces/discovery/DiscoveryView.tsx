@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { DiscoveryDailyEdition } from "../../components/DiscoveryDailyEdition";
+import { NewReleases, ReleaseRadarProvider } from "../../components/NewReleases";
 import {
   getDiscoveryShelfExplorer,
   getDiscoverySourceHealth,
@@ -177,6 +178,7 @@ export function DiscoveryView({
         </div>
       </header>
 
+      <ReleaseRadarProvider available={Boolean(status?.hasDatabase)}>
       <DiscoveryDailyEdition
         edition={discovery?.dailyEdition ?? null}
         archive={discovery?.dailyEditionArchive}
@@ -203,6 +205,15 @@ export function DiscoveryView({
         onOpenArtist={openArtistFromMusicMap}
         onOpenTrack={openTimelineTrack}
       />
+
+      <NewReleases compact available={Boolean(status?.hasDatabase)} onOpenArtist={openArtistFromMusicMap} />
+      <div id="discovery-new-releases">
+      <NewReleases
+        available={Boolean(status?.hasDatabase)}
+        onOpenArtist={openArtistFromMusicMap}
+      />
+      </div>
+      </ReleaseRadarProvider>
 
       <DiscoveryMixer
         onSearchSeeds={getDiscoveryMixerSeedOptions}

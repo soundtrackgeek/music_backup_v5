@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.188.0] - 2026-10-10
+
+### Added
+- **Discovery → New Releases** checks all catalog album artists and Wish List artists against ListenBrainz's sitewide fresh-release feed. Browse announcements through one calendar month ahead, releases from the last 30 days, or a weekly digest of the next seven days; search artists/titles, filter release types, hide owned releases, and add missing releases directly to Wish List.
+- **Artists → New Releases** scopes the same radar to any selected artist. Discovery's **New & upcoming** shelf shares refresh and Wish List state with the complete view, and artist links open the existing Artists page.
+- Schema 64 keeps the release feed and resolved artist identities in the catalog and its backups. The radar refreshes on opening when its daily cache expires, retains saved results during provider failures, and reports last-check time and artist identity coverage. It reuses the optional ListenBrainz token from the system keychain; unresolved exact single-artist feed candidates are checked in bounded MusicBrainz batches without guessing ambiguous names.
+
 ## [0.187.1] - 2026-10-10
 
 ### Fixed

@@ -21,6 +21,7 @@ mod jev;
 mod jobs;
 mod lastfm;
 mod listening;
+mod release_radar;
 mod library_completion;
 mod models;
 mod music_doctor;

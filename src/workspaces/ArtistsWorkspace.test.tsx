@@ -66,6 +66,7 @@ describe("artist detail tabs", () => {
   });
 
   it("identifies the views that may start deferred data requests", () => {
+    expect(artistDetailTabNeedsMusicBrainz("new-releases")).toBe(false);
     expect(artistDetailTabNeedsMusicBrainz("local-albums")).toBe(false);
     expect(artistDetailTabNeedsMusicBrainz("artist-info")).toBe(true);
     expect(artistDetailTabNeedsMusicBrainz("discography")).toBe(true);
@@ -86,6 +87,12 @@ describe("artist detail tabs", () => {
     expect(artistDetailTabNeedsHighlights("loved-tracks")).toBe(true);
     expect(artistDetailTabNeedsHighlights("chart-busters")).toBe(true);
     expect(artistDetailTabNeedsHighlights("cover-view")).toBe(false);
+  });
+
+  it("opens the new-release radar from every selected artist", () => {
+    render(<ArtistDetailTabsHarness />);
+    fireEvent.click(screen.getByRole("tab", { name: "New Releases" }));
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Active panel: new-releases");
   });
 
   it("reports the slide direction when moving between tabs", () => {

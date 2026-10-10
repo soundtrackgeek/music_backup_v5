@@ -13,6 +13,7 @@ export type ArtistDetailTab =
   | "chart-busters"
   | "local-albums"
   | "artist-info"
+  | "new-releases"
   | "discography"
   | "cover-view";
 
@@ -25,6 +26,7 @@ const artistDetailTabs: ReadonlyArray<{
   { id: "chart-busters", label: "Chart Busters" },
   { id: "local-albums", label: "Local albums" },
   { id: "artist-info", label: "Artist info" },
+  { id: "new-releases", label: "New Releases" },
   { id: "discography", label: "MusicBrainz discography" },
   { id: "cover-view", label: "Cover view" },
 ];

@@ -12,6 +12,7 @@ use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
     listening,
+    release_radar,
     sonic,
     sonic_failures,
     sonic_coverage,
@@ -298,6 +299,7 @@ fn builder() -> Builder<Wry> {
         get_year_progress,
         get_genre_progress,
         get_discovery,
+        release_radar::get_release_radar,
         get_discovery_daily_edition,
         get_discovery_source_health,
         rebuild_discovery_chart_matches,

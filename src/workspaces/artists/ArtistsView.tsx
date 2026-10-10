@@ -1,4 +1,5 @@
 import { ArtistsWorkspace, ArtistDetailTabs } from "../ArtistsWorkspace";
+import { NewReleases } from "../../components/NewReleases";
 import {
   RotateCcw,
   Database,
@@ -515,6 +516,11 @@ export function ArtistsView({
             countryOptions={originCountryOptions}
             countryFlagDisplay={settings.countryFlagDisplay}
           />
+        ) : null}
+
+        {artistDetailTab === "new-releases" ? (
+          selectedArtist ? <NewReleases key={selectedArtist.id} artistId={selectedArtist.id} artistName={selectedArtist.name} />
+            : <p className="empty-state">Select an artist to check new releases.</p>
         ) : null}
 
         {artistDetailTab === "discography" ? (

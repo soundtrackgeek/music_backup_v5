@@ -712,7 +712,7 @@ fn listenbrainz_entry() -> Result<keyring::Entry> {
         .context("Could not open the system keychain for ListenBrainz")
 }
 
-fn listenbrainz_token() -> Result<Option<zeroize::Zeroizing<String>>> {
+pub(crate) fn listenbrainz_token() -> Result<Option<zeroize::Zeroizing<String>>> {
     match listenbrainz_entry()?.get_password() {
         Ok(value) if !value.trim().is_empty() => Ok(Some(zeroize::Zeroizing::new(value))),
         Ok(_) | Err(keyring::Error::NoEntry) => Ok(None),

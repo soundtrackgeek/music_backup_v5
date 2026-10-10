@@ -131,6 +131,7 @@ export const commands = {
 	getYearProgress: (request: YearProgressRequest) => __TAURI_INVOKE<YearProgressStats[]>("get_year_progress", { request }),
 	getGenreProgress: (request: GenreProgressRequest) => __TAURI_INVOKE<GenreProgressStats[]>("get_genre_progress", { request }),
 	getDiscovery: (refreshDailyEdition: boolean | null) => __TAURI_INVOKE<DiscoveryResponse>("get_discovery", { refreshDailyEdition }),
+	getReleaseRadar: (refresh: boolean) => __TAURI_INVOKE<ReleaseRadar>("get_release_radar", { refresh }),
 	getDiscoveryDailyEdition: (date: string) => __TAURI_INVOKE<DiscoveryDailyEditionSnapshotResponse>("get_discovery_daily_edition", { date }),
 	getDiscoverySourceHealth: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("get_discovery_source_health", { date }),
 	rebuildDiscoveryChartMatches: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("rebuild_discovery_chart_matches", { date }),
@@ -3796,6 +3797,25 @@ export type PublishedSongWeek = {
 	entryDate: string,
 };
 
+export type RadarArtist = {
+	id: string,
+	name: string,
+	musicbrainzId: string | null,
+};
+
+export type RadarRelease = {
+	releaseGroupId: string,
+	title: string,
+	artist: string,
+	artists: RadarArtist[],
+	releaseDate: string,
+	releaseType: string,
+	secondaryType: string | null,
+	musicbrainzUrl: string,
+	owned: boolean,
+	onWishList: boolean,
+};
+
 export type RatingBucket = {
 	label: string,
 	count: number,
@@ -3855,6 +3875,19 @@ export type ReleaseAlternativeSource = {
 	username: string,
 	remoteFolder: string,
 	files: ReleaseAlternativeFile[],
+};
+
+export type ReleaseRadar = {
+	today: string,
+	upcomingUntil: string,
+	recentSince: string,
+	checkedAt: string | null,
+	stale: boolean,
+	warning: string | null,
+	artistCount: number,
+	identifiedArtistCount: number,
+	unresolvedArtistIds: string[],
+	releases: RadarRelease[],
 };
 
 export type RightSidebarMode = "expanded" | "hidden";

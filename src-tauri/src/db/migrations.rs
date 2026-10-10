@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 63;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 64;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -167,7 +167,17 @@ const MIGRATIONS: &[Migration] = &[
         up: listening_history,
         verify: Some(phase_sixty_three_schema_exists),
     },
+    Migration {
+        version: 64,
+        description: "cached new-release radar and artist identities",
+        up: crate::release_radar::install_schema,
+        verify: Some(phase_sixty_four_schema_exists),
+    },
 ];
+
+fn phase_sixty_four_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(crate::release_radar::schema_exists(conn)? && phase_sixty_three_schema_exists(conn)?)
+}
 
 fn listening_history(conn: &Connection) -> Result<()> {
     crate::listening::install_schema(conn)

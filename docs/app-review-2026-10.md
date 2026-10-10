@@ -511,7 +511,9 @@ You get:
 - a local **lyrics full-text search** in FTS5 ("which of my songs mention *Oslo*?"),
 - optional `.lrc` sidecar export for Aurora, Tonehavn, and Navidrome.
 
-### 8. New-release radar
+### 8. New-release radar - DONE
+
+**Implemented in 0.188.0 (2026-10-10):** Discovery includes a live **New & upcoming** shelf and a full **New Releases** section for every catalog album artist and Wish List artist. The selected artist's **New Releases** tab uses the same radar. Upcoming announcements extend through one calendar month ahead, recent releases cover the past 30 days, and the weekly digest covers the next seven days. Release type/search/owned filters, source attribution, artist navigation, and one-click Wish List handoff retain release-group identities. One global ListenBrainz feed is cached for 24 hours in schema 64, with saved results retained and marked stale after provider failures. Matching respects verified links, imported identities, unlink/ignore decisions, and unambiguous exact local-cache names; bounded live checks resolve exact single-artist feed candidates. Coverage limitations and timestamps are visible, and the optional ListenBrainz keychain token is reused. Partial dates and unresolved identities remain explicit limitations.
 
 **How:** for artists you own (or rate highly) and artists on the Wish List, check:
 - ListenBrainz **fresh releases**: `/1/explore/fresh-releases/` (up to 90 days), or the per-user endpoint,
