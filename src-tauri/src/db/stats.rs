@@ -163,7 +163,7 @@ pub(super) fn country_catalog_stats(conn: &Connection) -> Result<Vec<CountryCata
 }
 
 pub(super) fn country_catalog_stats_sql() -> String {
-    let album_artist_key = artist_key_sql("album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album_artist_display");
     format!(
         "
         WITH album_counts AS MATERIALIZED (
@@ -535,13 +535,13 @@ pub(super) fn library_recent_change_profile(
 }
 
 pub(super) fn library_overview_stats(conn: &Connection) -> Result<LibraryOverviewStats> {
-    let artist_key_sql = artist_key_sql("album_artist_display");
+    let catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
             (SELECT COUNT(*) FROM tracks),
             (SELECT COUNT(*) FROM albums),
-            (SELECT COUNT(DISTINCT {artist_key_sql})
+            (SELECT COUNT(DISTINCT {catalog_artist_key_sql})
                 FROM albums
                 WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NOT NULL),
             (SELECT COUNT(DISTINCT genre_normalized)
@@ -835,7 +835,7 @@ pub(super) fn catalog_concentration_stats(
     conn: &Connection,
     total_albums: i64,
 ) -> Result<CatalogConcentrationStats> {
-    let artist_key_sql = artist_key_sql("album_artist_display");
+    let catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let artist_groups = concentration_groups(
         conn,
         &format!(
@@ -844,7 +844,7 @@ pub(super) fn catalog_concentration_stats(
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS label,
             COUNT(*) AS album_count
         FROM albums
-        GROUP BY {artist_key_sql}
+        GROUP BY {catalog_artist_key_sql}
         ORDER BY album_count DESC, LOWER(label) ASC
         "
         ),

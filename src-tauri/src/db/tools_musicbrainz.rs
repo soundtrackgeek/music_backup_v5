@@ -513,12 +513,12 @@ pub(super) fn prepare_missing_musicbrainz_artist_tool_with_progress(
 pub(super) fn musicbrainz_tool_local_artists(
     conn: &Connection,
 ) -> Result<Vec<MissingMusicBrainzLocalArtist>> {
-    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         WITH album_artists AS (
             SELECT
-                {album_artist_key_sql} AS artist_key,
+                {album_catalog_artist_key_sql} AS artist_key,
                 NULLIF(TRIM(album_artist_display), '') AS display_artist,
                 id,
                 NULLIF(TRIM(album), '') AS album,
@@ -604,11 +604,11 @@ pub(super) fn musicbrainz_tool_local_artists(
 pub(super) fn musicbrainz_tool_local_albums(
     conn: &Connection,
 ) -> Result<Vec<MissingMusicBrainzLocalAlbum>> {
-    let artist_key_sql = artist_key_sql("album_artist_display");
+    let catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
-            {artist_key_sql} AS artist_key,
+            {catalog_artist_key_sql} AS artist_key,
             id,
             COALESCE(NULLIF(TRIM(album), ''), 'Untitled') AS title,
             year

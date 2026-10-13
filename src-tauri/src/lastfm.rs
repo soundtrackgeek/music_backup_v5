@@ -764,9 +764,9 @@ fn artist_top_tracks_lookups(identity: &LastFmArtistIdentity) -> Vec<ArtistTopTr
     if let Some(mbid) = identity.musicbrainz_mbid.as_deref().and_then(nonempty) {
         lookups.push(ArtistTopTracksLookup::MusicBrainz(mbid));
     }
-    lookups.push(ArtistTopTracksLookup::ArtistName(
-        identity.artist_name.clone(),
-    ));
+    if !identity.ambiguous_name {
+        lookups.push(ArtistTopTracksLookup::ArtistName(identity.artist_name.clone()));
+    }
     lookups
 }
 
@@ -984,6 +984,7 @@ fn constellation_branch_identity(
         })
         .context("This artist is not in the current first-hop Similar Artists cache.")?;
     Ok(LastFmArtistIdentity {
+        ambiguous_name: false,
         artist_key: branch_key,
         artist_name: branch.similar_artist_name.clone(),
         musicbrainz_mbid: branch.similar_artist_mbid.clone(),
@@ -1020,6 +1021,7 @@ fn related_artist_similarity_records(
     force_refresh: bool,
 ) -> Result<Vec<LastFmSimilarArtistCacheRecord>> {
     let artist_identity = LastFmArtistIdentity {
+        ambiguous_name: false,
         artist_key: crate::identity::strict_key(&identity.album_artist),
         artist_name: identity.album_artist.clone(),
         musicbrainz_mbid: identity.artist_mbid.clone(),
@@ -2414,6 +2416,7 @@ mod tests {
     #[test]
     fn retries_musicbrainz_artist_lookups_with_the_library_name() {
         let identity = LastFmArtistIdentity {
+            ambiguous_name: false,
             artist_key: "kiss".to_string(),
             artist_name: "KISS".to_string(),
             musicbrainz_mbid: Some("e1f1e33e-2e4c-4d43-b91b-7064068d3283".to_string()),
@@ -2487,6 +2490,7 @@ mod tests {
     #[test]
     fn constellation_expands_only_a_cached_first_hop_identity() {
         let root = LastFmArtistIdentity {
+            ambiguous_name: false,
             artist_key: "def leppard".to_string(),
             artist_name: "Def Leppard".to_string(),
             musicbrainz_mbid: None,
@@ -2538,6 +2542,7 @@ mod tests {
             expires_at: "2026-08-20T12:00:00Z".to_string(),
         };
         let matching = LastFmArtistIdentity {
+            ambiguous_name: false,
             artist_key: "poison".to_string(),
             artist_name: "  POISON ".to_string(),
             musicbrainz_mbid: Some("EXPECTED-MBID".to_string()),
@@ -2547,6 +2552,7 @@ mod tests {
             ..matching.clone()
         };
         let wrong_name = LastFmArtistIdentity {
+            ambiguous_name: false,
             artist_key: "poison tribute".to_string(),
             artist_name: "Poison Tribute".to_string(),
             musicbrainz_mbid: None,
@@ -2652,6 +2658,7 @@ mod tests {
     #[test]
     fn artist_popularity_response_returns_up_to_ten_owned_tracks() {
         let identity = LastFmArtistIdentity {
+            ambiguous_name: false,
             artist_key: "kiss".to_string(),
             artist_name: "KISS".to_string(),
             musicbrainz_mbid: None,

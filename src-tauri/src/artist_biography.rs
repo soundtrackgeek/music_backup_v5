@@ -403,6 +403,7 @@ fn fetch_biography_for_identity(
         }
     }
 
+    if identity.ambiguous_name { return linked_error.map(Err).unwrap_or(Ok(None)); }
     let name_mbid = match fetch_musicbrainz_artist_mbid_by_name(&identity.artist_name) {
         Ok(mbid) => mbid,
         Err(error) => {
@@ -687,6 +688,7 @@ mod tests {
     #[test]
     fn refreshes_legacy_unavailable_biography_cache_once_for_name_lookup() {
         let identity = ArtistBiographyIdentity {
+            ambiguous_name: false,
             artist_key: "kiss".to_string(),
             artist_name: "KISS".to_string(),
             musicbrainz_mbid: None,

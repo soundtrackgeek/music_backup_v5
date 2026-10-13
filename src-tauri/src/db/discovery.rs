@@ -520,7 +520,7 @@ pub(super) fn discovery_source_health(
         chart_rows.iter().any(|row| row.1 == 0),
     );
 
-    let album_artist_key = artist_key_sql("album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album_artist_display");
     let identity_sql = format!(
         "WITH local_artists AS (
              SELECT DISTINCT {album_artist_key} AS artist_key FROM albums
@@ -634,7 +634,7 @@ pub(super) fn discovery_source_health(
         false,
     );
 
-    let lastfm_artist_key = artist_key_sql("a.album_artist_display");
+    let lastfm_artist_key = catalog_artist_key_sql("a.album_artist_display");
     let lastfm_sql = format!(
         "SELECT COUNT(*), COALESCE(SUM(CASE WHEN EXISTS(
              SELECT 1 FROM lastfm_album_relationships relation WHERE relation.album_id = a.id
@@ -1023,7 +1023,7 @@ pub(super) fn discovery_life_events_all(
     conn: &Connection,
     date: NaiveDate,
 ) -> Result<Vec<DiscoveryLifeEventStory>> {
-    let album_artist_key = artist_key_sql("album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album_artist_display");
     let month_day = date.format("%m-%d").to_string();
     let sql = format!(
         "

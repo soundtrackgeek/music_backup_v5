@@ -1172,6 +1172,8 @@ impl Default for ArtistListRequest {
 pub struct ArtistSummary {
     pub id: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disambiguation: Option<String>,
     pub album_count: i64,
     pub rated_album_count: i64,
     pub partial_album_count: i64,

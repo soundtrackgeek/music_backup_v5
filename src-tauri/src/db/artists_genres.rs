@@ -56,7 +56,8 @@ pub(super) fn append_published_artist_histories(
     artist_id: &str,
     chart_tracks: &mut Vec<ArtistChartTrack>,
 ) -> Result<()> {
-    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let artist_key =
+        catalog_artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let mut stmt = conn.prepare(&format!(
         "SELECT t.id, t.title, COALESCE(NULLIF(TRIM(t.display_artist), ''), t.album_artist_display, a.album_artist_display),
                 COALESCE(t.album, a.album), COALESCE(t.release_year, t.year, a.release_year, a.year)
@@ -186,9 +187,9 @@ pub(super) fn artist_track_highlights(
     artist_id: &str,
 ) -> Result<ArtistTrackHighlights> {
     let artist_id = identity::artist_key(artist_id);
-    let album_artist_key = artist_key_sql("album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album_artist_display");
     let track_artist_key =
-        artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+        catalog_artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let artist_name_sql = format!(
         "SELECT COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), ?1)
          FROM albums
@@ -436,15 +437,15 @@ pub(super) fn list_artists(
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
     let (where_sql, values) = artist_search_where(&request.search_text);
-    let album_artist_key_sql = artist_key_sql("album_artist_display");
-    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
-    let album_artist_key_sql_a3 = artist_key_sql("a3.album_artist_display");
+    let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql_a2 = catalog_artist_key_sql("a2.album_artist_display");
+    let album_catalog_artist_key_sql_a3 = catalog_artist_key_sql("a3.album_artist_display");
 
     let count_sql = format!(
         "
         SELECT COUNT(*)
         FROM (
-            SELECT {album_artist_key_sql} AS artist_key
+            SELECT {album_catalog_artist_key_sql} AS artist_key
             FROM albums
             {where_sql}
             GROUP BY artist_key
@@ -462,7 +463,7 @@ pub(super) fn list_artists(
         "
         WITH grouped AS (
             SELECT
-                {album_artist_key_sql} AS artist_key,
+                {album_catalog_artist_key_sql} AS artist_key,
                 COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist_name,
                 COUNT(*) AS album_count,
                 SUM(CASE WHEN rating_completeness >= 1.0 THEN 1 ELSE 0 END) AS rated_album_count,
@@ -500,7 +501,7 @@ pub(super) fn list_artists(
             (
                 SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
                 FROM albums a2
-                WHERE {album_artist_key_sql_a2} = grouped.artist_key
+                WHERE {album_catalog_artist_key_sql_a2} = grouped.artist_key
                 GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
@@ -531,24 +532,25 @@ pub(super) fn list_artists(
             (
                 SELECT a3.id FROM albums a3
                 LEFT JOIN album_covers c3 ON c3.album_id = a3.id
-                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                WHERE {album_catalog_artist_key_sql_a3} = grouped.artist_key
                 ORDER BY c3.cache_path IS NOT NULL DESC, a3.album_score DESC, a3.year ASC, a3.id ASC
                 LIMIT 1
             ) AS representative_album_id,
             (
                 SELECT a3.album FROM albums a3
                 LEFT JOIN album_covers c3 ON c3.album_id = a3.id
-                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                WHERE {album_catalog_artist_key_sql_a3} = grouped.artist_key
                 ORDER BY c3.cache_path IS NOT NULL DESC, a3.album_score DESC, a3.year ASC, a3.id ASC
                 LIMIT 1
             ) AS representative_album,
             (
                 SELECT c3.cache_path FROM albums a3
                 JOIN album_covers c3 ON c3.album_id = a3.id
-                WHERE {album_artist_key_sql_a3} = grouped.artist_key
+                WHERE {album_catalog_artist_key_sql_a3} = grouped.artist_key
                 ORDER BY a3.album_score DESC, a3.year ASC, a3.id ASC
                 LIMIT 1
-            ) AS representative_cover_path
+            ) AS representative_cover_path,
+            (SELECT disambiguation FROM artist_identities WHERE id=grouped.artist_key) AS disambiguation
         FROM grouped
         LEFT JOIN musicbrainz_artist_infos info
           ON info.local_artist_key = grouped.artist_key
@@ -582,6 +584,7 @@ pub(super) fn artist_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Resu
     Ok(ArtistSummary {
         id: row.get(0)?,
         name: row.get(1)?,
+        disambiguation: row.get(37)?,
         album_count: row.get(2)?,
         rated_album_count: row.get(3)?,
         partial_album_count: row.get(4)?,
@@ -687,7 +690,7 @@ pub(super) fn list_genres(
         .context("Could not count genre results")?;
 
     let order_sql = genre_order_clause(&request.sort);
-    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
+    let album_catalog_artist_key_sql_a2 = catalog_artist_key_sql("a2.album_artist_display");
     let sql = format!(
         "
         WITH grouped AS (
@@ -731,7 +734,7 @@ pub(super) fn list_genres(
                 SELECT COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')
                 FROM albums a2
                 WHERE COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown') = grouped.genre_key
-                GROUP BY {album_artist_key_sql_a2}
+                GROUP BY {album_catalog_artist_key_sql_a2}
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(MIN(NULLIF(TRIM(a2.album_artist_display), '')), 'Unknown Artist')) ASC
                 LIMIT 1
             ) AS top_artist
@@ -991,8 +994,8 @@ pub(super) fn artist_timeline(
         )
         .context("Could not load artist timeline year extent")?;
 
-    let artist_key = artist_key_sql("a.album_artist_display");
-    let artist_key_a2 = artist_key_sql("a2.album_artist_display");
+    let artist_key = catalog_artist_key_sql("a.album_artist_display");
+    let artist_key_a2 = catalog_artist_key_sql("a2.album_artist_display");
     let mut conditions = vec!["a.year IS NOT NULL".to_string()];
     let mut values = Vec::new();
     add_i32_range(
@@ -1295,6 +1298,43 @@ pub(super) fn genre_suggestion_names(conn: &Connection) -> Result<Vec<String>> {
 mod tests {
     use super::*;
     use crate::db::test_support::*;
+
+    #[test]
+    fn split_same_name_artists_have_independent_index_rows_and_metadata() {
+        let conn = seeded_connection();
+        conn.execute_batch("UPDATE albums SET album_artist_display='Zoo'; UPDATE tracks SET album_artist_display='Zoo';
+          CREATE TEMP TABLE copied_album AS SELECT * FROM albums LIMIT 1;
+          UPDATE copied_album SET id='other-zoo',artist_identity_key=NULL;
+          INSERT INTO albums SELECT * FROM copied_album;").unwrap();
+        let result = crate::artist_identity::split(
+            &conn,
+            crate::artist_identity::SplitArtistRequest {
+                source_artist_id: "zoo".into(),
+                album_ids: vec!["other-zoo".into()],
+                target_artist_id: None,
+                disambiguation: "French group".into(),
+                source_disambiguation: Some("Norwegian group".into()),
+                musicbrainz_mbid: None,
+            },
+        )
+        .unwrap();
+        let rows = list_artists(&conn, ArtistListRequest::default(), 50)
+            .unwrap()
+            .rows;
+        assert_eq!(rows.len(), 2);
+        assert!(rows
+            .iter()
+            .all(|artist| artist.name == "Zoo" && artist.album_count == 1));
+        let original = rows.iter().find(|artist| artist.id == "zoo").unwrap();
+        let split = rows
+            .iter()
+            .find(|artist| artist.id == result.artist_id)
+            .unwrap();
+        assert_eq!(original.disambiguation.as_deref(), Some("Norwegian group"));
+        assert_eq!(split.disambiguation.as_deref(), Some("French group"));
+        assert!(split.music_brainz_mbid.is_none());
+        assert!(!split.portrait_available);
+    }
 
     #[test]
     fn lists_artist_summaries_and_filters_albums_by_artist_key() {

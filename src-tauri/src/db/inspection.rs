@@ -83,7 +83,7 @@ pub(super) fn inspect_current_view(
 }
 
 pub(super) fn current_view_from_sql(is_tracks: bool) -> String {
-    let origin_key_sql = artist_key_sql("a.album_artist_display");
+    let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
     if is_tracks {
         format!(
             "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql}"
@@ -582,7 +582,7 @@ pub(super) fn research_artist_summary(
     conn: &Connection,
     artist_id: &str,
 ) -> Result<serde_json::Value> {
-    let artist_key = artist_key_sql("album_artist_display");
+    let artist_key = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT COUNT(*), COALESCE(SUM(total_tracks), 0), COALESCE(SUM(loved_tracks), 0),

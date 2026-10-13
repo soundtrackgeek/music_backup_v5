@@ -1,4 +1,5 @@
 import { previewActivity, registerPreviewControl } from "./backend/activity";
+import { previewArtistId } from "./backend/artistIdentity";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { commands, events } from "./bindings";
 import { completed } from "./backend/complete";
@@ -6513,7 +6514,7 @@ export async function searchLibrary(request: BrowseRequest): Promise<BrowseRespo
       const matchesView = isTracks
         ? row.trackId !== null
         : row.trackId === null;
-      const artistKey = normalizeArtistKey(row.albumArtistDisplay);
+      const artistKey = previewArtistId(row.albumId, row.albumArtistDisplay);
       const genreKey = normalizeGenreKey(row.canonicalGenre);
       const ratedTracks = row.ratedTracks ?? 0;
       const ratingCompleteness = row.ratingCompleteness ?? 0;
@@ -6678,7 +6679,7 @@ export async function listArtists(request: ArtistListRequest): Promise<ArtistLis
   if (!isTauriRuntime()) {
     const searchText = request.searchText.trim().toLowerCase();
     const filtered = mockArtists.filter((artist) =>
-      artist.name.toLowerCase().includes(searchText),
+      artist.albumCount > 0 && `${artist.name} ${artist.disambiguation ?? ""}`.toLowerCase().includes(searchText),
     );
     const sorted = [...filtered].sort((left, right) =>
       compareArtists(left, right, request.sort.field),

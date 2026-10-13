@@ -67,6 +67,13 @@ pub(crate) fn artist_key_sql(field: &str) -> String {
     )
 }
 
+/// Album artist identity, with the legacy name key as a compatibility fallback.
+/// Both albums and tracks publish the same assignment column.
+pub(crate) fn catalog_artist_key_sql(field: &str) -> String {
+    let assignment = field.replace("album_artist_display", "artist_identity_key");
+    format!("COALESCE(NULLIF({assignment}, ''), {})", artist_key_sql(field))
+}
+
 /// SQL twin of [`fold_dashes`] for `field`, with NULL read as empty.
 pub(crate) fn fold_dashes_sql(field: &str) -> String {
     DASHES

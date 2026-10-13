@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct LastFmArtistIdentity {
+    pub ambiguous_name: bool,
     pub artist_key: String,
     pub artist_name: String,
     pub musicbrainz_mbid: Option<String>,
@@ -9,6 +10,7 @@ pub(crate) struct LastFmArtistIdentity {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ArtistBiographyIdentity {
+    pub ambiguous_name: bool,
     pub artist_key: String,
     pub artist_name: String,
     pub musicbrainz_mbid: Option<String>,
@@ -186,7 +188,7 @@ pub(super) fn lastfm_artist_identity(
     conn: &Connection,
     artist_id: &str,
 ) -> Result<Option<LastFmArtistIdentity>> {
-    let artist_key = artist_key_sql("album_artist_display");
+    let artist_key = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         WITH grouped AS (
@@ -196,7 +198,8 @@ pub(super) fn lastfm_artist_identity(
             FROM albums
             GROUP BY {artist_key}
         )
-        SELECT grouped.artist_key, grouped.artist_name, COALESCE(link.mbid, info.mbid)
+        SELECT grouped.artist_key, grouped.artist_name, COALESCE(link.mbid, info.mbid),
+          (SELECT COUNT(*)>1 FROM artist_identities WHERE name_key=(SELECT name_key FROM artist_identities WHERE id=grouped.artist_key))
         FROM grouped
         LEFT JOIN musicbrainz_artist_links link
           ON link.local_artist_key = grouped.artist_key
@@ -207,6 +210,7 @@ pub(super) fn lastfm_artist_identity(
     );
     conn.query_row(&sql, [artist_id], |row| {
         Ok(LastFmArtistIdentity {
+            ambiguous_name: row.get(3)?,
             artist_key: row.get(0)?,
             artist_name: row.get(1)?,
             musicbrainz_mbid: row.get(2)?,
@@ -231,6 +235,7 @@ pub(crate) fn artist_biography_identity_for_app(
     let (conn, _) = open_read(app)?;
     Ok(
         lastfm_artist_identity(&conn, artist_id)?.map(|identity| ArtistBiographyIdentity {
+            ambiguous_name: identity.ambiguous_name,
             artist_key: identity.artist_key,
             artist_name: identity.artist_name,
             musicbrainz_mbid: identity.musicbrainz_mbid,
@@ -336,7 +341,7 @@ pub(super) fn album_review_identity(
     conn: &Connection,
     album_id: &str,
 ) -> Result<Option<AlbumReviewIdentity>> {
-    let artist_key = artist_key_sql("a.album_artist_display");
+    let artist_key = catalog_artist_key_sql("a.album_artist_display");
     let sql = format!(
         "
         SELECT
@@ -528,7 +533,8 @@ pub(crate) fn lastfm_local_tracks_for_artist_for_app(
     artist_id: &str,
 ) -> Result<Vec<LastFmLocalTrackCandidate>> {
     let (conn, _) = open_read(app)?;
-    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let artist_key =
+        catalog_artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let sql = format!(
         "
         SELECT
@@ -564,7 +570,8 @@ pub(crate) fn lastfm_local_tracks_for_album_for_app(
     album_id: &str,
 ) -> Result<Vec<LastFmLocalTrackCandidate>> {
     let (conn, _) = open_read(app)?;
-    let artist_key = artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
+    let artist_key =
+        catalog_artist_key_sql("COALESCE(t.album_artist_display, a.album_artist_display)");
     let sql = format!(
         "
         SELECT
@@ -690,8 +697,8 @@ pub(super) fn lastfm_similar_local_artists(
     conn: &Connection,
     candidates: &[(Option<String>, String)],
 ) -> Result<Vec<Option<LastFmSimilarLocalArtist>>> {
-    let album_artist_key = artist_key_sql("a.album_artist_display");
-    let representative_artist_key = artist_key_sql("a3.album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("a.album_artist_display");
+    let representative_artist_key = catalog_artist_key_sql("a3.album_artist_display");
     let sql = format!(
         "
         WITH grouped AS (
@@ -741,7 +748,8 @@ pub(super) fn lastfm_similar_local_artists(
         WHERE (
                 NULLIF(TRIM(COALESCE(?1, '')), '') IS NOT NULL
             AND LOWER(COALESCE(link.mbid, info.mbid, '')) = LOWER(?1)
-        ) OR grouped.artist_key = ?2
+        ) OR (grouped.artist_key = ?2
+              AND (SELECT COUNT(*) FROM artist_identities WHERE name_key=?2) <= 1)
         ORDER BY CASE
             WHEN NULLIF(TRIM(COALESCE(?1, '')), '') IS NOT NULL
              AND LOWER(COALESCE(link.mbid, info.mbid, '')) = LOWER(?1)
@@ -852,7 +860,7 @@ pub(super) fn lastfm_related_local_albums(
     conn: &Connection,
     candidates: &[(Option<String>, String, String)],
 ) -> Result<Vec<Option<LastFmRelatedLocalAlbum>>> {
-    let album_artist_key = artist_key_sql("a.album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("a.album_artist_display");
     let sql = format!(
         "
         SELECT
@@ -872,7 +880,8 @@ pub(super) fn lastfm_related_local_albums(
             ) AS mbid_match
         FROM albums a
         LEFT JOIN album_covers cover ON cover.album_id = a.id
-        WHERE {album_artist_key} = ?2
+        WHERE ({album_artist_key} = ?2
+               AND (SELECT COUNT(*) FROM artist_identities WHERE name_key=?2) <= 1)
            OR EXISTS(
                 SELECT 1
                 FROM musicbrainz_release_decisions decision
@@ -906,7 +915,8 @@ pub(super) fn lastfm_related_local_albums(
                 })?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(rows.into_iter().find_map(|(local, mbid_match)| {
-                (mbid_match || identity::display_key(&local.album_title) == album_key).then_some(local)
+                (mbid_match || identity::display_key(&local.album_title) == album_key)
+                    .then_some(local)
             }))
         })
         .collect::<Result<Vec<_>>>()
@@ -1221,7 +1231,7 @@ pub(crate) fn artist_image_candidates_for_app(
     limit: u32,
 ) -> Result<Vec<ArtistImageCandidate>> {
     let (conn, _) = open_read(app)?;
-    let artist_key = artist_key_sql("a.album_artist_display");
+    let artist_key = catalog_artist_key_sql("a.album_artist_display");
     let mut stmt = conn.prepare(&format!(
         "
         SELECT
@@ -1249,7 +1259,7 @@ pub(crate) fn artist_image_candidates_for_app(
 
 pub(crate) fn artist_image_remaining_for_app(app: &AppHandle) -> Result<i64> {
     let (conn, _) = open_read(app)?;
-    let artist_key = artist_key_sql("a.album_artist_display");
+    let artist_key = catalog_artist_key_sql("a.album_artist_display");
     conn.query_row(
         &format!(
             "
@@ -1322,6 +1332,48 @@ pub(crate) fn upsert_artist_image_for_app(
 mod tests {
     use super::*;
     use crate::db::test_support::*;
+
+    #[test]
+    fn same_name_provider_matches_require_an_identity() {
+        let conn = seeded_connection();
+        conn.execute_batch(
+            "CREATE TEMP TABLE copied_album AS SELECT * FROM albums LIMIT 1;
+          UPDATE copied_album SET id='other-profile',artist_identity_key=NULL;
+          INSERT INTO albums SELECT * FROM copied_album;",
+        )
+        .unwrap();
+        let result = crate::artist_identity::split(
+            &conn,
+            crate::artist_identity::SplitArtistRequest {
+                source_artist_id: "pet shop boys".into(),
+                album_ids: vec!["other-profile".into()],
+                target_artist_id: None,
+                disambiguation: "Separate group".into(),
+                source_disambiguation: None,
+                musicbrainz_mbid: Some("22222222-2222-2222-2222-222222222222".into()),
+            },
+        )
+        .unwrap();
+        let matches = lastfm_similar_local_artists(
+            &conn,
+            &[
+                (None, "Pet Shop Boys".into()),
+                (
+                    Some("22222222-2222-2222-2222-222222222222".into()),
+                    "Pet Shop Boys".into(),
+                ),
+            ],
+        )
+        .unwrap();
+        assert!(matches[0].is_none());
+        assert_eq!(matches[1].as_ref().unwrap().artist_id, result.artist_id);
+        assert!(lastfm_related_local_albums(
+            &conn,
+            &[(None, "Pet Shop Boys".into(), "Actually".into())]
+        )
+        .unwrap()[0]
+            .is_none());
+    }
 
     #[test]
     fn matches_similar_artists_by_mbid_then_normalized_library_name() {

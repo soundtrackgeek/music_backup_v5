@@ -1564,11 +1564,11 @@ fn fetch_artist_origin(mbid: &str) -> Result<MusicBrainzArtistLookupResponse> {
 }
 
 fn local_origin_artists(conn: &Connection) -> Result<Vec<OriginLocalArtist>> {
-    let artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
+    let catalog_artist_key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
-            {artist_key_sql} AS local_artist_key,
+            {catalog_artist_key_sql} AS local_artist_key,
             COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown Artist') AS display_artist,
             COUNT(*) AS album_count
         FROM albums
@@ -4639,12 +4639,12 @@ fn release_decisions(conn: &Connection, artist_key: &str) -> Result<HashMap<Stri
 }
 
 fn local_artist_albums(conn: &Connection, artist_key: &str) -> Result<Vec<LocalAlbum>> {
-    let album_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
             SELECT id, COALESCE(album, 'Untitled'), year
             FROM albums
-            WHERE {album_artist_key_sql} = ?1
+            WHERE {album_catalog_artist_key_sql} = ?1
             ORDER BY COALESCE(year, 9999), LOWER(COALESCE(album, '')), id
             "
     );
@@ -6685,6 +6685,7 @@ mod tests {
         conn.execute_batch(
             "
             CREATE TABLE albums (
+                artist_identity_key TEXT,
                 id TEXT PRIMARY KEY,
                 album TEXT,
                 album_artist_display TEXT,

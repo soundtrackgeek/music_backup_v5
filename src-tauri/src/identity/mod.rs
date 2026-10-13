@@ -28,7 +28,7 @@ mod title;
 mod tests;
 
 pub(crate) use display::{
-    artist_key, artist_key_sql, artist_text_key, display_key, fold_dashes_sql,
+    artist_key, artist_key_sql, catalog_artist_key_sql, artist_text_key, display_key, fold_dashes_sql,
 };
 pub(crate) use loose::{credit_keys, loose_artist_key, loose_key, strip_chart_country_suffix};
 pub(crate) use strict::strict_key;

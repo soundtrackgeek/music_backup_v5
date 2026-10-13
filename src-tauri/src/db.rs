@@ -9,7 +9,7 @@ use crate::ai::{
     SetPlaylistAutomationRequest, SmartPlaylistRefreshResult, ViewInspectionItem,
     ViewInspectionRequest, ViewInspectionResult,
 };
-use crate::identity::{self, artist_key_sql};
+use crate::identity::{self, artist_key_sql, catalog_artist_key_sql};
 #[cfg(test)]
 use crate::models::AppSettings;
 use crate::models::{
@@ -282,6 +282,11 @@ pub(crate) fn open_read(app: &AppHandle) -> Result<(CatalogConnection, PathBuf)>
     let path = database_path(app)?;
     let conn = pool_for_path(&path)?.checkout(lifecycle::Access::Read)?;
     Ok((conn, path))
+}
+
+pub(crate) fn backup_artist_split(path: &Path) -> Result<()> {
+    create_database_file_backup(path, "artist-split")?;
+    Ok(())
 }
 
 #[cfg(not(test))]

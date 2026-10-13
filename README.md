@@ -911,6 +911,7 @@ npm run security:check
 
 ## Phase 6 Artists Features
 
+- **Artists → Split artist** separates artists that share a name. Select the albums belonging to another artist, add descriptions to distinguish the profiles, and optionally enter that artist's MusicBrainz ID. You can also move albums to an existing same-name profile, including moving a mistaken assignment back. The dialog loads every album for the selected profile, independently of the current browse page. Splits change catalog assignments only; source files and Track Artist/Album Artist tags remain intact. Assignments survive reimports and are published to compatible Aurora and Tonehavn versions. Newly imported albums with an ambiguous name remain under **Unassigned albums** until reviewed; provider name fallback is suppressed for these profiles.
 - Artists workspace with a searchable, sortable, paginated album-artist index.
 - Artist Overview with five initially visible Last.fm Popular Tracks, Show more/Show less expansion to as many as ten locally owned matches, and a Similar Artists shelf split between locally owned artists and missing artists to explore, all with cached provider attribution and explicit refresh. The shelf also offers a bounded, keyboard-accessible one- or two-hop artist constellation with an equivalent list fallback and direct local or Last.fm navigation.
 - Artist-level summary stats for album counts, rating progress, year span, top genre, track totals, loved tracks, TMOE, average completeness, average album rating, and average Album Score.

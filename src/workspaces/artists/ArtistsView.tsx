@@ -33,6 +33,8 @@ import {
 } from "./MusicBrainzPanels";
 import { ArtistAlbumCoverBoard } from "./ArtistDetails";
 import type { AppModel } from "../../app/useAppController";
+import { useState } from "react";
+import { SplitArtistDialog } from "./SplitArtistDialog";
 export function ArtistsView({
   model,
 }: {
@@ -105,6 +107,7 @@ export function ArtistsView({
     | "artistAlbumPopularityError"
     | "isArtistAlbumPopularityLoading"
     | "clearSelectedArtistAlbum"
+    | "refreshAfterArtistSplit"
   >;
 }) {
   const {
@@ -175,11 +178,18 @@ export function ArtistsView({
     artistAlbumPopularityError,
     isArtistAlbumPopularityLoading,
     clearSelectedArtistAlbum,
+    refreshAfterArtistSplit,
   } = model;
+  const [splitArtistId, setSplitArtistId] = useState<string | null>(null);
+  const [splitNotice, setSplitNotice] = useState<string | null>(null);
   return (
     <ArtistsWorkspace
       actions={
         <>
+          <button className="secondary-button" type="button" disabled={!selectedArtist}
+            onClick={() => { setSplitNotice(null); setSplitArtistId(selectedArtist!.id); }}>
+            Split artist
+          </button>
           <button
             className="icon-button"
             type="button"
@@ -326,6 +336,14 @@ export function ArtistsView({
         </div>
       </section>
 
+      {splitArtistId ? <SplitArtistDialog key={splitArtistId} artistId={splitArtistId}
+        onClose={() => setSplitArtistId(null)} onSaved={(result) => {
+          setSplitArtistId(null);
+          setSplitNotice(`Moved ${result.movedAlbums} ${result.movedAlbums === 1 ? "album" : "albums"} to a separate artist profile.`);
+          refreshAfterArtistSplit(splitArtistId, result);
+          void loadData();
+        }} /> : null}
+      {splitNotice ? <p role="status">{splitNotice}</p> : null}
       <section className="table-panel" aria-label="Artist index">
         <div className="panel-heading compact">
           <div>
@@ -402,7 +420,7 @@ export function ArtistsView({
                 <span className="eyebrow">Artist overview</span>
                 <h2>{selectedArtist?.name ?? "Select an artist"}</h2>
                 <p>
-                  {[selectedArtist?.topGenre, selectedArtist?.firstYear]
+                  {[selectedArtist?.disambiguation, selectedArtist?.topGenre, selectedArtist?.firstYear]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>

@@ -145,8 +145,8 @@ pub(super) fn discovery_mixer_seed_options(
     let mut options = Vec::new();
 
     if kind != "album" {
-        let artist_key = artist_key_sql("album.album_artist_display");
-        let representative_key = artist_key_sql("candidate.album_artist_display");
+        let artist_key = catalog_artist_key_sql("album.album_artist_display");
+        let representative_key = catalog_artist_key_sql("candidate.album_artist_display");
         let artist_sql = format!(
             "WITH grouped AS (
                 SELECT {artist_key} AS artist_key,
@@ -238,7 +238,7 @@ pub(super) fn discovery_mixer_seed_data(
 ) -> Result<DiscoveryMixerSeedData> {
     match input.kind.as_str() {
         "album" => {
-            let artist_key = artist_key_sql("album.album_artist_display");
+            let artist_key = catalog_artist_key_sql("album.album_artist_display");
             conn.query_row(
                 &format!(
                     "SELECT album.id,
@@ -284,8 +284,8 @@ pub(super) fn discovery_mixer_seed_data(
         }
         "artist" => {
             let artist_key = input.id.trim();
-            let grouped_key = artist_key_sql("album.album_artist_display");
-            let representative_key = artist_key_sql("candidate.album_artist_display");
+            let grouped_key = catalog_artist_key_sql("album.album_artist_display");
+            let representative_key = catalog_artist_key_sql("candidate.album_artist_display");
             let sql = format!(
                 "WITH grouped AS (
                     SELECT {grouped_key} AS artist_key,
@@ -367,7 +367,7 @@ pub(super) fn discovery_mixer(
         .iter()
         .map(|seed| seed.artist_key.clone())
         .collect::<HashSet<_>>();
-    let candidate_artist_key = artist_key_sql("album.album_artist_display");
+    let candidate_artist_key = catalog_artist_key_sql("album.album_artist_display");
     let candidate_sql = format!(
         "SELECT album.id,
                 COALESCE(NULLIF(TRIM(album.album), ''), 'Untitled album'),

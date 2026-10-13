@@ -2548,3 +2548,16 @@
   .artist-chart-section .artist-highlight-track-copy strong { white-space: normal; overflow-wrap: anywhere; }
   .artist-chart-section .artist-chart-history dd { white-space: normal; }
 }
+.artist-split-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; color: var(--text-primary, #24342d); background: var(--palette-white, white); border: 1px solid #c5d3ca; border-radius: 12px; }
+.artist-split-dialog::backdrop { background: rgb(20 34 27 / 48%); }
+.artist-split-dialog header, .artist-split-dialog footer, .artist-split-selection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.artist-split-dialog h2 { margin: 6px 0; }
+.artist-split-dialog form > label, .artist-split-fields label { display: grid; gap: 6px; margin: 14px 0; font-size: 13px; }
+.artist-split-dialog input:not([type=checkbox]), .artist-split-dialog select { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #b5c5bb; border-radius: 6px; background: white; color: inherit; }
+.artist-split-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px; }
+.artist-split-selection { margin: 16px 0 8px; font-size: 13px; }
+.artist-split-albums { max-height: 280px; overflow-y: auto; border: 1px solid #d8e1dd; border-radius: 6px; padding: 10px; }
+.artist-split-albums label { display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; }
+.artist-split-albums label span { display: grid; gap: 4px; }
+.artist-split-albums small { color: #64746b; }
+.artist-split-dialog footer { justify-content: flex-end; margin-top: 20px; }

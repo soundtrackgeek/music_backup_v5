@@ -104,7 +104,9 @@ export const commands = {
 	listActivityJobs: () => __TAURI_INVOKE<Job[]>("list_activity_jobs"),
 	controlActivityJob: (id: number, action: string) => __TAURI_INVOKE<Job[]>("control_activity_job", { id, action }),
 	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse>("search_library", { request }),
-	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse>("list_artists", { request }),
+	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse_Serialize>("list_artists", { request }),
+	getArtistSplitContext: (artistId: string) => __TAURI_INVOKE<ArtistSplitContext>("get_artist_split_context", { artistId }),
+	splitArtist: (request: SplitArtistRequest) => __TAURI_INVOKE<SplitArtistResult>("split_artist", { request }),
 	getArtistTrackHighlights: (artistId: string) => __TAURI_INVOKE<ArtistTrackHighlights>("get_artist_track_highlights", { artistId }),
 	listGenres: (request: GenreListRequest) => __TAURI_INVOKE<GenreListResponse>("list_genres", { request }),
 	listSavedSearches: () => __TAURI_INVOKE<SavedSearch[]>("list_saved_searches"),
@@ -831,6 +833,20 @@ export type ArtistChartTrack = {
 /**  Serializes exactly as its payload. */
 export type ArtistCompletionVerificationProgress = LibraryCompletionArtistVerificationStatus;
 
+export type ArtistIdentityAlbum = {
+	id: string,
+	title: string,
+	year: number | null,
+	tracks: number,
+};
+
+export type ArtistIdentityChoice = {
+	id: string,
+	name: string,
+	disambiguation: string | null,
+	musicbrainzMbid: string | null,
+};
+
 export type ArtistListRequest = {
 	searchText?: string,
 	sort?: BrowseSort,
@@ -838,8 +854,17 @@ export type ArtistListRequest = {
 	offset?: number,
 };
 
-export type ArtistListResponse = {
-	rows: ArtistSummary[],
+export type ArtistListResponse = ArtistListResponse_Serialize | ArtistListResponse_Deserialize;
+
+export type ArtistListResponse_Deserialize = {
+	rows: ArtistSummary_Deserialize[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type ArtistListResponse_Serialize = {
+	rows: ArtistSummary_Serialize[],
 	total: number,
 	limit: number,
 	offset: number,
@@ -855,9 +880,59 @@ export type ArtistLovedTrack = {
 	rating: number | null,
 };
 
-export type ArtistSummary = {
+export type ArtistSplitContext = {
+	artist: ArtistIdentityChoice,
+	albums: ArtistIdentityAlbum[],
+	otherArtists: ArtistIdentityChoice[],
+};
+
+export type ArtistSummary = ArtistSummary_Serialize | ArtistSummary_Deserialize;
+
+export type ArtistSummary_Deserialize = {
 	id: string,
 	name: string,
+	disambiguation: string | null,
+	albumCount: number,
+	ratedAlbumCount: number,
+	partialAlbumCount: number,
+	unratedAlbumCount: number,
+	trackCount: number,
+	totalSeconds: number,
+	lovedTracks: number,
+	tmoeSeconds: number,
+	averageRatingCompleteness: number | null,
+	averageAlbumRating: number | null,
+	averageAlbumScore: number | null,
+	firstYear: number | null,
+	lastYear: number | null,
+	topGenre: string | null,
+	musicBrainzMbid: string | null,
+	musicBrainzSortName: string | null,
+	musicBrainzArtistType: string | null,
+	musicBrainzGender: string | null,
+	musicBrainzBeginDate: string | null,
+	musicBrainzBeginYear: number | null,
+	musicBrainzEndDate: string | null,
+	musicBrainzEndYear: number | null,
+	musicBrainzEnded: boolean | null,
+	musicBrainzBeginAreaName: string | null,
+	musicBrainzEndAreaName: string | null,
+	musicBrainzInfoReviewState: string | null,
+	musicBrainzInfoFetchedAt: string | null,
+	originCountryCode: string | null,
+	originCountryName: string | null,
+	originCountryRawArea: string | null,
+	originCountryReviewState: string | null,
+	portraitAvailable: boolean,
+	representativeAlbumId: string | null,
+	representativeAlbum: string | null,
+	representativeCoverPath: string | null,
+};
+
+export type ArtistSummary_Serialize = {
+	id: string,
+	name: string,
+	disambiguation?: string | null,
 	albumCount: number,
 	ratedAlbumCount: number,
 	partialAlbumCount: number,
@@ -4328,6 +4403,20 @@ export type SoundcheckResult = {
 };
 
 export type SoundcheckStatus = "pending" | "passed" | "review" | "failed" | "unsupported";
+
+export type SplitArtistRequest = {
+	sourceArtistId: string,
+	albumIds: string[],
+	targetArtistId: string | null,
+	disambiguation: string,
+	sourceDisambiguation: string | null,
+	musicbrainzMbid: string | null,
+};
+
+export type SplitArtistResult = {
+	artistId: string,
+	movedAlbums: number,
+};
 
 export type StartLibraryCompletionArtistVerificationRequest = {
 	artistIds?: string[],

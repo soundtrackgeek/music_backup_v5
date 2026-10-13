@@ -711,13 +711,13 @@ pub(super) fn music_tool_issue_order_clause(sort: &BrowseSort) -> String {
 pub(super) fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
     match tool_id {
         "duplicate-albums" => {
-            let album_artist_key_sql = artist_key_sql("album_artist_display");
-            let album_artist_key_sql_a = artist_key_sql("a.album_artist_display");
+            let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
+            let album_catalog_artist_key_sql_a = catalog_artist_key_sql("a.album_artist_display");
             Ok(format!(
                 "
             WITH duplicate_groups AS (
                 SELECT
-                    {album_artist_key_sql} AS artist_key,
+                    {album_catalog_artist_key_sql} AS artist_key,
                     COALESCE(NULLIF(TRIM(LOWER(album)), ''), 'unknown') AS album_key,
                     COALESCE(year, -1) AS year_key,
                     COUNT(*) AS version_count
@@ -743,7 +743,7 @@ pub(super) fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
                 NULL AS file_path
             FROM albums a
             JOIN duplicate_groups g
-              ON {album_artist_key_sql_a} = g.artist_key
+              ON {album_catalog_artist_key_sql_a} = g.artist_key
              AND COALESCE(NULLIF(TRIM(LOWER(a.album)), ''), 'unknown') = g.album_key
              AND COALESCE(a.year, -1) = g.year_key
             "
@@ -2013,7 +2013,7 @@ pub(super) fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             "COALESCE(t.genre, '') LIKE '%;%' OR COALESCE(t.genre, '') LIKE '%|%'",
         )),
         "conflicting-album-artists" => {
-            let album_artist_key_sql = format!(
+            let album_catalog_artist_key_sql = format!(
                 "NULLIF(TRIM(LOWER({})), '')",
                 identity::fold_dashes_sql("album_artist_display")
             );
@@ -2022,10 +2022,10 @@ pub(super) fn music_tool_issue_sql(tool_id: &str) -> Result<String> {
             WITH conflicting AS (
                 SELECT
                     album_id,
-                    COUNT(DISTINCT {album_artist_key_sql}) AS artist_count
+                    COUNT(DISTINCT {album_catalog_artist_key_sql}) AS artist_count
                 FROM tracks
                 GROUP BY album_id
-                HAVING COUNT(DISTINCT {album_artist_key_sql}) > 1
+                HAVING COUNT(DISTINCT {album_catalog_artist_key_sql}) > 1
             )
             SELECT
                 'conflicting-album-artists:' || a.id AS id,

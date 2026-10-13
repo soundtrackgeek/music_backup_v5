@@ -1,4 +1,5 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useRef } from "react";
+import type { SplitArtistResult } from "../../bindings";
 import {
   createArtistAlbumsRequest,
   createAlbumTracksRequest,
@@ -157,6 +158,9 @@ export function useArtistsWorkspace({
   refreshMusicBrainzOriginCountryStatus,
   refreshMusicBrainzArtistInfoStatus,
 }: Inputs) {
+  const selectedArtistIdRef = useRef(selectedArtistId);
+  useEffect(() => { selectedArtistIdRef.current = selectedArtistId; }, [selectedArtistId]);
+  const pendingSplitSelection = useRef<{ sourceId: string; targetId: string } | null>(null);
   const artistAlbumsRequest = useMemo(
     () => (selectedArtist ? createArtistAlbumsRequest(selectedArtist) : null),
     [selectedArtist],
@@ -200,6 +204,14 @@ export function useArtistsWorkspace({
         .then((nextResponse) => {
           if (!cancelled) {
             setArtistResponse(nextResponse);
+            const pending = pendingSplitSelection.current;
+            if (pending && selectedArtistIdRef.current === pending.sourceId) {
+              pendingSplitSelection.current = null;
+              if (!nextResponse.rows.some((artist) => artist.id === pending.sourceId) &&
+                  nextResponse.rows.some((artist) => artist.id === pending.targetId)) {
+                setSelectedArtistId(pending.targetId);
+              }
+            }
           }
         })
         .catch((searchError) => {
@@ -641,6 +653,7 @@ export function useArtistsWorkspace({
   }
 
   function selectArtist(artistId: string) {
+    pendingSplitSelection.current = null;
     resetDeferredArtistDetails();
     setSelectedArtistId(artistId);
     setArtistExportResult(null);
@@ -1006,6 +1019,12 @@ export function useArtistsWorkspace({
 
   const artistTotal = artistResponse?.total ?? 0;
 
+  function refreshAfterArtistSplit(sourceId: string, result: SplitArtistResult) {
+    pendingSplitSelection.current = { sourceId, targetId: result.artistId };
+    resetDeferredArtistDetails();
+    refreshOriginJoinedViews();
+  }
+
   const artistPageStart = artistTotal === 0 ? 0 : artistRequest.offset + 1;
 
   const artistPageEnd = Math.min(
@@ -1044,6 +1063,7 @@ export function useArtistsWorkspace({
     saveArtistOriginCountry,
     runArtistMusicBrainzExport,
     openMusicBrainzArtistPage,
+    refreshAfterArtistSplit,
     artistTotal,
     artistPageStart,
     artistPageEnd,

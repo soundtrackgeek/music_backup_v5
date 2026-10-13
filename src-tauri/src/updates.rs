@@ -24,6 +24,10 @@ const UPDATE_SEARCH_WHERE: &str = "
     AND (?2 IS NULL OR created_at >= ?2)
 ";
 
+fn historical_artist_key_sql() -> String {
+    format!("COALESCE((SELECT a.artist_identity_key FROM albums a WHERE a.id=library_updates.album_id), {})", crate::identity::artist_key_sql("album_artist_display"))
+}
+
 #[cfg(not(test))]
 pub fn list_for_app(
     app: &AppHandle,
@@ -199,13 +203,13 @@ pub(crate) fn list_artists_for_connection(
     let limit = request.limit.clamp(1, 200);
     let offset = request.offset;
     let summary = library_update_summary(conn, &query, date_from.as_deref())?;
-    let artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
+    let catalog_artist_key_sql = historical_artist_key_sql();
 
     let filtered_cte = format!(
         "
         WITH filtered AS (
             SELECT
-                {artist_key_sql} AS artist_key,
+                {catalog_artist_key_sql} AS artist_key,
                 COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown artist') AS artist_name,
                 created_at,
                 change_kind,
@@ -328,13 +332,13 @@ pub(crate) fn list_artists_for_connection(
     let new_artists = if change_kind.as_deref().is_some_and(|kind| kind != "new") {
         Vec::new()
     } else {
-        let update_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
-        let album_artist_key_sql = crate::identity::artist_key_sql("album_artist_display");
+        let update_catalog_artist_key_sql = historical_artist_key_sql();
+        let album_catalog_artist_key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
         let new_artists_sql = format!(
             "
             WITH update_history AS (
                 SELECT
-                    {update_artist_key_sql} AS artist_key,
+                    {update_catalog_artist_key_sql} AS artist_key,
                     MAX(COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown artist'))
                         AS artist_name,
                     SUM(CASE WHEN category = 'album' AND change_kind = 'new' THEN 1 ELSE 0 END)
@@ -344,15 +348,15 @@ pub(crate) fn list_artists_for_connection(
                     MIN(CASE WHEN category = 'album' AND change_kind = 'new' THEN created_at END)
                         AS added_at
                 FROM library_updates
-                GROUP BY {update_artist_key_sql}
+                GROUP BY {update_catalog_artist_key_sql}
             ), current_library AS (
                 SELECT
-                    {album_artist_key_sql} AS artist_key,
+                    {album_catalog_artist_key_sql} AS artist_key,
                     MAX(COALESCE(NULLIF(TRIM(album_artist_display), ''), 'Unknown artist'))
                         AS artist_name,
                     COUNT(*) AS current_albums
                 FROM albums
-                GROUP BY {album_artist_key_sql}
+                GROUP BY {album_catalog_artist_key_sql}
             ), first_appearances AS (
                 SELECT
                     history.artist_key,

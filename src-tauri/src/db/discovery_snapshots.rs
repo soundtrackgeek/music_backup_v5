@@ -433,7 +433,7 @@ pub(super) fn discovery_artist_completion_snapshot_with_scope(
         representative_cover_path: Option<String>,
     }
 
-    let album_artist_key = artist_key_sql("album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album_artist_display");
     let candidates_sql = format!(
         "WITH artist_stats AS (
             SELECT {album_artist_key} AS artist_id,
@@ -956,7 +956,7 @@ pub(super) fn discovery_recommendation_snapshot_filtered(
     } else {
         conn.query_row("SELECT random()", [], |row| row.get::<_, i64>(0))? as u64
     };
-    let album_artist_key = artist_key_sql("album.album_artist_display");
+    let album_artist_key = catalog_artist_key_sql("album.album_artist_display");
     let recent_sql = format!(
         "WITH latest_events AS (
             SELECT event.*,
@@ -1086,7 +1086,7 @@ pub(super) fn discovery_recommendation_snapshot_filtered(
         .map(|anchor| anchor.artist_key.clone())
         .collect::<HashSet<_>>();
 
-    let candidate_artist_key = artist_key_sql("album.album_artist_display");
+    let candidate_artist_key = catalog_artist_key_sql("album.album_artist_display");
     let candidate_sql = format!(
         "SELECT album.id,
                 COALESCE(NULLIF(TRIM(album.album), ''), 'Unknown Album'),

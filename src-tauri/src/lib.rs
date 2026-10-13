@@ -6,6 +6,7 @@ mod ai;
 mod album_review;
 mod artist_biography;
 mod artist_artwork;
+mod artist_identity;
 mod artist_completion;
 mod aurora_bridge;
 mod background;

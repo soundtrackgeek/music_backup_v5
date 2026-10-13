@@ -12,6 +12,7 @@ use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
     artist_artwork,
+    artist_identity,
     listening,
     release_radar,
     sonic,
@@ -275,6 +276,8 @@ fn builder() -> Builder<Wry> {
         control_activity_job,
         search_library,
         list_artists,
+        artist_identity::get_artist_split_context,
+        artist_identity::split_artist,
         get_artist_track_highlights,
         list_genres,
         list_saved_searches,

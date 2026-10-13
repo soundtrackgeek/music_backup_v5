@@ -533,7 +533,7 @@ pub fn artwork(app: &AppHandle, artist_id: &str, force: bool) -> Result<ArtistAr
     let mut warnings = credential_error.into_iter().collect::<Vec<_>>();
     let biography = db::artist_biography_cache_for_app(app, &id)?;
     let mut mbid = linked.clone().filter(|v| artist_biography::valid_mbid(v));
-    if linked.is_none() {
+    if linked.is_none() && !identity.ambiguous_name {
         mbid = biography
             .as_ref()
             .and_then(|v| v.musicbrainz_mbid.clone())
@@ -686,7 +686,7 @@ pub fn artwork(app: &AppHandle, artist_id: &str, force: bool) -> Result<ArtistAr
 }
 pub fn sync(app: &AppHandle, limit: u32) -> Result<ArtistArtworkSyncSummary> {
     let (conn, _) = db::open_read(app)?;
-    let key = crate::identity::artist_key_sql("a.album_artist_display");
+    let key = crate::identity::catalog_artist_key_sql("a.album_artist_display");
     let sql=format!("SELECT {key} FROM albums a LEFT JOIN artist_artwork art ON art.artist_key={key} WHERE art.artist_key IS NULL OR art.expires_at < ?1 GROUP BY {key} ORDER BY COUNT(*) DESC, {key} LIMIT ?2");
     let ids = conn
         .prepare(&sql)?

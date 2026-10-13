@@ -122,7 +122,7 @@ fn watched_artists(
     conn: &Connection,
     cache: &HashMap<String, HashSet<String>>,
 ) -> Result<Vec<RadarArtist>> {
-    let key_sql = crate::identity::artist_key_sql("album_artist_display");
+    let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
     let mut stmt = conn.prepare(&format!("WITH artists AS (
         SELECT {key_sql} AS artist_key, COALESCE(MIN(NULLIF(TRIM(album_artist_display),'')), 'Unknown Artist') AS name
         FROM albums GROUP BY artist_key)

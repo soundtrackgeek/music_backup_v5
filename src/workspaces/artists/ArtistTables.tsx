@@ -167,6 +167,7 @@ export function ArtistIndexTable({
               />
               <span>
                 <strong>{artist.name}</strong>
+                {artist.disambiguation ? <small>{artist.disambiguation}</small> : null}
                 <small>{formatNumber(artist.trackCount)} tracks</small>
               </span>
             </span>

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.190.0] - 2026-10-13
+
+### Added
+- **Artists → Split artist** creates separate profiles for artists sharing a name, with distinguishing descriptions and independent MusicBrainz IDs. Review all albums, select the ones to move, or assign them to an existing same-name profile.
+- Durable catalog assignments survive full and folder reimports while preserving Track Artist, Album Artist, music tags, and source files. Ambiguous new albums appear under **Unassigned albums** for review.
+- Schema 66 publishes artist identities, album assignments, and a monotonic revision for Aurora and Tonehavn. Artist browsing, metadata, artwork, discography, filters, and discovery use the assigned identity.
+
 ## [0.189.2] - 2026-10-13
 
 ### Fixed

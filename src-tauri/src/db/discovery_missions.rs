@@ -401,11 +401,11 @@ pub(super) fn discovery_high_potential_genre_mission(
 pub(super) fn discovery_artist_backlog_mission(
     conn: &Connection,
 ) -> Result<Option<DiscoveryMission>> {
-    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
-            {album_artist_key_sql} AS artist_id,
+            {album_catalog_artist_key_sql} AS artist_id,
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
             COUNT(*),
             COALESCE(SUM(total_tracks), 0),
@@ -618,11 +618,11 @@ pub(super) fn discovery_loved_decade_mission(
 pub(super) fn discovery_artist_partial_score_mission(
     conn: &Connection,
 ) -> Result<Option<DiscoveryMission>> {
-    let album_artist_key_sql = artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let sql = format!(
         "
         SELECT
-            {album_artist_key_sql} AS artist_id,
+            {album_catalog_artist_key_sql} AS artist_id,
             COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
             COUNT(*),
             COALESCE(SUM(total_tracks), 0),
@@ -839,13 +839,13 @@ pub(super) fn discovery_genre_points(conn: &Connection) -> Result<Vec<DiscoveryG
 }
 
 pub(super) fn discovery_artist_points(conn: &Connection) -> Result<Vec<DiscoveryArtistPoint>> {
-    let album_artist_key_sql = artist_key_sql("album_artist_display");
-    let album_artist_key_sql_a2 = artist_key_sql("a2.album_artist_display");
+    let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
+    let album_catalog_artist_key_sql_a2 = catalog_artist_key_sql("a2.album_artist_display");
     let sql = format!(
         "
         WITH grouped AS (
             SELECT
-                {album_artist_key_sql} AS artist_id,
+                {album_catalog_artist_key_sql} AS artist_id,
                 COALESCE(MIN(NULLIF(TRIM(album_artist_display), '')), 'Unknown Artist') AS artist,
                 COUNT(*) AS album_count,
                 COALESCE(SUM(total_tracks), 0) AS track_count,
@@ -873,7 +873,7 @@ pub(super) fn discovery_artist_points(conn: &Connection) -> Result<Vec<Discovery
             (
                 SELECT COALESCE(NULLIF(TRIM(a2.canonical_genre), ''), 'Unknown')
                 FROM albums a2
-                WHERE {album_artist_key_sql_a2} = grouped.artist_id
+                WHERE {album_catalog_artist_key_sql_a2} = grouped.artist_id
                 GROUP BY COALESCE(NULLIF(TRIM(LOWER(a2.genre_normalized)), ''), 'unknown')
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1

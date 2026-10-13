@@ -158,7 +158,7 @@ pub fn genre_suggestion_names_for_app(app: &AppHandle) -> Result<Vec<String>> {
     genre_suggestion_names(&conn)
 }
 
-pub(super) fn search_library(
+pub(crate) fn search_library(
     conn: &Connection,
     request: BrowseRequest,
     max_limit: u32,
@@ -352,12 +352,12 @@ pub(super) fn search_library(
     };
 
     let from_sql = if is_tracks {
-        let origin_key_sql = artist_key_sql("a.album_artist_display");
+        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
         format!(
             "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_track_quality q ON q.file_path = t.file_path AND q.filename = t.filename LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
         )
     } else {
-        let origin_key_sql = artist_key_sql("a.album_artist_display");
+        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
         format!(
             "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
         )
@@ -520,9 +520,9 @@ pub(super) fn build_where_clause(
         add_track_id_condition(&mut conditions, &mut values, "t.id", &filters.track_ids);
     }
     let artist_key_field = if is_tracks {
-        artist_key_sql("t.album_artist_display")
+        catalog_artist_key_sql("t.album_artist_display")
     } else {
-        artist_key_sql("a.album_artist_display")
+        catalog_artist_key_sql("a.album_artist_display")
     };
     add_artist_key_condition(
         &mut conditions,
