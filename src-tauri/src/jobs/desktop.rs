@@ -133,6 +133,14 @@ const HANDLERS: &[Registration] = &[
         )?)
     ),
     registration!(
+        "artistArtwork",
+        "Artist artwork",
+        false,
+        true,
+        true,
+        |app, p| encode(crate::artist_artwork::sync(app, serde_json::from_value(p["limit"].clone())?)?)
+    ),
+    registration!(
         "musicDoctor",
         "Music Doctor sync",
         false,

@@ -1289,6 +1289,7 @@ pub(crate) fn upsert_artist_image_for_app(
             state = excluded.state,
             message = excluded.message,
             fetched_at = excluded.fetched_at
+        WHERE artist_images.source = 'lastfm'
         ",
         params![
             &record.artist_key,

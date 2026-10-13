@@ -19,6 +19,7 @@ import {
 } from "../../components/catalog/SearchCriteria";
 import { ArtistIndexTable, ArtistAlbumTable } from "./ArtistTables";
 import { ArtistPortrait } from "../../components/ArtistPortrait";
+import { ArtistArtworkPanel } from "../../components/ArtistArtworkPanel";
 import {
   ArtistPopularTracksPanel,
   ArtistSimilarArtistsPanel,
@@ -414,6 +415,7 @@ export function ArtistsView({
               onRefresh={() => void refreshArtistPopularity()}
               onOpenSource={(url) => void openLastFmSource(url)}
             />
+            {selectedArtist ? <ArtistArtworkPanel key={selectedArtist.id} artistId={selectedArtist.id} artistName={selectedArtist.name} /> : null}
             <ArtistSimilarArtistsPanel
               similarity={artistSimilarity}
               isLoading={isArtistSimilarityLoading}

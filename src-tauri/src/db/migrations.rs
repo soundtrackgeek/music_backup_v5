@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 64;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 65;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -173,7 +173,17 @@ const MIGRATIONS: &[Migration] = &[
         up: crate::release_radar::install_schema,
         verify: Some(phase_sixty_four_schema_exists),
     },
+    Migration {
+        version: 65,
+        description: "artist artwork with Commons attribution and fanart.tv assets",
+        up: crate::artist_artwork::install_schema,
+        verify: Some(phase_sixty_five_schema_exists),
+    },
 ];
+
+fn phase_sixty_five_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(crate::artist_artwork::schema_exists(conn)? && phase_sixty_four_schema_exists(conn)?)
+}
 
 fn phase_sixty_four_schema_exists(conn: &Connection) -> Result<bool> {
     Ok(crate::release_radar::schema_exists(conn)? && phase_sixty_three_schema_exists(conn)?)

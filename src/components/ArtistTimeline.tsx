@@ -35,6 +35,7 @@ import type {
 } from "../types";
 import { AlbumCover } from "./AlbumCover";
 import { ArtistPortrait } from "./ArtistPortrait";
+import { ArtistArtworkPanel } from "./ArtistArtworkPanel";
 
 type ArtistTimelineProps = {
   genreOptions: string[];
@@ -630,6 +631,7 @@ export function ArtistTimeline({
                     />
                     <div><strong>{selectedRow.artist.name}</strong><span>{selectedRow.artist.topGenre ?? "Artist"}</span></div>
                   </header>
+                  <ArtistArtworkPanel key={selectedRow.artist.id} artistId={selectedRow.artist.id} artistName={selectedRow.artist.name} compact />
                   <dl>
                     <div><dt>Span</dt><dd>{selectedRow.artist.firstYear}–{selectedRow.artist.lastYear}</dd></div>
                     <div><dt>Albums</dt><dd>{formatCount(selectedRow.artist.albumCount)}</dd></div>

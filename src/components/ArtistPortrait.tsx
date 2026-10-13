@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { getArtistImageUrl } from "../backend";
+import { getArtistPortraitCredit } from "../backend/artistArtwork";
+import type { ArtworkCredit } from "../bindings";
 import { useArtworkRevision } from "../backend/artwork";
 import { AlbumCover } from "./AlbumCover";
 
@@ -27,12 +29,14 @@ export function ArtistPortrait({
 }: ArtistPortraitProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const [credit, setCredit] = useState<ArtworkCredit | null>(null);
   const revision = useArtworkRevision();
 
   useEffect(() => {
     setImageUrl(null);
     setImageFailed(false);
-    if (!portraitAvailable) return;
+    setCredit(null);
+    if (!portraitAvailable && revision === 0) return;
     let cancelled = false;
     void getArtistImageUrl(artistId)
       .then((nextUrl) => {
@@ -46,11 +50,18 @@ export function ArtistPortrait({
     };
   }, [artistId, portraitAvailable, revision]);
 
+  useEffect(() => {
+    if (!imageUrl || imageFailed) return;
+    let cancelled = false;
+    void getArtistPortraitCredit(artistId, revision).then(value => { if (!cancelled) setCredit(value); });
+    return () => { cancelled = true; };
+  }, [artistId, imageUrl, imageFailed, revision]);
+
   const classes = ["artist-portrait", className].filter(Boolean).join(" ");
   const label = `${artistName} portrait`;
   if (imageUrl && !imageFailed) {
     return (
-      <span className={`${classes} has-image`} aria-hidden={decorative || undefined}>
+      <span className={`${classes} has-image`} aria-hidden={decorative || undefined} title={credit ? [label, credit.author, credit.license, credit.provider, credit.sourceUrl].filter(Boolean).join(" · ") : label}>
         <img
           src={imageUrl}
           alt={decorative ? "" : label}

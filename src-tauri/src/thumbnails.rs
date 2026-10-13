@@ -54,7 +54,7 @@ impl ArtworkRequest {
             .trim_start_matches('/')
             .split_once('/')
             .context("Missing artwork ID")?;
-        if !matches!(kind, "album" | "artist" | "completion")
+        if !matches!(kind, "album" | "artist" | "artist-logo" | "artist-background" | "completion")
             || id.is_empty()
             || id.len() > 1024
             || id.chars().any(char::is_control)
@@ -76,7 +76,7 @@ impl ArtworkRequest {
         }
         Ok(Self {
             kind: kind.into(),
-            id: if kind == "artist" {
+            id: if kind.starts_with("artist") {
                 crate::identity::artist_text_key(id)
             } else {
                 id.into()
@@ -127,10 +127,12 @@ impl ThumbnailService {
         let sql = match request.kind.as_str() {
             "album" => "SELECT cache_path, imported_at FROM album_covers WHERE album_id = ?1",
             "artist" => "SELECT cache_path, fetched_at FROM artist_images WHERE artist_key = ?1 AND state = 'available'",
+            "artist-logo" => "SELECT logo_path, fetched_at FROM artist_artwork WHERE artist_key = ?1",
+            "artist-background" => "SELECT background_path, fetched_at FROM artist_artwork WHERE artist_key = ?1",
             "completion" => "SELECT cover_cache_path, cover_checked_at FROM library_completion_verifications WHERE candidate_key = ?1 AND cover_state = 'available'",
             _ => unreachable!(),
         };
-        let id = if request.kind == "artist" {
+        let id = if request.kind.starts_with("artist") {
             crate::identity::artist_text_key(&request.id)
         } else {
             request.id.clone()
@@ -419,6 +421,8 @@ mod tests {
         )
         .unwrap();
         conn.execute("INSERT INTO library_completion_verifications VALUES ('candidate:1', ?1, 'first', 'available')", [source.to_str().unwrap()]).unwrap();
+        conn.execute_batch("CREATE TABLE artist_artwork (artist_key TEXT PRIMARY KEY, logo_path TEXT, background_path TEXT, fetched_at TEXT);").unwrap();
+        conn.execute("INSERT INTO artist_artwork VALUES ('a-ha', ?1, ?1, 'first')", [source.to_str().unwrap()]).unwrap();
         let mut service = ThumbnailService::new(database, temp.path().join("thumbs"));
         service.redirect_aliases = true;
         (temp, service, source)
@@ -444,6 +448,17 @@ mod tests {
         let location = redirect.headers()["Location"].to_str().unwrap().to_string();
         let response = service.respond(request(&location));
         (location, response)
+    }
+
+    #[test]
+    fn serves_artist_logos_and_backgrounds_with_alpha_through_the_id_protocol() {
+        let (_temp, service, _) = fixture();
+        for kind in ["artist-logo", "artist-background"] {
+            let (_, response) = follow(&service, &alias(kind, " A–Ha ", 600));
+            assert_eq!(response.status(), StatusCode::OK);
+            let image = image::load_from_memory(response.body()).unwrap().to_rgba8();
+            assert!(image.pixels().any(|p| p.0[3] < 255));
+        }
     }
 
     #[test]

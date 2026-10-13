@@ -11,6 +11,7 @@ use tauri::Wry;
 use tauri_specta::{Builder, ErrorHandlingMode};
 
 use super::{
+    artist_artwork,
     listening,
     release_radar,
     sonic,
@@ -300,6 +301,13 @@ fn builder() -> Builder<Wry> {
         get_genre_progress,
         get_discovery,
         release_radar::get_release_radar,
+        artist_artwork::get_artist_artwork,
+        artist_artwork::get_artist_portrait_credit,
+        artist_artwork::get_fanart_credential_status,
+        artist_artwork::save_fanart_keys,
+        artist_artwork::delete_fanart_keys,
+        artist_artwork::test_fanart_connection,
+        artist_artwork::sync_artist_artwork,
         get_discovery_daily_edition,
         get_discovery_source_health,
         rebuild_discovery_chart_matches,

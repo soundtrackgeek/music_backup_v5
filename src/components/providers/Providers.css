@@ -1,5 +1,9 @@
 /* providers styles. Selectors retain their feature namespaces. */
 
+.fanart-settings-panel { grid-column: 1 / -1; }
+.fanart-settings-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; margin: 16px 0; }
+.fanart-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 
 .music-doctor-settings-panel {
   grid-column: span 2;

@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 import { isTauriRuntime } from "./tauriClient";
 
 export type ThumbnailSize = 96 | 300 | 600;
-type ArtworkKind = "album" | "artist" | "completion";
+type ArtworkKind = "album" | "artist" | "artist-logo" | "artist-background" | "completion";
 let revision = 0;
 const listeners = new Set<() => void>();
 

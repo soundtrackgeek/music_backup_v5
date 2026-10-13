@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.189.0] - 2026-10-13
+
+### Added
+- **Better artist imagery** (October app review, new feature 10): Artist Overview and selected Career Peaks cards load real portraits from MBID-keyed fanart.tv, with Wikidata P18 / Wikimedia Commons as the portrait fallback. HD logos and backgrounds appear with source links; Commons photos show their author, individual license, license link, and file source.
+- **Settings → Providers → Artist imagery · fanart.tv** validates and securely stores a project API key and optional personal key, tests the connection, removes stored keys, and syncs the next 50 artists as a cancellable Activity Center job. Development builds accept the ignored `FANART_TV` / `FANART_TV_API_KEY` `.env` key for testing; installed builds use the credential store. Commons needs no key.
+- Schema 65 stores artwork attribution, identity, expiry, and local asset paths. Portraits share the existing thumbnail protocol across Artists, Artist Index, Timelines, Discovery, and similar-artist views; logos and backgrounds use the same bounded ID-only protocol. Temporary provider failures keep previous images with a warning, artist relinks invalidate the cache, and unavailable results expire for later retry.
+
 ## [0.188.0] - 2026-10-10
 
 ### Added

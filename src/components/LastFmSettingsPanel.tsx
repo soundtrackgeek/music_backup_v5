@@ -88,7 +88,7 @@ export function LastFmSettingsPanel() {
           <p>
             {status?.configured
               ? "API key stored securely in Windows Credential Manager"
-              : "Connect Last.fm for popular tracks, album heat, and artist portraits"}
+              : "Connect Last.fm for popular tracks, album heat, and similar artists"}
           </p>
         </div>
         <Images size={18} />
@@ -134,7 +134,7 @@ export function LastFmSettingsPanel() {
       <div className="ai-settings-notes">
         <span>Read-only metadata needs the API key; the Last.fm secret is not required.</span>
         <span>Popular Tracks and album fire rankings load on demand, then reuse a local SQLite cache.</span>
-        <span>Portraits are downloaded in explicit batches and reused in Timelines, Artists, and Artist Index.</span>
+        <span>Legacy Last.fm portraits are reused across the app. Use Artist imagery below for fanart.tv and Wikimedia Commons photos, logos, and backgrounds.</span>
         <span>The API key is never written to SQLite, browser storage, logs, or backups.</span>
       </div>
 

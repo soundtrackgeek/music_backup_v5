@@ -132,6 +132,19 @@ export const commands = {
 	getGenreProgress: (request: GenreProgressRequest) => __TAURI_INVOKE<GenreProgressStats[]>("get_genre_progress", { request }),
 	getDiscovery: (refreshDailyEdition: boolean | null) => __TAURI_INVOKE<DiscoveryResponse>("get_discovery", { refreshDailyEdition }),
 	getReleaseRadar: (refresh: boolean) => __TAURI_INVOKE<ReleaseRadar>("get_release_radar", { refresh }),
+	getArtistArtwork: (artistId: string, forceRefresh: boolean | null) => __TAURI_INVOKE<ArtistArtwork>("get_artist_artwork", { artistId, forceRefresh }),
+	getArtistPortraitCredit: (artistId: string) => __TAURI_INVOKE<{
+	provider: string,
+	sourceUrl: string,
+	author: string | null,
+	license: string | null,
+	licenseUrl: string | null,
+} | null>("get_artist_portrait_credit", { artistId }),
+	getFanartCredentialStatus: () => __TAURI_INVOKE<FanartCredentialStatus>("get_fanart_credential_status"),
+	saveFanartKeys: (input: SaveFanartKeysRequest) => __TAURI_INVOKE<FanartCredentialStatus>("save_fanart_keys", { input }),
+	deleteFanartKeys: () => __TAURI_INVOKE<FanartCredentialStatus>("delete_fanart_keys"),
+	testFanartConnection: () => __TAURI_INVOKE<FanartConnectionTest>("test_fanart_connection"),
+	syncArtistArtwork: (limit: number) => __TAURI_INVOKE<ArtistArtworkSyncSummary>("sync_artist_artwork", { limit }),
 	getDiscoveryDailyEdition: (date: string) => __TAURI_INVOKE<DiscoveryDailyEditionSnapshotResponse>("get_discovery_daily_edition", { date }),
 	getDiscoverySourceHealth: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("get_discovery_source_health", { date }),
 	rebuildDiscoveryChartMatches: (date: string) => __TAURI_INVOKE<DiscoverySourceHealthResponse>("rebuild_discovery_chart_matches", { date }),
@@ -768,6 +781,28 @@ export type AppUpdateInstallPhase = "downloading" | "installing" | "restarting";
 /**  Serializes exactly as its payload. */
 export type AppUpdateInstallProgress = InstallProgress;
 
+export type ArtistArtwork = {
+	artistId: string,
+	artistName: string,
+	musicbrainzMbid: string | null,
+	portrait: ArtworkCredit | null,
+	logo: ArtworkCredit | null,
+	background: ArtworkCredit | null,
+	fetchedAt: string | null,
+	cached: boolean,
+	stale: boolean,
+	message: string,
+};
+
+export type ArtistArtworkSyncSummary = {
+	checked: number,
+	downloaded: number,
+	unavailable: number,
+	failed: number,
+	remaining: number,
+	message: string,
+};
+
 export type ArtistBiography = {
 	artistId: string,
 	artistName: string,
@@ -924,6 +959,14 @@ export type ArtistTrackHighlights = {
 	artistName: string,
 	lovedTracks: ArtistLovedTrack[],
 	chartTracks: ArtistChartTrack[],
+};
+
+export type ArtworkCredit = {
+	provider: string,
+	sourceUrl: string,
+	author: string | null,
+	license: string | null,
+	licenseUrl: string | null,
 };
 
 export type Assessment = {
@@ -2038,6 +2081,16 @@ export type FailedTracksPage = {
 	rows: FailedTrack[],
 	total: number,
 	nextCursor: string | null,
+};
+
+export type FanartConnectionTest = {
+	message: string,
+};
+
+export type FanartCredentialStatus = {
+	configured: boolean,
+	personalKeyConfigured: boolean,
+	source: AiKeySource,
 };
 
 export type GenreListRequest = {
@@ -3930,6 +3983,11 @@ export type SaveExternalDiscoveryRequest = {
 	id: number | null,
 	name: string,
 	response: ExternalDiscoveryResponse,
+};
+
+export type SaveFanartKeysRequest = {
+	apiKey: string,
+	personalKey: string | null,
 };
 
 export type SaveJourneyRequest = {

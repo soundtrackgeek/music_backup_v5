@@ -104,7 +104,7 @@ struct WikipediaDesktopUrl {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct WikipediaTarget {
+pub(crate) struct WikipediaTarget {
     language: String,
     title: String,
 }
@@ -123,7 +123,7 @@ struct BiographyResolution {
     used_name_fallback: bool,
 }
 
-fn valid_mbid(value: &str) -> bool {
+pub(crate) fn valid_mbid(value: &str) -> bool {
     value.len() == 36
         && value
             .chars()
@@ -134,7 +134,7 @@ fn valid_mbid(value: &str) -> bool {
             })
 }
 
-fn valid_wikidata_id(value: &str) -> bool {
+pub(crate) fn valid_wikidata_id(value: &str) -> bool {
     value
         .strip_prefix('Q')
         .is_some_and(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
@@ -219,7 +219,7 @@ fn exact_musicbrainz_artist_mbid(
     matches.next().is_none().then(|| first.id.clone())
 }
 
-fn fetch_musicbrainz_artist_mbid_by_name(artist_name: &str) -> Result<Option<String>> {
+pub(crate) fn fetch_musicbrainz_artist_mbid_by_name(artist_name: &str) -> Result<Option<String>> {
     let mut url = Url::parse(MUSICBRAINZ_ARTIST_API)?;
     url.query_pairs_mut()
         .append_pair("query", &musicbrainz_artist_name_query(artist_name))
@@ -237,7 +237,7 @@ fn fetch_musicbrainz_artist_mbid_by_name(artist_name: &str) -> Result<Option<Str
     Ok(exact_musicbrainz_artist_mbid(&payload, artist_name))
 }
 
-fn fetch_musicbrainz_targets(
+pub(crate) fn fetch_musicbrainz_targets(
     artist_mbid: &str,
 ) -> Result<(Option<String>, Option<WikipediaTarget>)> {
     if !valid_mbid(artist_mbid) {

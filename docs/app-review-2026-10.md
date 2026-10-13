@@ -528,7 +528,9 @@ Show a **New & upcoming** shelf in the Daily Edition and a weekly digest, with o
 - "first and last performed",
 - a **"Live-show prep" playlist** built from recent setlists matched to your library.
 
-### 10. Better artist imagery
+### 10. Better artist imagery - DONE (0.189.0)
+
+Implemented with fanart.tv provider settings, secure project/personal keys, attributed Wikidata P18 / Commons portrait fallback, locally cached portraits/logos/backgrounds, Artist Overview and Career Peaks display, shared thumbnail delivery, and cancellable 50-artist batches.
 
 **Why:** Last.fm stopped serving real artist photos years ago. The app correctly rejects its placeholder hash ([`lastfm.rs:48`](../src-tauri/src/lastfm.rs#L48)), so many artists probably fall back to album covers.
 
