@@ -139,8 +139,13 @@ struct CatalogFingerprint {
 #[derive(Clone, Debug)]
 pub(crate) struct SourceApplyGuard {
     data_version: i64,
+    catalog_fingerprint: CatalogFingerprint,
     folders: Vec<(String, FolderFingerprint)>,
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("The active catalog changed while the prepared import was waiting to apply. Prepare a new delta before importing")]
+pub(crate) struct PreparedCatalogChanged;
 
 #[derive(Clone, Debug)]
 pub(crate) struct BatchAlbumInput {
@@ -592,6 +597,7 @@ fn prepare_source_apply_guard_for_phase(
     }
     Ok(Some(SourceApplyGuard {
         data_version,
+        catalog_fingerprint,
         folders,
     }))
 }
@@ -603,10 +609,15 @@ pub(crate) fn ensure_source_apply_guard(
     let Some(guard) = guard else {
         return Ok(());
     };
-    if sqlite_data_version(conn)? != guard.data_version {
-        bail!(
-            "The active catalog changed while the prepared import was waiting to apply. Prepare a new delta before importing"
-        );
+    // Another connection can write caches, settings or import bookkeeping while
+    // the recovery backup is being copied. data_version is only a signal to
+    // recheck the catalog, not evidence that the reviewed content changed.
+    // The importer holds BEGIN IMMEDIATE here, so the comparison and subsequent
+    // apply share one snapshot with no intervening external writer.
+    if sqlite_data_version(conn)? != guard.data_version
+        && catalog_fingerprint(conn)? != guard.catalog_fingerprint
+    {
+        return Err(PreparedCatalogChanged.into());
     }
     for (folder_path, expected_fingerprint) in &guard.folders {
         let folder = Path::new(folder_path);
@@ -743,6 +754,7 @@ pub(crate) fn build_snapshot(
         }
         drop(rows);
         drop(statement);
+        hash_authoritative_album_ratings(conn, &mut catalog_hasher)?;
         if sqlite_data_version(conn)? != initial_data_version {
             bail!("The active catalog changed while its safe snapshot was being built. Try again");
         }
@@ -967,6 +979,7 @@ pub(crate) fn build_batch_snapshot(
         }
         drop(rows);
         drop(statement);
+        hash_authoritative_album_ratings(conn, &mut catalog_hasher)?;
         if sqlite_data_version(conn)? != initial_data_version {
             bail!("The active catalog changed while its safe snapshot was being built. Try again");
         }
@@ -1143,6 +1156,7 @@ fn catalog_fingerprint_with_data_version(conn: &Connection) -> Result<(CatalogFi
     }
     drop(rows);
     drop(statement);
+    hash_authoritative_album_ratings(conn, &mut hasher)?;
     let completed_import_revision = completed_import_revision(conn)?;
     if sqlite_data_version(conn)? != initial_data_version {
         bail!("The active catalog changed while it was being verified. Try again");
@@ -1198,6 +1212,26 @@ fn hash_record(hasher: &mut Sha256, values: &[String]) {
         hasher.update((value.len() as u64).to_le_bytes());
         hasher.update(value.as_bytes());
     }
+}
+
+fn hash_authoritative_album_ratings(conn: &Connection, hasher: &mut Sha256) -> Result<()> {
+    // Album ratings can be edited independently of the older per-track values.
+    // Their authoritative values must not be overwritten by a prepared import.
+    hasher.update(b"authoritative-album-ratings-v1");
+    let mut statement = conn.prepare("SELECT id, album_rating FROM albums ORDER BY id")?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let rating: Option<i32> = row.get(1)?;
+        hash_record(
+            hasher,
+            &[
+                id,
+                rating.map(|value| value.to_string()).unwrap_or_default(),
+            ],
+        );
+    }
+    Ok(())
 }
 
 fn completed_import_revision(conn: &Connection) -> Result<i64> {
@@ -3035,18 +3069,130 @@ mod tests {
 
         let other = Connection::open(&database).expect("second connection");
         other
+            .execute_batch(
+                "CREATE TABLE provider_cache (value TEXT);
+                 INSERT INTO provider_cache VALUES ('portrait');
+                 INSERT INTO import_runs VALUES (3, 'running');
+                 INSERT INTO import_runs VALUES (4, 'failed');
+                 UPDATE tracks SET title = title;",
+            )
+            .expect("external writes that do not change the reviewed catalog");
+        assert_ne!(sqlite_data_version(&conn).unwrap(), guard.data_version);
+        let tx = conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .expect("immediate apply transaction");
+        ensure_source_apply_guard(&tx, Some(&guard))
+            .expect("external cache and bookkeeping writes must not invalidate the import");
+        tx.rollback().unwrap();
+
+        other
             .execute(
                 "UPDATE tracks SET title = 'Changed elsewhere' WHERE id = 1",
                 [],
             )
             .expect("external catalog change");
-        drop(other);
         let tx = conn
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .expect("immediate apply transaction");
         let error = ensure_source_apply_guard(&tx, Some(&guard))
             .expect_err("external catalog commit must invalidate apply guard");
         assert!(error.to_string().contains("active catalog changed"));
+        assert!(error.downcast_ref::<PreparedCatalogChanged>().is_some());
+        tx.rollback().unwrap();
+
+        other
+            .execute(
+                "UPDATE tracks SET title = 'Outside', normalized_rating = 100 WHERE id = 1",
+                [],
+            )
+            .expect("external rating change");
+        let tx = conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        assert!(ensure_source_apply_guard(&tx, Some(&guard))
+            .unwrap_err()
+            .downcast_ref::<PreparedCatalogChanged>()
+            .is_some());
+    }
+
+    fn empty_catalog_apply_guard_fixture() -> (tempfile::TempDir, Connection, SourceApplyGuard) {
+        let temp = tempdir().unwrap();
+        let album = temp.path().join("Album");
+        fs::create_dir(&album).unwrap();
+        write_tagged_mp3(&album.join("01.mp3"), "Album");
+        let conn = Connection::open(temp.path().join("catalog.sqlite3")).unwrap();
+        create_catalog(&conn);
+        conn.execute(
+            "INSERT INTO albums (id, album_rating) VALUES ('retained', 80)",
+            [],
+        )
+        .unwrap();
+        let output = temp
+            .path()
+            .join(SNAPSHOT_DIRECTORY)
+            .join("album-folder-guard.tsv");
+        build_snapshot(
+            &conn,
+            &album,
+            &output,
+            &AtomicBool::new(false),
+            &mut |_, _, _| {},
+        )
+        .unwrap();
+        let guard = prepare_source_apply_guard(&conn, output.to_string_lossy().as_ref())
+            .unwrap()
+            .unwrap();
+        (temp, conn, guard)
+    }
+
+    #[test]
+    fn apply_guard_rejects_a_completed_import_even_when_track_content_is_unchanged() {
+        let (temp, mut conn, guard) = empty_catalog_apply_guard_fixture();
+        let other = Connection::open(temp.path().join("catalog.sqlite3")).unwrap();
+        other
+            .execute("INSERT INTO import_runs VALUES (2, 'completed')", [])
+            .unwrap();
+        let tx = conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        assert!(ensure_source_apply_guard(&tx, Some(&guard))
+            .unwrap_err()
+            .downcast_ref::<PreparedCatalogChanged>()
+            .is_some());
+    }
+
+    #[test]
+    fn apply_guard_rejects_an_independent_authoritative_album_rating_edit() {
+        let (temp, mut conn, guard) = empty_catalog_apply_guard_fixture();
+        let other = Connection::open(temp.path().join("catalog.sqlite3")).unwrap();
+        other
+            .execute(
+                "UPDATE albums SET album_rating = 90 WHERE id = 'retained'",
+                [],
+            )
+            .unwrap();
+        let tx = conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        assert!(ensure_source_apply_guard(&tx, Some(&guard))
+            .unwrap_err()
+            .downcast_ref::<PreparedCatalogChanged>()
+            .is_some());
+    }
+
+    #[test]
+    fn apply_guard_still_checks_source_files_after_an_unrelated_external_write() {
+        let (temp, mut conn, guard) = empty_catalog_apply_guard_fixture();
+        let other = Connection::open(temp.path().join("catalog.sqlite3")).unwrap();
+        other
+            .execute("INSERT INTO import_runs VALUES (2, 'running')", [])
+            .unwrap();
+        fs::write(temp.path().join("Album/01.mp3"), b"changed source").unwrap();
+        let tx = conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        let error = ensure_source_apply_guard(&tx, Some(&guard)).unwrap_err();
+        assert!(error.to_string().contains("tagged album folder changed"));
     }
 
     #[test]

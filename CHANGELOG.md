@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.189.2] - 2026-10-13
+
+### Fixed
+- Prevent unrelated writes from another SQLite connection during the recovery backup from falsely rejecting a reviewed Aurora intake. A changed database data version now triggers a catalog-content, authoritative-album-rating and completed-import-revision check inside the immediate apply transaction. Real catalog edits and source/destination file changes still stop the import.
+- Report a genuine catalog conflict after verified destination rollback as `stalePlan`, allowing Aurora's existing bounded re-preview to compare the reviewed albums again. Retained, changed, or unverifiable destinations and ambiguous commit outcomes remain non-retryable recovery errors.
+
 ## [0.189.1] - 2026-10-13
 
 ### Fixed

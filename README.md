@@ -1,5 +1,15 @@
 # Music Library
 
+Music Library **0.189.2** fixes Aurora intake failing after the recovery backup
+when another connection writes unrelated cache or bookkeeping data. The final
+check compares the reviewed catalog content, authoritative album ratings and
+completed import revision inside the atomic write transaction; source and
+destination file checks remain enforced.
+A real catalog conflict can use Aurora's existing bounded re-preview only after
+all copied destinations have been safely rolled back. Changed or unverifiable
+copies remain a recovery error. Update Music Library, then preview the intake
+again; no Aurora update is required.
+
 Music Library **0.186.3** fixes overnight audio analysis stopping on MP2 audio
 stored with `.mp3` filenames and valid MP3s without a readable header duration.
 Individual file errors are saved in **Failed tracks** while the queue continues;

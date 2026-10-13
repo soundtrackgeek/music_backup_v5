@@ -2570,6 +2570,14 @@ fn verify_replacement_recovery(
     Ok(())
 }
 
+#[derive(Debug, thiserror::Error)]
+enum PrecommitCompensation {
+    #[error("Copied destination folders were removed after exact verification; sources remain")]
+    Verified,
+    #[error("Destination compensation retained changed or unverifiable folders: {0}")]
+    Retained(String),
+}
+
 fn compensate_precommit(
     error: anyhow::Error,
     published: &[PublishedAlbum],
@@ -2579,14 +2587,9 @@ fn compensate_precommit(
     let cleanup_errors = cleanup_published(published);
     if cleanup_errors.is_empty() {
         let _ = fs::remove_file(journal_path);
-        error.context(
-            "Copied destination folders were removed after exact verification; sources remain",
-        )
+        error.context(PrecommitCompensation::Verified)
     } else {
-        error.context(format!(
-            "Destination compensation retained changed or unverifiable folders: {}",
-            cleanup_errors.join("; ")
-        ))
+        error.context(PrecommitCompensation::Retained(cleanup_errors.join("; ")))
     }
 }
 
@@ -3942,6 +3945,19 @@ fn bridge_error_code(error: &anyhow::Error) -> &'static str {
     if database_is_busy(error) {
         return "databaseBusy";
     }
+    // A catalog conflict after publishing is safe to prepare again only after
+    // every copied destination was verified and compensated. Retained or
+    // ambiguous destinations must keep their non-retryable recovery error.
+    if error
+        .downcast_ref::<folder_sync::PreparedCatalogChanged>()
+        .is_some()
+    {
+        return match error.downcast_ref::<PrecommitCompensation>() {
+            Some(PrecommitCompensation::Verified) => "stalePlan",
+            Some(PrecommitCompensation::Retained(_)) => "transferFailed",
+            None => "importFailed",
+        };
+    }
     let message = format!("{error:#}").to_lowercase();
     if message.contains("protocol version") {
         "unsupportedProtocol"
@@ -4535,6 +4551,58 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn catalog_conflict_is_retryable_only_after_verified_destination_compensation() {
+        for mutation in 0..3 {
+            let changed_destination = mutation != 0;
+            let fixture = SelectionFixture::new();
+            let preview = fixture.preview();
+            let directory = plan_directory(
+                &bridge_app_data_dir().unwrap(),
+                preview["planId"].as_str().unwrap(),
+            )
+            .unwrap();
+            let plan: StoredPlan =
+                serde_json::from_slice(&fs::read(directory.join("plan.json")).unwrap()).unwrap();
+            let published = stage_and_publish(&plan, None).unwrap();
+            let destination = Path::new(&plan.albums[0].destination_path);
+            if mutation == 1 {
+                fs::write(destination.join("01.mp3"), b"externally changed copy").unwrap();
+            } else if mutation == 2 {
+                fs::remove_file(destination.join(STAGING_OWNER_FILE)).unwrap();
+            }
+            let journal = directory.join("apply-journal.json");
+            write_apply_journal(&journal, &plan.plan_id, "published").unwrap();
+            let error = compensate_precommit(
+                anyhow::Error::new(folder_sync::PreparedCatalogChanged)
+                    .context("The catalog apply failed; sources remain"),
+                &published,
+                Path::new(&plan.destination_root),
+                &journal,
+            );
+            assert_eq!(
+                bridge_error_code(&error),
+                if changed_destination {
+                    "transferFailed"
+                } else {
+                    "stalePlan"
+                }
+            );
+            assert_eq!(destination.exists(), changed_destination);
+            assert_eq!(journal.exists(), changed_destination);
+            for target in &fixture.targets {
+                assert!(Path::new(&target.source_path).join("01.mp3").is_file());
+            }
+        }
+
+        let ambiguous = anyhow::Error::new(folder_sync::PreparedCatalogChanged)
+            .context("Could not verify the catalog commit outcome; published destinations and sources were retained for retry");
+        assert_ne!(bridge_error_code(&ambiguous), "stalePlan");
+        let permanent =
+            anyhow!("injected catalog failure").context(PrecommitCompensation::Verified);
+        assert_ne!(bridge_error_code(&permanent), "stalePlan");
     }
 
     #[test]
