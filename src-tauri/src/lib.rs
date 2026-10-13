@@ -734,6 +734,16 @@ async fn list_saved_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, 
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+async fn refresh_saved_smart_playlists(app: AppHandle) -> Result<Vec<ai::SavedPlaylist>, String> {
+    tauri::async_runtime::spawn_blocking(move || db::refresh_saved_smart_playlists_for_app(&app))
+        .await
+        .map_err(|error| format!("Saved Smart playlist refresh task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 async fn save_playlist(
     app: AppHandle,
     input: ai::SavePlaylistRequest,

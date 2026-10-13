@@ -9,8 +9,10 @@ older Music Library versions can discard fields they do not understand when savi
 Create or edit Smart rules in Playlists. Song rules match individual songs. Album
 rules match albums and collect their songs in disc/track order. The rules use the
 native `BrowseRequest`, with optional `smartSettings`: `trackLimit` (1–10,000) and
-`refreshPolicy` (`library` or `manual`). Automatic rules refresh when opening the
-playlist workspace and after library changes; manual rules refresh explicitly.
+`refreshPolicy` (`library` or `manual`). The playlist workspace reads saved snapshots
+first, then refreshes automatic rules in the background while the names and saved
+tracks remain available. Automatic rules also refresh after library changes;
+manual rules refresh explicitly.
 Empty results are valid. Existing recipes without settings keep their prior behavior.
 Both editors preserve advanced native filters and reject saving a stale revision.
 The lists reload on focus so playlists created in the other app become visible.

@@ -23,7 +23,6 @@ import {
   buildPlaylist,
   deleteSavedPlaylist,
   exportPlaylist,
-  listSavedPlaylists,
   refreshSmartPlaylist,
   savePlaylist,
   setPlaylistAutomation,
@@ -40,6 +39,7 @@ import { AiMarkdownExportButton } from "../components/AiMarkdownExportButton";
 import { ExportResultStatus } from "../components/ExportResultStatus";
 import { PageLunaCommandArea } from "../components/SearchProgressiveDisclosure";
 import { MixtapeBuilder, MixtapeReview } from "../components/MixtapeBuilder";
+import { useSavedPlaylists } from "./playlists/useSavedPlaylists";
 
 export type PlaylistBuilderLaunch = {
   id: number;
@@ -94,13 +94,16 @@ export function PlaylistBuilderWorkspace({
 }: PlaylistBuilderWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"luna" | "mixtape" | "journey">("luna");
-  const sonicJourney = useSonicJourney(() => { void listSavedPlaylists().then(setSavedPlaylists).catch(e => setSavedError(String(e))); });
+  const {
+    savedPlaylists, updateSavedPlaylists: setSavedPlaylists, includeSavedPlaylist, reloadSavedPlaylists,
+    isLoading: isLoadingSaved, isRefreshingSmart, loadError: savedLoadError,
+  } = useSavedPlaylists();
+  const sonicJourney = useSonicJourney(reloadSavedPlaylists);
   const [mixtapeRevision, setMixtapeRevision] = useState(0);
   const [playlist, setPlaylist] = useState<AiPlaylist | null>(null);
   const [name, setName] = useState("");
   const [activeSavedId, setActiveSavedId] = useState<number | null>(null);
   const [activeSavedRevision, setActiveSavedRevision] = useState<string | null>(null);
-  const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
   const [smartEditor, setSmartEditor] = useState<"new" | "edit" | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -135,33 +138,8 @@ export function PlaylistBuilderWorkspace({
   }, [launch?.id]);
 
   useEffect(() => {
-    let disposed = false;
-    const refresh = () => { void listSavedPlaylists()
-      .then((saved) => {
-        if (!disposed) setSavedPlaylists(saved);
-      })
-      .catch((loadError) => {
-        if (!disposed) {
-          setSavedError(
-            loadError instanceof Error ? loadError.message : String(loadError),
-          );
-        }
-      }); };
-    refresh();
-    window.addEventListener("focus", refresh);
-    return () => {
-      disposed = true;
-      window.removeEventListener("focus", refresh);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!savedPlaylistToOpen) return;
-    setSavedPlaylists((previous) =>
-      previous.some((saved) => saved.id === savedPlaylistToOpen.id)
-        ? previous
-        : [savedPlaylistToOpen, ...previous],
-    );
+    includeSavedPlaylist(savedPlaylistToOpen);
     openSaved(savedPlaylistToOpen);
   }, [savedPlaylistToOpen?.id]);
 
@@ -776,14 +754,30 @@ export function PlaylistBuilderWorkspace({
               <span>Saved playlist library</span>
               <h2>Saved playlists</h2>
             </div>
-            <strong>{savedPlaylists.length}</strong>
+            <strong>{savedPlaylists.length === 0 && (isLoadingSaved || savedLoadError) ? "—" : savedPlaylists.length}</strong>
           </header>
           <p>
             Reopen the exact track order and mixtape locks without spending tokens.
           </p>
           {savedError ? <p className="error-message">{savedError}</p> : null}
+          {savedLoadError ? (
+            <div>
+              <p className="error-message" role="alert">{savedLoadError}</p>
+              <button type="button" className="secondary-button" onClick={reloadSavedPlaylists}>Retry loading playlists</button>
+            </div>
+          ) : null}
+          {isRefreshingSmart ? <p role="status">Refreshing Smart playlists…</p> : null}
           <div className="playlist-saved-list">
-            {savedPlaylists.length === 0 ? (
+            {savedPlaylists.length === 0 && isLoadingSaved ? (
+              <div className="playlist-empty-state" role="status">
+                <RefreshCw size={21} className="spin" />
+                <strong>Loading playlists…</strong>
+              </div>
+            ) : savedPlaylists.length === 0 && savedLoadError ? (
+              <div className="playlist-empty-state">
+                <strong>Unable to load saved playlists.</strong>
+              </div>
+            ) : savedPlaylists.length === 0 ? (
               <div className="playlist-empty-state">
                 <Clock3 size={21} />
                 <strong>No saved playlists yet.</strong>

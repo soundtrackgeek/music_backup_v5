@@ -285,6 +285,7 @@ export const commands = {
 	testJevConnection: () => __TAURI_INVOKE<AiConnectionTest>("test_jev_connection"),
 	exportAiMarkdown: (input: AiMarkdownExportRequest) => __TAURI_INVOKE<ExportResult>("export_ai_markdown", { input }),
 	listSavedPlaylists: () => __TAURI_INVOKE<SavedPlaylist_Serialize[]>("list_saved_playlists"),
+	refreshSavedSmartPlaylists: () => __TAURI_INVOKE<SavedPlaylist_Serialize[]>("refresh_saved_smart_playlists"),
 	savePlaylist: (input: SavePlaylistRequest_Deserialize) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_playlist", { input }),
 	saveSmartPlaylist: (input: SaveSmartPlaylistRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_smart_playlist", { input }),
 	deleteSavedPlaylist: (id: number) => __TAURI_INVOKE<null>("delete_saved_playlist", { id }),

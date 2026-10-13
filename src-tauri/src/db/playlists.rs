@@ -1051,9 +1051,21 @@ pub fn build_playlist_for_app(app: &AppHandle, plan: AiPlaylistPlan) -> Result<A
 
 #[cfg(not(test))]
 pub fn list_saved_playlists_for_app(app: &AppHandle) -> Result<Vec<SavedPlaylist>> {
-    let (conn, _) = open(app)?;
-    refresh_all_smart_playlists_for_connection(&conn)?;
+    // Opening the page must only read the saved snapshots. Rule evaluation can
+    // scan the whole catalog and belongs in the separate background command.
+    let (conn, _) = open_read(app)?;
     list_saved_playlists(&conn)
+}
+
+fn refresh_saved_smart_playlists(conn: &Connection) -> Result<Vec<SavedPlaylist>> {
+    refresh_all_smart_playlists_for_connection(conn)?;
+    list_saved_playlists(conn)
+}
+
+#[cfg(not(test))]
+pub fn refresh_saved_smart_playlists_for_app(app: &AppHandle) -> Result<Vec<SavedPlaylist>> {
+    let (conn, _) = open(app)?;
+    refresh_saved_smart_playlists(&conn)
 }
 
 #[cfg(not(test))]
@@ -1172,6 +1184,42 @@ pub fn export_playlist_for_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_playlist_listing_reads_snapshots_without_evaluating_smart_rules() {
+        let conn = seeded_connection();
+        let saved = save_smart_playlist_on(
+            &conn,
+            crate::ai::SaveSmartPlaylistRequest {
+                id: None,
+                expected_updated_at: None,
+                name: "Instant saved list".into(),
+                request: test_playlist_plan().request,
+                settings: crate::ai::SmartPlaylistSettings {
+                    track_limit: 100,
+                    refresh_policy: "library".into(),
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.automation.desired_count, 1);
+        // The rules would now produce no matches, but listing must return the
+        // exact stored snapshot using a read-only connection without writes.
+        conn.execute("UPDATE tracks SET canonical_genre='Other',genre_normalized='other'", [])
+            .unwrap();
+        conn.execute_batch("PRAGMA query_only = ON").unwrap();
+        let changes = conn.total_changes();
+        let listed = list_saved_playlists(&conn).unwrap();
+        assert_eq!(serde_json::to_value(&listed[0]).unwrap(), serde_json::to_value(&saved).unwrap());
+        assert_eq!(conn.total_changes(), changes);
+
+        conn.execute_batch("PRAGMA query_only = OFF").unwrap();
+        let refreshed = refresh_saved_smart_playlists(&conn).unwrap();
+        assert_eq!(refreshed.len(), 1);
+        assert_eq!(refreshed[0].name, saved.name);
+        assert_eq!(refreshed[0].automation.desired_count, 0);
+        assert!(refreshed[0].playlist.tracks.is_empty());
+    }
 
     #[test]
     fn shared_smart_rules_roundtrip_limits_manual_refresh_and_empty_matches() {

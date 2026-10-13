@@ -1,13 +1,126 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PlaylistBuilderWorkspace } from "./PlaylistBuilderWorkspace";
 import { createRequest } from "../app/requests";
 import { localSearchPlaylistFromResponse } from "../app/searchPlaylist";
-import type { BrowseResponse, BrowseRow } from "../types";
+import type { BrowseResponse, BrowseRow, SavedPlaylist } from "../types";
 import { mockVirtualLayout } from "../test/virtualLayout";
+import * as backend from "../backend";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
+async function smartPlaylistFixture(): Promise<SavedPlaylist> {
+  return {
+    id: 9001, name: "AOR Loved",
+    playlist: await backend.buildPlaylist({ prompt: "Loved AOR", sourceRequest: null }),
+    libraryImportRunId: null, libraryImportedAt: null,
+    libraryAlbumCount: 1, libraryTrackCount: 2,
+    createdAt: "2026-10-13T10:00:00Z", updatedAt: "2026-10-13T10:00:00Z",
+    automation: { smart: true, desiredCount: 2, lastEvaluatedAt: null, lastError: null },
+  };
+}
 
 describe("playlist builder workspace", () => {
+  it("shows loading rather than an empty library until the first list completes", async () => {
+    const list = deferred<SavedPlaylist[]>();
+    vi.spyOn(backend, "listSavedPlaylists").mockReturnValue(list.promise);
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    const panel = screen.getByLabelText("Saved playlists");
+    expect(within(panel).getByRole("status")).toHaveTextContent("Loading playlists…");
+    expect(panel.querySelector("header > strong")).toHaveTextContent("—");
+    expect(screen.queryByText("No saved playlists yet.")).not.toBeInTheDocument();
+    await act(async () => list.resolve([]));
+    expect(screen.getByText("No saved playlists yet.")).toBeVisible();
+    expect(panel.querySelector("header > strong")).toHaveTextContent("0");
+  });
+
+  it("opens saved tracks while Smart refresh is still pending and deduplicates focus events", async () => {
+    const saved = await smartPlaylistFixture();
+    const refresh = deferred<SavedPlaylist[]>();
+    const list = vi.spyOn(backend, "listSavedPlaylists").mockResolvedValue([saved]);
+    const evaluate = vi.spyOn(backend, "refreshSavedSmartPlaylists").mockReturnValue(refresh.promise);
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    const button = await screen.findByRole("button", { name: /^AOR Loved/ });
+    expect(screen.getByRole("status")).toHaveTextContent("Refreshing Smart playlists…");
+    fireEvent.click(button);
+    expect(screen.getByLabelText("Playlist name")).toHaveValue("AOR Loved");
+    expect(screen.getByText("What Have I Done to Deserve This?")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "My current draft" } });
+    act(() => { window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("focus")); });
+    expect(list).toHaveBeenCalledOnce();
+    expect(evaluate).toHaveBeenCalledOnce();
+    await act(async () => refresh.resolve([{ ...saved, automation: { ...saved.automation, desiredCount: 197 } }]));
+    expect(screen.getByRole("button", { name: /^AOR Loved/ })).toHaveTextContent("197 matching tracks");
+    expect(screen.queryByText("Refreshing Smart playlists…")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Playlist name")).toHaveValue("My current draft");
+  });
+
+  it("keeps manual Smart playlists out of the automatic background refresh", async () => {
+    const saved = await smartPlaylistFixture();
+    saved.playlist.smartSettings = { trackLimit: 100, refreshPolicy: "manual" };
+    vi.spyOn(backend, "listSavedPlaylists").mockResolvedValue([saved]);
+    const refresh = vi.spyOn(backend, "refreshSavedSmartPlaylists");
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    await screen.findByRole("button", { name: /^AOR Loved/ });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByText("Refreshing Smart playlists…")).not.toBeInTheDocument();
+  });
+
+  it("loads the rest of the library when opening a saved history item during the initial read", async () => {
+    const saved = await smartPlaylistFixture();
+    saved.automation.smart = false;
+    const other = { ...saved, id: 9002, name: "Other saved playlist" };
+    const list = deferred<SavedPlaylist[]>();
+    vi.spyOn(backend, "listSavedPlaylists").mockReturnValue(list.promise);
+    render(<PlaylistBuilderWorkspace isAvailable savedPlaylistToOpen={saved} />);
+    expect(screen.getByLabelText("Playlist name")).toHaveValue("AOR Loved");
+    await act(async () => list.resolve([saved, other]));
+    expect(screen.getByRole("button", { name: /^Other saved playlist/ })).toBeVisible();
+    expect(screen.getByLabelText("Playlist name")).toHaveValue("AOR Loved");
+  });
+
+  it("reports a failed list without claiming it is empty and allows retry", async () => {
+    vi.spyOn(backend, "listSavedPlaylists")
+      .mockRejectedValueOnce(new Error("Catalog is temporarily busy"))
+      .mockResolvedValueOnce([]);
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Catalog is temporarily busy");
+    expect(screen.queryByText("No saved playlists yet.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading playlists" }));
+    expect(await screen.findByText("No saved playlists yet.")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retains saved playlists when background rule evaluation fails", async () => {
+    const saved = await smartPlaylistFixture();
+    vi.spyOn(backend, "listSavedPlaylists").mockResolvedValue([saved]);
+    vi.spyOn(backend, "refreshSavedSmartPlaylists").mockRejectedValue(new Error("Rule refresh failed"));
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Rule refresh failed");
+    fireEvent.click(screen.getByRole("button", { name: /^AOR Loved/ }));
+    expect(screen.getByLabelText("Playlist name")).toHaveValue("AOR Loved");
+    expect(screen.queryByText("No saved playlists yet.")).not.toBeInTheDocument();
+  });
+
+  it("does not restore a deleted playlist from a late background response", async () => {
+    const saved = await smartPlaylistFixture();
+    const refresh = deferred<SavedPlaylist[]>();
+    vi.spyOn(backend, "listSavedPlaylists").mockResolvedValue([saved]);
+    vi.spyOn(backend, "refreshSavedSmartPlaylists").mockReturnValue(refresh.promise);
+    vi.spyOn(backend, "deleteSavedPlaylist").mockResolvedValue(undefined);
+    render(<PlaylistBuilderWorkspace isAvailable />);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete AOR Loved" }));
+    await screen.findByText("No saved playlists yet.");
+    await act(async () => refresh.resolve([saved]));
+    expect(screen.queryByRole("button", { name: /^AOR Loved/ })).not.toBeInTheDocument();
+    expect(screen.getByText("No saved playlists yet.")).toBeVisible();
+  });
+
   it("keeps a saved sonic journey out of Smart refresh and identifies its local analysis", async () => {
     const request = createRequest("tracks");
     const draft = localSearchPlaylistFromResponse("Journey", request, {

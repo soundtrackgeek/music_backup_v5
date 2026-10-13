@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.189.1] - 2026-10-13
+
+### Fixed
+- Show saved playlists immediately from their stored snapshots instead of waiting for every Smart playlist to scan the catalog. Automatic Smart rules refresh separately in the background, preserving manual refresh policies and the current draft.
+- Show **Loading playlists…** during the initial read, distinguish load failures from an empty library, and allow retry. Keep existing playlists visible during refresh and prevent late responses from undoing a save or deletion.
+
 ## [0.189.0] - 2026-10-13
 
 ### Added

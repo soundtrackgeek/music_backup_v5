@@ -3970,6 +3970,18 @@ export async function listSavedPlaylists(): Promise<SavedPlaylist[]> {
   return commands.listSavedPlaylists().then(completed);
 }
 
+let savedSmartRefresh: Promise<SavedPlaylist[]> | null = null;
+
+export function refreshSavedSmartPlaylists(): Promise<SavedPlaylist[]> {
+  // Focus events and remounts share an outstanding evaluation instead of
+  // starting another full catalog scan.
+  if (savedSmartRefresh) return savedSmartRefresh;
+  savedSmartRefresh = (isTauriRuntime()
+    ? commands.refreshSavedSmartPlaylists().then(completed)
+    : listSavedPlaylists()).finally(() => { savedSmartRefresh = null; });
+  return savedSmartRefresh;
+}
+
 export async function saveSmartPlaylist(input: import("./bindings").SaveSmartPlaylistRequest): Promise<SavedPlaylist> {
   if (isTauriRuntime()) return commands.saveSmartPlaylist(input).then(completed);
   const draft = await buildPlaylist({ prompt: input.name, sourceRequest: input.request as BrowseRequest });
