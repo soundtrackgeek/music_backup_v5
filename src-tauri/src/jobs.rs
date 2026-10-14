@@ -103,7 +103,12 @@ pub fn validate_checkpoint(expected: &str, actual: Option<&str>) -> Result<()> {
 
 pub fn list(conn: &Connection) -> Result<Vec<Job>> {
     // Bound finished history, but always include all actionable jobs.
-    let mut stmt = conn.prepare(&format!("SELECT {COLUMNS} FROM jobs WHERE state IN ('queued','running','pausing','paused','cancelling','failed') OR id IN (SELECT id FROM jobs ORDER BY id DESC LIMIT 100) ORDER BY id DESC LIMIT 300"))?;
+    // The analysis panel must still find the last saved job after unrelated work
+    // pushes it out of Activity Center's bounded recent-history window.
+    let mut stmt = conn.prepare(&format!("SELECT {COLUMNS} FROM jobs WHERE id IN (
+        SELECT id FROM (SELECT id FROM jobs WHERE state IN ('queued','running','pausing','paused','cancelling','failed') OR id IN (SELECT id FROM jobs ORDER BY id DESC LIMIT 100) ORDER BY id DESC LIMIT 300)
+        UNION SELECT MAX(id) FROM jobs WHERE kind IN ('sonicAnalysis','sonicReuse') GROUP BY kind
+        ) ORDER BY id DESC"))?;
     let rows = stmt
         .query_map([], read)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -239,6 +244,20 @@ mod tests {
         let c = Connection::open_in_memory().unwrap();
         ensure_schema(&c).unwrap();
         c
+    }
+    #[test]
+    fn latest_analysis_remains_visible_after_hundreds_of_unrelated_jobs() {
+        let c=db();
+        let sonic=enqueue(&c,"sonicAnalysis","Audio analysis","{}",true,true,true,None).unwrap();
+        c.execute("UPDATE jobs SET state='cancelled' WHERE id=?1",[sonic]).unwrap();
+        for _ in 0..350 {
+            let id=enqueue(&c,"unrelated","Other work","{}",false,false,false,None).unwrap();
+            c.execute("UPDATE jobs SET state='completed' WHERE id=?1",[id]).unwrap();
+        }
+        let visible=list(&c).unwrap();
+        assert!(visible.iter().any(|j|j.id==sonic));
+        assert_eq!(visible.len(),101);
+        assert_eq!(visible.first().unwrap().id,351);
     }
     #[test]
     fn claims_once_and_serializes_each_kind() {

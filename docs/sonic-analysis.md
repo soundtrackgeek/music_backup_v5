@@ -4,7 +4,16 @@ Music Library owns analysis and Aurora reads completed results. MP3 files and
 the music catalog are never rewritten by analysis. Start with an album's
 **Analyze this album** button, or **Tools → Audio analysis → Analyze favorites**.
 Favorites means loved tracks or tracks rated at least four stars. **Analyze
-library** queues every cataloged MP3. New imports need a new analysis batch.
+library** queues every cataloged MP3. An unfinished job of the same scope is
+continued with its original job/batch identity. After a scan completes, starting
+analysis again creates a fresh batch to pick up new imports and changed files.
+
+**Continue analysis** in this panel resumes the saved paused, failed or cancelled
+job directly. Its progress, current message and failure reason remain visible;
+**Pause analysis** stops at a safe checkpoint. These controls load independently
+of coverage, so a slow coverage read does not hide continuation. Unchanged tracks
+reuse completed results. Edited scheduling settings are saved before continuing.
+Activity Center offers the same controls and stays synchronized with this panel.
 
 ## Idle time and scheduling
 
@@ -31,6 +40,28 @@ multiple cores. Windows gives that process below-normal priority. Music Library
 continues to handle other Activity Center jobs while analysis waits. Pause,
 resume, cancel, and retry in Activity Center. Completed files survive pauses,
 restarts, cancellation, and failed batches; retry retains completed checkpoints.
+
+### Queue storage
+
+`sonic-work.sqlite3` stores file queues and checkpoints, while
+`music-analysis.sqlite3` stores the actual reusable audio results. Older versions
+retained a separate full-library queue for every new analysis job, including
+cancelled runs; those repeated paths and their indexes could occupy many GB.
+
+Before processing more tracks, Music Library 0.190.2 reclaims older superseded
+queues. It keeps every live/paused queue and the newest queue for each scope and
+album. Completed analysis, unresolved failures, schedule settings and job history
+are retained. Retry on an older reclaimed job rebuilds its queue against the
+current catalog and reuses saved results for unchanged files. Its progress can
+restart while cached tracks are checked; no completed audio analysis is discarded.
+
+Cleanup reports its progress in the panel and Activity Center, deletes in durable
+chunks and resumes safely after interruption. Large amounts of free space are
+compacted; subsequent reclamation uses incremental vacuum. The first cleanup of
+a large database can take several minutes. Existing readers can defer physical
+compaction, and freed pages remain reusable until it can finish. MP3 files and
+the catalog are not changed by this maintenance.
+If another reader deferred compaction, pausing and continuing analysis retries it.
 
 ### Remaining time and failures
 

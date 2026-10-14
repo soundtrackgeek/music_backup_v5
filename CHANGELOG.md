@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.190.2] - 2026-10-14
+
+### Fixed
+- Put **Continue analysis**, saved queue progress, current errors and **Pause analysis** directly in Tools → Audio analysis. Saved jobs stay discoverable beyond the recent Activity history window. Continuation loads independently of slower coverage queries; Activity Center changes update the panel without overlapping coverage scans.
+- Reuse the existing unfinished job and batch when **Analyze library**, favorites, album analysis or reuse verification is started again. Serialize job selection/enqueueing, retain completed checkpoints, and reject overlapping different scopes.
+- Reclaim superseded historical queues before analysis continues, retaining all live/paused queues and the newest queue per scope/album. Historical job Retry rebuilds a reclaimed snapshot and reuses saved audio features. Chunked cleanup is restartable; large free space is compacted and subsequent reclamation uses incremental vacuum. Completed analysis, source files, scheduling and unresolved failure records are preserved.
+
 ## [0.190.1] - 2026-10-14
 
 ### Fixed

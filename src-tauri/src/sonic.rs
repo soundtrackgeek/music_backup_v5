@@ -188,6 +188,9 @@ pub(crate) fn results(dir: &Path) -> Result<Connection> {
 pub(crate) fn work(dir: &Path) -> Result<Connection> {
     let c = Connection::open(dir.join("sonic-work.sqlite3"))?;
     c.busy_timeout(Duration::from_secs(5))?;
+    if c.pragma_query_value(None, "page_count", |r| r.get::<_, i64>(0))? == 0 {
+        c.execute_batch("PRAGMA auto_vacuum=INCREMENTAL;")?;
+    }
     c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       CREATE TABLE IF NOT EXISTS sonic_batches(id TEXT PRIMARY KEY,prepared INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS sonic_items(batch_id TEXT NOT NULL,track_key TEXT NOT NULL,directory TEXT NOT NULL,filename TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT,PRIMARY KEY(batch_id,track_key));
@@ -627,6 +630,9 @@ fn run_at(
         |r| r.get(0),
     )?;
     let mut reported = Instant::now() - Duration::from_secs(5);
+    crate::sonic_queue::maintain(dir, &mut w, &batch, stop, &|message| {
+        report(completed, total, message, None);
+    })?;
     let mut waiting = false;
     let reuse_only = request.scope == "reuse";
     let mut estimate = AnalysisEstimate::default();
@@ -2111,6 +2117,38 @@ mod tests {
         assert_eq!(result["total"], 3);
         assert_eq!(result["failedCount"], 0);
         assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+    }
+
+    #[test]
+    fn a_reclaimed_historical_queue_rebuilds_on_retry_without_reanalyzing_saved_audio() {
+        let dir = fixture();
+        let j = Connection::open(dir.path().join("jobs.sqlite3")).unwrap();
+        crate::jobs::ensure_schema(&j).unwrap();
+        let make_request = |batch: &str| AnalyzeRequest {
+            scope: "all".into(), album_id: None, batch_id: Some(batch.into()),
+        };
+        for batch in ["old", "latest"] {
+            let id = crate::jobs::enqueue(&j,"sonicAnalysis","Audio analysis",
+                &serde_json::to_string(&make_request(batch)).unwrap(),true,true,true,None).unwrap();
+            j.execute("UPDATE jobs SET state='cancelled' WHERE id=?1",[id]).unwrap();
+        }
+        let w = work(dir.path()).unwrap();
+        w.execute_batch("INSERT INTO sonic_batches VALUES('old',1);
+            INSERT INTO sonic_items VALUES('old','old-checkpoint','folder','song.mp3','done',NULL);").unwrap();
+        let s = results(dir.path()).unwrap();
+        let saved: Vec<(String,String)> = s.prepare("SELECT track_key,analyzed_at FROM sonic_tracks ORDER BY track_key").unwrap()
+            .query_map([],|r|Ok((r.get(0)?,r.get(1)?))).unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        for batch in ["latest", "old"] {
+            run_at(dir.path(), make_request(batch), &||false, &|_,_,_,_|{}, &||Some(301), &||12).unwrap();
+            assert_eq!(w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=?1 AND state='done'",[batch],|r|r.get::<_,i64>(0)).unwrap(),3);
+            if batch == "latest" {
+                assert_eq!(w.query_row("SELECT prepared FROM sonic_batches WHERE id='old'",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+                crate::jobs::control(&j,1,"retry").unwrap();
+            }
+        }
+        let after: Vec<(String,String)> = s.prepare("SELECT track_key,analyzed_at FROM sonic_tracks ORDER BY track_key").unwrap()
+            .query_map([],|r|Ok((r.get(0)?,r.get(1)?))).unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        assert_eq!(saved,after);
     }
 
     #[test]

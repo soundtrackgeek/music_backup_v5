@@ -1,5 +1,15 @@
 # Music Library
 
+Music Library **0.190.2** adds **Tools → Audio analysis → Continue analysis**
+with saved progress, errors and a Pause button directly in the analysis panel.
+Continue works while coverage is loading. **Analyze library** also resumes an
+unfinished library job instead of creating another full-library queue.
+Before analysis continues, superseded historical queues are reclaimed and large
+amounts of free queue storage are compacted. Current/paused checkpoints, failed
+track records and completed analysis are preserved; older job history remains
+available and Retry rebuilds a reclaimed queue using saved results. The first
+cleanup of a large work database can take several minutes.
+
 Music Library **0.190.1** and Aurora **0.37.1** keep listening history separate
 for reviewed same-name artist profiles. Use **Artists → Split artist** to assign
 albums and add a distinguishing description, for example for Creed or The Kids.

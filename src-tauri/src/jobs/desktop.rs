@@ -308,16 +308,24 @@ fn emit(app: &AppHandle) {
 }
 pub fn submit(app: &AppHandle, kind: &str, payload: Value) -> Result<i64> {
     let h = registration(kind)?;
-    let id = enqueue(
-        &app.state::<JobSystem>().open()?,
-        kind,
-        h.label,
-        &payload.to_string(),
-        h.resumable,
-        h.cancel,
-        h.retry,
-        None,
-    )?;
+    let id = if matches!(kind, "sonicAnalysis" | "sonicReuse") {
+        crate::sonic_queue::enqueue(
+            &app.state::<JobSystem>().open()?,
+            kind,
+            &serde_json::from_value(payload)?,
+        )?
+    } else {
+        enqueue(
+            &app.state::<JobSystem>().open()?,
+            kind,
+            h.label,
+            &payload.to_string(),
+            h.resumable,
+            h.cancel,
+            h.retry,
+            None,
+        )?
+    };
     emit(app);
     app.state::<JobSystem>().wake.notify_one();
     Ok(id)

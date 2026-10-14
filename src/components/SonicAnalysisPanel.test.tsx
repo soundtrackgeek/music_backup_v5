@@ -1,11 +1,96 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SonicAnalysisPanel } from "./SonicAnalysisPanel";
 import * as backend from "../backend/sonic";
+import * as activity from "../backend/activity";
 
 vi.mock("../backend/sonic", () => ({ getSonicStatus: vi.fn(), getSonicSeeds: vi.fn(), configureSonicSchedule: vi.fn(), startSonicAnalysis: vi.fn(), findSonicMatches: vi.fn(), saveSonicPlaylist: vi.fn() }));
-vi.mock("../backend/activity", () => ({ listenToActivityJobs: () => Promise.resolve(() => undefined) }));
+vi.mock("../backend/activity", () => ({ listActivityJobs: vi.fn(), controlActivityJob: vi.fn(), listenToActivityJobs: vi.fn() }));
+
+beforeEach(() => {
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([]);
+  vi.mocked(activity.listenToActivityJobs).mockResolvedValue(() => undefined);
+});
 afterEach(() => vi.resetAllMocks());
+const savedJob: activity.ActivityJob = { id: 560, kind: "sonicAnalysis", label: "Audio analysis", state: "failed", progress: 22, completed: 249274, total: 1108247, etaSeconds: null, message: "Saved checkpoint", error: "Storage failed", createdAt: "2026-10-14", updatedAt: "2026-10-14", resumable: true, canCancel: true, canRetry: true };
+
+it.each([["paused", "resume"], ["failed", "retry"], ["cancelled", "retry"]] as const)("continues %s analysis directly while coverage is still loading", async (state, action) => {
+  vi.mocked(backend.getSonicStatus).mockReturnValue(new Promise(() => undefined));
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([{ ...savedJob, state }]);
+  vi.mocked(activity.controlActivityJob).mockResolvedValue([{ ...savedJob, state: "queued" }]);
+  render(<SonicAnalysisPanel />);
+  fireEvent.click(await screen.findByRole("button", { name: "Continue analysis" }));
+  await waitFor(() => expect(activity.controlActivityJob).toHaveBeenCalledWith(560, action));
+  expect(backend.startSonicAnalysis).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Analysis queued" })).toBeDisabled();
+  expect(screen.getByText("249,274 of 1,108,247 queue entries checked")).toBeInTheDocument();
+});
+
+it("updates the saved job from Activity events and pauses it without creating another job", async () => {
+  vi.mocked(backend.getSonicStatus).mockReturnValue(new Promise(() => undefined));
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  let publish!: (jobs: activity.ActivityJob[]) => void;
+  vi.mocked(activity.listenToActivityJobs).mockImplementation(async handler => { publish = handler; return () => undefined; });
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([{ ...savedJob, state: "running" }]);
+  vi.mocked(activity.controlActivityJob).mockResolvedValue([{ ...savedJob, state: "pausing" }]);
+  render(<SonicAnalysisPanel />);
+  fireEvent.click(await screen.findByRole("button", { name: "Pause analysis" }));
+  await waitFor(() => expect(activity.controlActivityJob).toHaveBeenCalledWith(560, "pause"));
+  await act(async () => publish([{ ...savedJob, state: "paused" }]));
+  expect(screen.getByRole("button", { name: "Continue analysis" })).toBeEnabled();
+  expect(backend.getSonicStatus).toHaveBeenCalledTimes(1);
+});
+
+it("keeps coverage readers out of queue compaction and refreshes when analysis advances", async () => {
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  let publish!: (jobs: activity.ActivityJob[]) => void;
+  vi.mocked(activity.listenToActivityJobs).mockImplementation(async handler => { publish = handler; return () => undefined; });
+  render(<SonicAnalysisPanel />);
+  await screen.findByText("2 of 100 tracks analyzed · 98 pending · 0 failed");
+  await act(async () => publish([{ ...savedJob, state: "running", message: "Compacting audio analysis queue storage. Saved analysis is preserved." }]));
+  expect(backend.getSonicStatus).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(/Compacting audio analysis queue storage/)).toBeInTheDocument();
+  await act(async () => publish([{ ...savedJob, state: "running", message: "Analyzing next.mp3", updatedAt: "next" }]));
+  await waitFor(() => expect(backend.getSonicStatus).toHaveBeenCalledTimes(2));
+});
+
+it("does not offer an older failed scan after a newer scan completed", async () => {
+  vi.mocked(backend.getSonicStatus).mockReturnValue(new Promise(() => undefined));
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([{ ...savedJob, id: 561, state: "completed" }, savedJob]);
+  render(<SonicAnalysisPanel />);
+  await waitFor(() => expect(activity.listActivityJobs).toHaveBeenCalled());
+  expect(screen.queryByRole("button", { name: "Continue analysis" })).not.toBeInTheDocument();
+});
+
+it("keeps unfinished analysis available after a newer reuse verification completes", async () => {
+  vi.mocked(backend.getSonicStatus).mockReturnValue(new Promise(() => undefined));
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([{ ...savedJob, id: 561, kind: "sonicReuse", state: "completed" }, savedJob]);
+  render(<SonicAnalysisPanel />);
+  expect(await screen.findByRole("button", { name: "Continue analysis" })).toBeEnabled();
+});
+
+it("saves edited settings before continuing and leaves the saved job alone if saving fails", async () => {
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([savedJob]);
+  vi.mocked(backend.configureSonicSchedule).mockRejectedValue(new Error("Could not save schedule"));
+  render(<SonicAnalysisPanel />);
+  fireEvent.click(await screen.findByLabelText("Only when the computer is idle"));
+  fireEvent.click(await screen.findByRole("button", { name: "Continue analysis" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not save schedule");
+  expect(activity.controlActivityJob).not.toHaveBeenCalled();
+  vi.mocked(backend.configureSonicSchedule).mockResolvedValue({ ...status, schedule: { ...status.schedule, idleOnly: false } });
+  vi.mocked(activity.controlActivityJob).mockResolvedValue([{ ...savedJob, state: "queued" }]);
+  fireEvent.click(screen.getByRole("button", { name: "Continue analysis" }));
+  await waitFor(() => expect(activity.controlActivityJob).toHaveBeenCalledWith(560, "retry"));
+  expect(backend.configureSonicSchedule).toHaveBeenLastCalledWith({ ...status.schedule, idleOnly: false });
+});
 it("saves idle and overnight settings separately from queueing an album", async () => {
   const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
