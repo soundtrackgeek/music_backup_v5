@@ -2929,6 +2929,8 @@ export type ListeningRow = {
 	key: string,
 	title: string,
 	artist: string,
+	artistId: string | null,
+	artistDisambiguation: string | null,
 	album: string | null,
 	albumId: string | null,
 	trackId: number | null,

@@ -29,7 +29,7 @@ const overview: ListeningOverview = {
   playsLast30Days: 12, playsLast365Days: 100, months: [{ month: "2026-09", plays: 30 }, { month: "2026-10", plays: 12 }],
 };
 const row: ListeningRow = {
-  key: "1", title: "Running Up That Hill", artist: "Kate Bush", album: "Hounds of Love", albumId: "hounds",
+  artistId: "kate bush", artistDisambiguation: null, key: "1", title: "Running Up That Hill", artist: "Kate Bush", album: "Hounds of Love", albumId: "hounds",
   trackId: 1, rating: 100, plays: 42, lastPlayedAt: 1_790_000_000, source: null,
 };
 
@@ -38,6 +38,23 @@ beforeEach(() => {
   vi.mocked(getListeningList).mockResolvedValue([row]);
 });
 afterEach(() => vi.resetAllMocks());
+
+it("labels separate same-name profiles and opens the selected ID", async () => {
+  const open = vi.fn();
+  vi.mocked(getListeningList).mockResolvedValue([
+    { ...row, key: "first", title: "Creed", artist: "Creed", artistId: "creed", artistDisambiguation: "First group" },
+    { ...row, key: "second", title: "Creed", artist: "Creed", artistId: "artist:second", artistDisambiguation: "Second group" },
+    { ...row, key: "unresolved", title: "Same song", artist: "The Kids", artistId: null, artistDisambiguation: "Unresolved artist" },
+  ]);
+  render(<ListeningHistory onOpenAlbum={vi.fn()} onOpenArtist={open} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Top artists" }));
+  expect(await screen.findByText("First group")).toBeVisible();
+  expect(screen.getByText("Second group")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Open artist Creed (Second group)" }));
+  expect(open).toHaveBeenCalledWith("artist:second", "Creed");
+  expect(screen.getByText("Unresolved artist")).toBeVisible();
+  expect(screen.queryByRole("button", { name: /Open artist The Kids/ })).not.toBeInTheDocument();
+});
 
 it("summarizes plays, lists top tracks, and opens albums", async () => {
   const open = vi.fn();

@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
+mod artist_profiles;
+use artist_profiles::ArtistProfiles;
 
 pub(crate) const CROSS_SOURCE_WINDOW_SECONDS: i64 = 600;
 const REDISCOVER_AFTER_SECONDS: i64 = 3 * 365 * 24 * 60 * 60;
@@ -88,6 +90,8 @@ pub struct ListeningRow {
     pub key: String,
     pub title: String,
     pub artist: String,
+    pub artist_id: Option<String>,
+    pub artist_disambiguation: Option<String>,
     pub album: Option<String>,
     pub album_id: Option<String>,
     pub track_id: Option<i64>,
@@ -203,6 +207,33 @@ pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     Ok(count == 4)
 }
 
+pub(crate) fn install_play_identity_schema(conn: &Connection) -> Result<()> {
+    if play_identity_schema_exists(conn)? {
+        return Ok(());
+    }
+    conn.execute_batch("CREATE TABLE listening_plays_v67 (
+        id INTEGER PRIMARY KEY, source TEXT NOT NULL, played_at INTEGER NOT NULL,
+        artist TEXT NOT NULL, title TEXT NOT NULL, album TEXT, artist_key TEXT NOT NULL,
+        title_key TEXT NOT NULL, album_key TEXT NOT NULL DEFAULT '',path_key TEXT NOT NULL DEFAULT '',
+        recording_mbid TEXT, imported_at TEXT NOT NULL);
+      INSERT INTO listening_plays_v67 SELECT * FROM listening_plays;
+      DROP TABLE listening_plays;
+      ALTER TABLE listening_plays_v67 RENAME TO listening_plays;
+      CREATE UNIQUE INDEX idx_listening_plays_source_identity ON listening_plays(source,played_at,artist_key,title_key,album_key,path_key);
+      CREATE INDEX idx_listening_plays_identity ON listening_plays(artist_key,title_key,album_key,path_key,played_at);
+      CREATE INDEX idx_listening_plays_played_at ON listening_plays(played_at);
+      DELETE FROM listening_link_state;")?;
+    Ok(())
+}
+
+pub(crate) fn play_identity_schema_exists(conn: &Connection) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*)=6 FROM pragma_index_info('idx_listening_plays_source_identity')",
+        [],
+        |r| r.get(0),
+    )?)
+}
+
 // ---------------------------------------------------------------------------
 // Identity keys and inserts
 // ---------------------------------------------------------------------------
@@ -239,11 +270,16 @@ pub(crate) fn insert_plays(
     let imported_at = Utc::now().to_rfc3339();
     let mut summary = InsertSummary::default();
     let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    let profiles = ArtistProfiles::load(&tx)?;
     {
         let mut cross_source = tx.prepare_cached(
             "SELECT 1 FROM listening_plays
              WHERE artist_key = ?1 AND title_key = ?2 AND source <> ?3
                AND played_at BETWEEN ?4 - ?5 AND ?4 + ?5
+               AND (path_key='' OR ?6='' OR path_key=?6)
+               AND (album_key='' OR ?7='' OR album_key=?7)
+               AND (?8=0 OR (path_key<>'' AND path_key=?6) OR (?10 AND album_key<>'' AND album_key=?7)
+                    OR (recording_mbid IS NOT NULL AND recording_mbid=?9))
              LIMIT 1",
         )?;
         let mut insert = tx.prepare_cached(
@@ -261,16 +297,6 @@ pub(crate) fn insert_plays(
                 summary.skipped += 1;
                 continue;
             }
-            if cross_source.exists(params![
-                artist_key,
-                title_key,
-                source,
-                play.played_at,
-                CROSS_SOURCE_WINDOW_SECONDS
-            ])? {
-                summary.duplicates += 1;
-                continue;
-            }
             let album = play
                 .album
                 .as_deref()
@@ -283,6 +309,21 @@ pub(crate) fn insert_plays(
                 .as_deref()
                 .map(str::trim)
                 .filter(|value| !value.is_empty());
+            if cross_source.exists(params![
+                artist_key,
+                title_key,
+                source,
+                play.played_at,
+                CROSS_SOURCE_WINDOW_SECONDS,
+                file_path_key,
+                album_key,
+                profiles.ambiguous(artist),
+                mbid,
+                profiles.album_identifies_artist(artist, &album_key)
+            ])? {
+                summary.duplicates += 1;
+                continue;
+            }
             let changed = insert.execute(params![
                 source,
                 play.played_at,
@@ -321,7 +362,14 @@ fn plays_revision(conn: &Connection) -> Result<String> {
     let tracks: i64 = conn.query_row("SELECT COALESCE(MAX(id), 0) FROM tracks", [], |row| {
         row.get(0)
     })?;
-    Ok(format!("{catalog}|{tracks}|{count}:{max_id}"))
+    let artist_revision: i64 = conn.query_row(
+        "SELECT revision FROM artist_identity_revision WHERE singleton=1",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(format!(
+        "artist-profiles:1|{catalog}|{tracks}|{count}:{max_id}|{artist_revision}"
+    ))
 }
 
 pub(crate) fn links_current(conn: &Connection) -> Result<bool> {
@@ -340,13 +388,17 @@ struct PlayGroup {
     title_key: String,
     album_key: String,
     path_key: String,
-    best: Option<(u8, i64)>,
+    best: Option<(u8, i64, String)>,
+    ambiguous: bool,
 }
 
 /// Rebuilds `listening_identity_links`. Each play identity links to at most
 /// one track: an exact file path wins, then a matching album, then the
-/// track's own (non album-artist) credit, then the lowest track id.
+/// track's own credit. Ties across distinct artist profiles remain unresolved.
 pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    let conn = &tx;
+    let profiles = ArtistProfiles::load(conn)?;
     let mut groups = Vec::new();
     {
         let mut stmt = conn.prepare(
@@ -359,6 +411,7 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
                 album_key: row.get(2)?,
                 path_key: row.get(3)?,
                 best: None,
+                ambiguous: false,
             })
         })?;
         for row in rows {
@@ -381,12 +434,13 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
     }
 
     if !groups.is_empty() {
-        let mut stmt = conn.prepare(
+        let key = crate::identity::catalog_artist_key_sql("album_artist_display");
+        let mut stmt = conn.prepare(&format!(
             "SELECT id, COALESCE(display_artist, ''), COALESCE(album_artist_display, ''),
                     COALESCE(album, ''), COALESCE(title, ''), COALESCE(file_path, ''),
-                    COALESCE(filename, '')
-             FROM tracks ORDER BY id",
-        )?;
+                    COALESCE(filename, ''), {key}
+             FROM tracks ORDER BY id"
+        ))?;
         let mut rows = stmt.query([])?;
         while let Some(row) = rows.next()? {
             let track_id: i64 = row.get(0)?;
@@ -396,12 +450,20 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
             let title: String = row.get(4)?;
             let directory: String = row.get(5)?;
             let filename: String = row.get(6)?;
+            let assigned_id: String = row.get(7)?;
+            let profile = profiles.for_track(&display_artist, &album_artist, &assigned_id);
+            let proof = profile.id.unwrap_or_else(|| {
+                format!(
+                    "{assigned_id}\0{}",
+                    crate::identity::artist_key(&profile.name)
+                )
+            });
 
             if !by_path.is_empty() {
                 let key = track_path_key(&directory, &filename);
                 if let Some(indexes) = by_path.get(&key) {
                     for &index in indexes {
-                        offer(&mut groups[index], 8, track_id);
+                        offer(&mut groups[index], 8, track_id, &proof);
                     }
                 }
             }
@@ -428,12 +490,16 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
                 if group.artist_key == own_key {
                     score += 2;
                 }
-                offer(&mut groups[index], score, track_id);
+                if score < 5
+                    && (profiles.ambiguous(&display_artist) || profiles.ambiguous(&album_artist))
+                {
+                    continue;
+                }
+                offer(&mut groups[index], score, track_id, &proof);
             }
         }
     }
 
-    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
     tx.execute("DELETE FROM listening_identity_links", [])?;
     let mut linked = 0;
     {
@@ -443,7 +509,7 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
              VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
         for group in &groups {
-            if let Some((_, track_id)) = group.best {
+            if let Some((_, track_id, _)) = group.best.as_ref().filter(|_| !group.ambiguous) {
                 insert.execute(params![
                     group.artist_key,
                     group.title_key,
@@ -465,10 +531,17 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
     Ok(linked)
 }
 
-fn offer(group: &mut PlayGroup, score: u8, track_id: i64) {
-    // Tracks are scanned in id order, so a tie keeps the lowest id.
-    if group.best.is_none_or(|(best, _)| score > best) {
-        group.best = Some((score, track_id));
+fn offer(group: &mut PlayGroup, score: u8, track_id: i64, artist_id: &str) {
+    // A tie may pick an edition of the same artist, never a different group.
+    if group.best.as_ref().is_none_or(|(best, _, _)| score > *best) {
+        group.best = Some((score, track_id, artist_id.into()));
+        group.ambiguous = false;
+    } else if group
+        .best
+        .as_ref()
+        .is_some_and(|(best, _, id)| score == *best && id != artist_id)
+    {
+        group.ambiguous = true;
     }
 }
 
@@ -592,6 +665,8 @@ fn row_from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<ListeningRow> {
         key: row.get(0)?,
         title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
         artist: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        artist_id: None,
+        artist_disambiguation: None,
         album: row.get(3)?,
         album_id: row.get(4)?,
         track_id: row.get(5)?,
@@ -614,6 +689,10 @@ pub(crate) fn list(
         .map(|days| now - i64::from(days) * 86_400)
         .unwrap_or(0);
     let played = played_cte();
+    let profiles = ArtistProfiles::load(conn)?;
+    if request.list == "topArtists" {
+        return profiles.top_artists(conn, since, limit);
+    }
     let track_columns = "CAST(t.id AS TEXT), t.title,
         COALESCE(NULLIF(t.display_artist, ''), t.album_artist_display), t.album, t.album_id,
         t.id, t.normalized_rating";
@@ -679,18 +758,18 @@ pub(crate) fn list(
              LIMIT ?2"
         ),
         "unmatched" => format!(
-            "SELECT p.artist_key || char(31) || p.title_key, MAX(p.title), MAX(p.artist),
+            "SELECT p.artist_key || char(31) || p.title_key || char(31) || p.album_key || char(31) || p.path_key, MAX(p.title), MAX(p.artist),
                     MAX(p.album), NULL, NULL, NULL, COUNT(*), MAX(p.played_at), NULL
              FROM listening_plays p LEFT JOIN {PLAY_LINK_JOIN}
              LEFT JOIN tracks t ON t.id = l.track_id
              WHERE p.played_at >= ?1 AND t.id IS NULL
-             GROUP BY p.artist_key, p.title_key
+             GROUP BY p.artist_key, p.title_key, p.album_key, p.path_key
              ORDER BY 8 DESC, 9 DESC LIMIT ?2"
         ),
         other => bail!("Unknown listening list {other:?}"),
     };
     let mut stmt = conn.prepare(&sql)?;
-    let rows = if request.list == "rediscover" {
+    let mut rows = if request.list == "rediscover" {
         stmt.query_map(
             params![0, limit, now - REDISCOVER_AFTER_SECONDS],
             row_from_sql,
@@ -700,6 +779,7 @@ pub(crate) fn list(
         stmt.query_map(params![since, limit], row_from_sql)?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
+    profiles.attach_rows(conn, &mut rows)?;
     Ok(rows)
 }
 

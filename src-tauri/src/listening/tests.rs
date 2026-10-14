@@ -4,6 +4,200 @@ use serde_json::json;
 const NOW: i64 = 1_790_000_000;
 const DAY: i64 = 86_400;
 
+fn split_artist(conn: &Connection, name: &str, album: &str, description: &str) -> String {
+    crate::artist_identity::split(
+        conn,
+        crate::artist_identity::SplitArtistRequest {
+            source_artist_id: crate::identity::artist_key(name),
+            album_ids: vec![album.into()],
+            target_artist_id: None,
+            disambiguation: description.into(),
+            source_disambiguation: Some("First group".into()),
+            musicbrainz_mbid: None,
+        },
+    )
+    .unwrap()
+    .artist_id
+}
+
+#[test]
+fn reviewed_splits_reproject_old_plays_and_keep_ambiguous_plays_visible() {
+    let conn = catalog();
+    for (index, name, title) in [
+        (1, "Creed", "First"),
+        (2, "Creed", "Second"),
+        (3, "The Kids", "First"),
+        (4, "The Kids", "Second"),
+        (5, "The Kids", "Third"),
+    ] {
+        let id = index.to_string();
+        album(&conn, &id, name, title, 100);
+        track(
+            &conn,
+            index,
+            &id,
+            name,
+            name,
+            title,
+            "Same song",
+            100,
+            (&format!("D:/Music/{id}"), "01.mp3"),
+        );
+        insert_plays(
+            &conn,
+            "aurora",
+            &[play(name, "Same song", Some(title), NOW - index * DAY)],
+        )
+        .unwrap();
+    }
+    insert_plays(
+        &conn,
+        "lastfm",
+        &[play("Creed", "Same song", None, NOW - 10 * DAY)],
+    )
+    .unwrap();
+    refresh_links(&conn).unwrap();
+    assert!(links_current(&conn).unwrap());
+    let old_ids: Vec<i64> = conn
+        .prepare("SELECT id FROM listening_plays ORDER BY id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    let creed = split_artist(&conn, "Creed", "2", "Second Creed group");
+    let kids2 = split_artist(&conn, "The Kids", "4", "Second Kids group");
+    let kids3 = split_artist(&conn, "The Kids", "5", "Third Kids group");
+    assert!(!links_current(&conn).unwrap());
+    assert_eq!(refresh_links(&conn).unwrap(), 5);
+    let artists = list(&conn, &request("topArtists"), NOW).unwrap();
+    assert_eq!(artists.len(), 5);
+    for id in ["creed", "the kids", &creed, &kids2, &kids3] {
+        let artist = artists
+            .iter()
+            .find(|r| r.artist_id.as_deref() == Some(id))
+            .unwrap();
+        assert_eq!(artist.plays, 1);
+        assert!(artist.artist_disambiguation.is_some());
+    }
+    let recent = list(&conn, &request("recent"), NOW).unwrap();
+    let unresolved = recent.iter().find(|r| r.album.is_none()).unwrap();
+    assert_eq!(
+        unresolved.artist_disambiguation.as_deref(),
+        Some("Unresolved artist")
+    );
+    assert!(unresolved.track_id.is_none());
+    assert_eq!(list(&conn, &request("unmatched"), NOW).unwrap().len(), 1);
+    let ids: Vec<i64> = conn
+        .prepare("SELECT id FROM listening_plays ORDER BY id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(ids, old_ids);
+}
+
+#[test]
+fn same_name_same_album_and_title_require_path_evidence_and_are_not_dropped() {
+    let conn = catalog();
+    for index in 1..=2 {
+        let id = index.to_string();
+        album(&conn, &id, "Creed", "Same album", 100);
+        track(
+            &conn,
+            index,
+            &id,
+            "Creed",
+            "Creed",
+            "Same album",
+            "Same song",
+            100,
+            (&format!("D:/Music/{id}"), "01.mp3"),
+        );
+    }
+    let second = split_artist(&conn, "Creed", "2", "Second group");
+    let first = PlayInput {
+        file_path: Some("D:/Music/1/01.mp3".into()),
+        ..play("Creed", "Same song", Some("Same album"), NOW)
+    };
+    let other = PlayInput {
+        file_path: Some("D:/Music/2/01.mp3".into()),
+        ..first.clone()
+    };
+    assert_eq!(
+        insert_plays(&conn, "aurora", &[first.clone(), other.clone()])
+            .unwrap()
+            .inserted,
+        2
+    );
+    assert_eq!(
+        insert_plays(&conn, "lastfm", &[other]).unwrap().duplicates,
+        1
+    );
+    assert_eq!(
+        insert_plays(
+            &conn,
+            "lastfm",
+            &[play("Creed", "Same song", Some("Same album"), NOW)]
+        )
+        .unwrap()
+        .inserted,
+        1
+    );
+    refresh_links(&conn).unwrap();
+    let rows = list(&conn, &request("topArtists"), NOW).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(rows
+        .iter()
+        .any(|r| r.artist_id.as_deref() == Some(&second) && r.plays == 1));
+    assert_eq!(list(&conn, &request("unmatched"), NOW).unwrap()[0].plays, 1);
+}
+
+#[test]
+fn play_identity_upgrade_preserves_saved_rows_and_accepts_distinct_paths() {
+    let conn = catalog();
+    conn.execute_batch("DROP INDEX idx_listening_plays_source_identity; CREATE UNIQUE INDEX legacy_play_identity ON listening_plays(source,played_at,artist_key,title_key);").unwrap();
+    insert_plays(
+        &conn,
+        "aurora",
+        &[PlayInput {
+            file_path: Some("D:/first.mp3".into()),
+            ..play("Creed", "Song", Some("First"), NOW)
+        }],
+    )
+    .unwrap();
+    let before: (i64, String, String) = conn
+        .query_row(
+            "SELECT id,artist,imported_at FROM listening_plays",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    install_play_identity_schema(&conn).unwrap();
+    let after = conn
+        .query_row(
+            "SELECT id,artist,imported_at FROM listening_plays",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(before, after);
+    assert_eq!(
+        insert_plays(
+            &conn,
+            "aurora",
+            &[PlayInput {
+                file_path: Some("D:/second.mp3".into()),
+                ..play("Creed", "Song", Some("Second"), NOW)
+            }]
+        )
+        .unwrap()
+        .inserted,
+        1
+    );
+}
+
 fn catalog() -> Connection {
     let conn = Connection::open_in_memory().expect("open in-memory database");
     crate::db::configure(&conn).expect("configure database");

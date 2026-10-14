@@ -19,12 +19,12 @@ import "./ListeningHistory.css";
 const LISTS: { id: ListeningList; label: string; description: string; periodic: boolean }[] = [
   { id: "topTracks", label: "Most played", description: "Library tracks with the most plays.", periodic: true },
   { id: "topAlbums", label: "Top albums", description: "Albums ranked by plays across their tracks.", periodic: true },
-  { id: "topArtists", label: "Top artists", description: "Album artists ranked by plays.", periodic: true },
+  { id: "topArtists", label: "Top artists", description: "Performing artists ranked by plays, with same-name profiles kept separate.", periodic: true },
   { id: "recent", label: "Recent plays", description: "Every imported play, newest first.", periodic: true },
   { id: "rediscover", label: "Rediscover", description: "5★ tracks you have not played in three years.", periodic: false },
   { id: "neverPlayedFavorites", label: "Unplayed 5★", description: "5★ tracks with no play in your imported history.", periodic: false },
   { id: "leastPlayedAlbums", label: "Least played 4★+", description: "Albums rated 4★ or higher, fewest plays first.", periodic: false },
-  { id: "unmatched", label: "Not in library", description: "Plays that match no library track.", periodic: true },
+  { id: "unmatched", label: "Unmatched plays", description: "Plays without a confident library match, including ambiguous same-name artists.", periodic: true },
 ];
 
 const PERIODS: { days: number | null; label: string }[] = [
@@ -43,7 +43,7 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function ListeningHistory({ onOpenAlbum }: { onOpenAlbum: (albumId: string) => void }) {
+export function ListeningHistory({ onOpenAlbum, onOpenArtist }: { onOpenAlbum: (albumId: string) => void; onOpenArtist?: (artistId: string, artistName: string) => void }) {
   const [overview, setOverview] = useState<ListeningOverview | null>(null);
   const [list, setList] = useState<ListeningList>("topTracks");
   const [periodDays, setPeriodDays] = useState<number | null>(null);
@@ -122,8 +122,8 @@ export function ListeningHistory({ onOpenAlbum }: { onOpenAlbum: (albumId: strin
           <div>
             <h2>Sources</h2>
             <p>
-              Plays are imported read-only and matched to library tracks by artist and title. A play reported by
-              two sources within ten minutes is counted once.
+              Plays are matched using file, album and artist evidence. Reports from two sources within ten minutes
+              count once when their evidence agrees; ambiguous artists remain unresolved.
             </p>
           </div>
           <Headphones size={18} />
@@ -223,8 +223,8 @@ export function ListeningHistory({ onOpenAlbum }: { onOpenAlbum: (albumId: strin
               {rows.map((row, index) => (
                 <tr key={row.key}>
                   <td>{index + 1}</td>
-                  <td>{row.title}</td>
-                  {isArtistList ? null : <td>{row.artist}</td>}
+                  <td>{isArtistList ? <ListeningArtist row={row} onOpen={onOpenArtist} /> : row.title}</td>
+                  {isArtistList ? null : <td><ListeningArtist row={row} onOpen={onOpenArtist} /></td>}
                   {isAlbumList || isArtistList ? null : (
                     <td>
                       {row.albumId ? (
@@ -264,6 +264,13 @@ export function ListeningHistory({ onOpenAlbum }: { onOpenAlbum: (albumId: strin
       </section>
     </div>
   );
+}
+
+function ListeningArtist({ row, onOpen }: { row: ListeningRow; onOpen?: (id: string, name: string) => void }) {
+  return <span className="listening-artist">
+    {row.artistId && onOpen ? <button type="button" className="listening-link" aria-label={`Open artist ${row.artist}${row.artistDisambiguation ? ` (${row.artistDisambiguation})` : ""}`} onClick={() => onOpen(row.artistId!, row.artist)}>{row.artist}</button> : row.artist}
+    {row.artistDisambiguation ? <small>{row.artistDisambiguation}</small> : null}
+  </span>;
 }
 
 function ListeningSourceCard({

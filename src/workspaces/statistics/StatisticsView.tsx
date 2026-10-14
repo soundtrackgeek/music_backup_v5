@@ -85,7 +85,7 @@ export function StatisticsView({
     | "ratingAlbumTotal"
     | "ratingTrackTotal"
     | "openTimelineAlbum"
-  >;
+  > & Partial<Pick<AppModel, "openArtistFromMusicMap">>;
 }) {
   const {
     statisticsView,
@@ -108,6 +108,7 @@ export function StatisticsView({
     ratingAlbumTotal,
     ratingTrackTotal,
     openTimelineAlbum,
+    openArtistFromMusicMap,
   } = model;
   return (
     <section
@@ -178,7 +179,7 @@ export function StatisticsView({
           role="tabpanel"
           aria-labelledby="statistics-listening-tab"
         >
-          <ListeningHistory onOpenAlbum={openTimelineAlbum} />
+          <ListeningHistory onOpenAlbum={openTimelineAlbum} onOpenArtist={openArtistFromMusicMap} />
         </section>
       ) : null}
       <TransitionRegion>

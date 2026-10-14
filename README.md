@@ -1,5 +1,16 @@
 # Music Library
 
+Music Library **0.190.1** and Aurora **0.37.1** keep listening history separate
+for reviewed same-name artist profiles. Use **Artists → Split artist** to assign
+albums and add a distinguishing description, for example for Creed or The Kids.
+History rows, Top artists and Aurora's artist play counts use those assignments;
+older plays are recalculated without importing the history again. Exact file
+matches take priority, and album/title evidence can identify moved tracks.
+Ambiguous plays show **Unresolved artist** instead of choosing a group. In Music
+Library, find them in **Statistics → Listening → Unmatched plays**. Original
+history records and music tags stay intact. Track Artist remains the performing
+artist on compilations; Album Artist remains the owner of the album.
+
 Music Library **0.189.2** fixes Aurora intake failing after the recovery backup
 when another connection writes unrelated cache or bookkeeping data. The final
 check compares the reviewed catalog content, authoritative album ratings and

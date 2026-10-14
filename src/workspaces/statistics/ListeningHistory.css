@@ -193,3 +193,5 @@
 :root[data-theme="dark"] .listening-message {
   color: #7fd8c0;
 }
+.listening-artist { display: inline-flex; flex-direction: column; gap: 3px; }
+.listening-artist small { color: var(--palette-muted, #61716c); font-size: .85em; overflow-wrap: anywhere; }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.190.1] - 2026-10-14
+
+### Fixed
+- Separate listening-history Top artists and navigation by reviewed artist profile, with visible descriptions for same-name artists. Rebuild older play links after splits without requiring another catalog or history import; preserve compilation Track Artist credits.
+- Keep ambiguous same-name plays in **Unmatched plays** with an **Unresolved artist** label instead of assigning a tied song to an arbitrary group. Distinguish unmatched albums and paths.
+- Preserve distinct same-source plays sharing a timestamp and song title when album or file evidence differs. Cross-source deduplication rejects conflicting evidence and requires a shared path, recording ID or uniquely identifying album for ambiguous artists. Schema 67 preserves existing play IDs and source records.
+
 ## [0.190.0] - 2026-10-13
 
 ### Added

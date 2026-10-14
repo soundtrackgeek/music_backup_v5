@@ -27,7 +27,7 @@ const previewRows: ListeningRow[] = [
   { key: "901", title: "Midnight City", artist: "M83", album: "Hurry Up, We're Dreaming", albumId: "sonic-m83", trackId: 901, rating: 100, plays: 87, lastPlayedAt: null, source: null },
   { key: "903", title: "Nightcall", artist: "Kavinsky", album: "OutRun", albumId: "sonic-outrun", trackId: 903, rating: 80, plays: 54, lastPlayedAt: null, source: null },
   { key: "902", title: "A Real Hero", artist: "College & Electric Youth", album: "Drive", albumId: "sonic-drive", trackId: 902, rating: 100, plays: 12, lastPlayedAt: null, source: null },
-];
+].map((row) => ({ ...row, artistId: null, artistDisambiguation: null }));
 
 function previewOverview(): ListeningOverview {
   const now = previewNow();
@@ -73,8 +73,9 @@ export async function getListeningList(list: ListeningList, periodDays: number |
   const rows = previewRows.map((row, index) => ({ ...row, lastPlayedAt: now - (index + 1) * 5 * DAY }));
   if (list === "rediscover") return [{ ...rows[2], lastPlayedAt: now - 1_300 * DAY }];
   if (list === "neverPlayedFavorites" || list === "leastPlayedAlbums") return rows.slice(2).map((row) => ({ ...row, plays: 0, lastPlayedAt: null }));
-  if (list === "unmatched") return [{ key: "outside", title: "Song You Streamed", artist: "Outside Artist", album: null, albumId: null, trackId: null, rating: null, plays: 9, lastPlayedAt: now - DAY, source: null }];
+  if (list === "unmatched") return [{ key: "outside", title: "Song You Streamed", artist: "Outside Artist", album: null, albumId: null, trackId: null, rating: null, plays: 9, lastPlayedAt: now - DAY, source: null, artistId: null, artistDisambiguation: null }];
   if (list === "recent") return rows.map((row) => ({ ...row, plays: 1, source: "lastfm" }));
+  if (list === "topArtists") return rows.map((row) => ({ ...row, title: row.artist, artistId: row.artist.toLocaleLowerCase(), key: row.artist.toLocaleLowerCase(), album: null, albumId: null, trackId: null }));
   return rows.slice(0, limit);
 }
 
