@@ -1148,6 +1148,8 @@ pub struct ArtistListRequest {
     #[serde(default)]
     pub unresolved_only: bool,
     #[serde(default)]
+    pub missing_mbid_only: bool,
+    #[serde(default)]
     pub missing_info: String,
     #[serde(default)]
     pub only_missing_field: bool,
@@ -1166,6 +1168,7 @@ impl Default for ArtistListRequest {
         Self {
             search_text: String::new(),
             unresolved_only: false,
+            missing_mbid_only: false,
             missing_info: String::new(),
             only_missing_field: false,
             year_from: None,

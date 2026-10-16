@@ -3,6 +3,7 @@ import type { ArtistListRequest, ArtistListResponse } from "../../types";
 import { NumberField, SelectField } from "../../components/catalog/SearchCriteria";
 import { artistInfoFields, missingArtistInfo } from "../../app/artistInfo";
 import { formatYearSpan } from "./ArtistTables";
+import { MusicBrainzArtistLink } from "./ArtistAutoResolve";
 
 export function UnresolvedArtistFilters({ request, onChange }: {
   request: ArtistListRequest;
@@ -50,7 +51,7 @@ export function UnresolvedArtistTable({ response, selectedArtistId, onSelect }: 
               <strong>{artist.name}</strong>
               {artist.disambiguation ? <span>{artist.disambiguation}</span> : null}
               <small>{artist.albumCount} {artist.albumCount === 1 ? "album" : "albums"}</small>
-            </button></td>
+            </button>{artist.musicBrainzMbid ? <MusicBrainzArtistLink mbid={artist.musicBrainzMbid} /> : null}</td>
             <td><div className="artist-missing-fields">{missingArtistInfo(artist).map((field) => <span key={field.value}>{field.label}</span>)}</div></td>
             <td>{formatYearSpan(artist.firstYear, artist.lastYear) || "Unknown"}</td>
             <td>{artist.addedAt?.slice(0, 10) || "Unknown"}</td>

@@ -3,6 +3,7 @@ import { previewArtistId } from "./backend/artistIdentity";
 import { matchesArtistInfo } from "./app/artistInfo";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { commands, events } from "./bindings";
+import type { ArtistAutoResolveResult } from "./bindings";
 import { completed } from "./backend/complete";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -6674,6 +6675,27 @@ export async function searchLibrary(request: BrowseRequest): Promise<BrowseRespo
   }
 
   return commands.searchLibrary(request);
+}
+
+export async function autoResolveArtist(artistId: string): Promise<ArtistAutoResolveResult> {
+  if (isTauriRuntime()) return commands.autoResolveArtist(artistId);
+  const artist = mockArtists.find((row) => row.id === artistId);
+  const result: ArtistAutoResolveResult = {
+    artistId, artistName: artist?.name ?? artistId, status: "skipped", candidates: [],
+    message: "Artist is already linked or no longer available.",
+  };
+  if (!artist || artist.musicBrainzMbid?.trim()) return result;
+  if (artist.id !== "head east") return { ...result, status: "not-found", message: "No match in the browser preview fixtures." };
+  const mbid = "1f6fdb90-95a2-419e-9994-b406d562caac";
+  await refreshMusicBrainzArtistInfo({ artistKey: artist.id, artistName: artist.name, musicbrainzMbid: mbid });
+  Object.assign(artist, {
+    musicBrainzMbid: mbid, musicBrainzSortName: "Head East", musicBrainzArtistType: "Group",
+    musicBrainzBeginDate: "1969", musicBrainzBeginYear: 1969, musicBrainzEnded: false,
+    musicBrainzBeginAreaName: "Illinois, United States", musicBrainzInfoReviewState: "unverified",
+    musicBrainzInfoFetchedAt: new Date().toISOString(),
+  });
+  return { ...result, status: "updated", message: "MBID saved and artist info updated (browser preview).",
+    candidates: [{ id: mbid, name: artist.name, country: "US", disambiguation: null }] };
 }
 
 export async function listArtists(request: ArtistListRequest): Promise<ArtistListResponse> {

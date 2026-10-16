@@ -676,6 +676,9 @@ fn artist_info_where(request: &ArtistListRequest) -> Result<(String, Vec<Value>)
     ];
     let mut clauses = Vec::new();
     let mut values = Vec::new();
+    if request.missing_mbid_only {
+        clauses.push(format!("({})", fields[0].1));
+    }
     if !request.missing_info.is_empty() {
         let selected = fields
             .iter()
@@ -1449,6 +1452,24 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Year from"));
+    }
+
+    #[test]
+    fn auto_resolve_targets_intersect_missing_field_and_year_filters_before_pagination() {
+        let conn = unresolved_artist_connection();
+        let mut request = ArtistListRequest {
+            unresolved_only: true, missing_mbid_only: true,
+            missing_info: "originCountry".into(), year_from: Some(1980), year_to: Some(1985),
+            limit: 1, ..Default::default()
+        };
+        let page = list_artists(&conn, request.clone(), 50).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.rows[0].id, "zulu");
+        request.only_missing_field = true;
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 0);
+        request.only_missing_field = false;
+        request.search_text = "pet".into();
+        assert_eq!(list_artists(&conn, request, 50).unwrap().total, 0);
     }
 
     #[test]

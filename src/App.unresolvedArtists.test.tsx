@@ -22,6 +22,24 @@ async function openUnresolved() {
 }
 
 describe("Unresolved artists", () => {
+  it("auto-resolves missing MBIDs and keeps a direct review link after the artist leaves the list", async () => {
+    const nav = await openUnresolved();
+    expect(screen.getByLabelText("Artists to try")).toHaveValue(10);
+    fireEvent.change(screen.getByLabelText("Missing information"), { target: { value: "mbid" } });
+    fireEvent.change(screen.getByLabelText("Artists to try"), { target: { value: "1" } });
+    await screen.findByRole("button", { name: "Complete info for Head East" });
+    fireEvent.click(screen.getByRole("button", { name: "Auto-resolve & update" }));
+    const batch = within(screen.getByRole("region", { name: "Auto-resolve artists" }));
+    expect(await batch.findByText(/Finished checking 1 artist/)).toBeVisible();
+    expect(batch.getByRole("link", { name: "MusicBrainz (US)" })).toHaveAttribute("href", "https://musicbrainz.org/artist/1f6fdb90-95a2-419e-9994-b406d562caac");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Complete info for Head East" })).not.toBeInTheDocument());
+    expect(mockArtists.find((row) => row.id === "head east")?.musicBrainzArtistType).toBe("Group");
+    fireEvent.click(nav.getByRole("button", { name: "Search" }));
+    fireEvent.click(nav.getByRole("button", { name: "Artists" }));
+    expect(await screen.findByLabelText("Artists to try")).toHaveValue(1);
+    expect(screen.getByRole("link", { name: "MusicBrainz (US)" })).toBeVisible();
+  });
+
   it("returns to an available page after resolving the last result on a page", async () => {
     const template = mockArtists.find((row) => row.id === "pet shop boys")!;
     for (let index = 0; index < 10; index++) {

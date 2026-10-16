@@ -164,6 +164,7 @@ export function createArtistListRequest(): ArtistListRequest {
   return {
     searchText: "",
     unresolvedOnly: false,
+    missingMbidOnly: false,
     missingInfo: "",
     onlyMissingField: false,
     yearFrom: null,

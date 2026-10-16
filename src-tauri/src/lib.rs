@@ -1302,6 +1302,21 @@ async fn refresh_musicbrainz_artist_releases(
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+async fn auto_resolve_artist(
+    app: AppHandle,
+    artist_id: String,
+) -> Result<musicbrainz::auto_resolve::ArtistAutoResolveResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        musicbrainz::auto_resolve::resolve_for_app(&app, &artist_id)
+    })
+    .await
+    .map_err(|error| format!("Artist auto-resolve task failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 async fn set_musicbrainz_artist_origin_country(
     app: AppHandle,
     request: MusicBrainzArtistOriginCountryRequest,

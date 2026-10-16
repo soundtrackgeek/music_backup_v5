@@ -1,4 +1,6 @@
 use crate::db;
+#[path = "artist_auto_resolve.rs"]
+pub(crate) mod auto_resolve;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,

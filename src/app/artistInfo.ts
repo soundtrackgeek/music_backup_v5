@@ -26,6 +26,7 @@ export function missingArtistInfo(artist: ArtistSummary) {
 }
 
 export function matchesArtistInfo(artist: ArtistSummary, request: ArtistListRequest) {
+  if (request.missingMbidOnly && artist.musicBrainzMbid?.trim()) return false;
   const missing = missingArtistInfo(artist);
   return request.missingInfo
     ? missing.some((field) => field.value === request.missingInfo) && (!request.onlyMissingField || missing.length === 1)

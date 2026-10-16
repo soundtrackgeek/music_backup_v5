@@ -58,6 +58,7 @@ export const commands = {
 	setMusicbrainzReleaseDecision: (request: MusicBrainzReleaseDecisionRequest) => __TAURI_INVOKE<null>("set_musicbrainz_release_decision", { request }),
 	setMusicbrainzArtistLink: (request: MusicBrainzArtistLinkRequest) => __TAURI_INVOKE<null>("set_musicbrainz_artist_link", { request }),
 	refreshMusicbrainzArtistReleases: (request: MusicBrainzArtistRefreshRequest) => __TAURI_INVOKE<MusicBrainzArtistRefreshResult>("refresh_musicbrainz_artist_releases", { request }),
+	autoResolveArtist: (artistId: string) => __TAURI_INVOKE<ArtistAutoResolveResult>("auto_resolve_artist", { artistId }),
 	setMusicbrainzArtistOriginCountry: (request: MusicBrainzArtistOriginCountryRequest) => __TAURI_INVOKE<MusicBrainzArtistOriginCountryUpdate>("set_musicbrainz_artist_origin_country", { request }),
 	listMusicbrainzOverlaySyncLog: (limit: number | null) => __TAURI_INVOKE<MusicBrainzOverlaySyncLogEntry[]>("list_musicbrainz_overlay_sync_log", { limit }),
 	saveSettings: (settings: AppSettings_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("save_settings", { settings }),
@@ -806,6 +807,21 @@ export type ArtistArtworkSyncSummary = {
 	message: string,
 };
 
+export type ArtistAutoResolveCandidate = {
+	id: string,
+	name: string,
+	disambiguation: string | null,
+	country: string | null,
+};
+
+export type ArtistAutoResolveResult = {
+	artistId: string,
+	artistName: string,
+	status: string,
+	message: string,
+	candidates: ArtistAutoResolveCandidate[],
+};
+
 export type ArtistBiography = {
 	artistId: string,
 	artistName: string,
@@ -850,6 +866,7 @@ export type ArtistIdentityChoice = {
 export type ArtistListRequest = {
 	searchText?: string,
 	unresolvedOnly?: boolean,
+	missingMbidOnly?: boolean,
 	missingInfo?: string,
 	onlyMissingField?: boolean,
 	yearFrom: number | null,

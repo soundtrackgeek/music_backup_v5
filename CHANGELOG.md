@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.192.0] - 2026-10-16
+
+### Added
+- **Unresolved artists → Auto-resolve & update** searches MusicBrainz for artists missing an MBID, saves a unique exact-name match as unverified, and automatically refreshes artist info, origin country, and album/EP discography. Choose how many artists to try (10 by default; editable from 1 to 1,000) using the current search, missing-info, Year, and sort filters across all pages.
+- Batch progress, Stop after the current artist, individual outcomes, and direct MusicBrainz links for matched artists and review candidates. Results remain available while moving between workspaces; failed lookups do not block later artists.
+
+### Fixed
+- Auto-resolve saves the MBID and refreshed metadata in one transaction, preserves manual origin countries, and rechecks eligibility before saving. Existing MBIDs, explicit unlinks/ignores, and split artist identities are preserved; ambiguous or truncated search results require manual review.
+
 ## [0.191.0] - 2026-10-16
 
 ### Added

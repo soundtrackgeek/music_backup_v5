@@ -2582,3 +2582,23 @@
 .artist-split-albums label span { display: grid; gap: 4px; }
 .artist-split-albums small { color: #64746b; }
 .artist-split-dialog footer { justify-content: flex-end; margin-top: 20px; }
+
+.artist-auto-resolve-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.artist-auto-resolve h2 { font-size: 1rem; margin: 0 0 6px; }
+.artist-auto-resolve p { font-size: .8rem; color: var(--text-muted, #66746f); margin: 6px 0; }
+.artist-auto-resolve-actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+.artist-auto-resolve-actions label { display: grid; gap: 5px; font-size: .75rem; }
+.artist-auto-resolve-actions input { width: 100px; min-height: 38px; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text); background: var(--color-panel); }
+.artist-auto-resolve .artist-auto-resolve-help { margin-top: 14px; max-width: 90ch; }
+.artist-auto-resolve progress { width: 100%; height: 8px; accent-color: #0a766b; margin-top: 10px; }
+.artist-auto-resolve-results { border-top: 1px solid var(--color-border); margin-top: 14px; padding-top: 12px; }
+.artist-auto-resolve-results summary { cursor: pointer; font-size: .85rem; font-weight: 600; }
+.artist-auto-resolve-results ul { list-style: none; margin: 12px 0 0; padding: 0; max-height: 360px; overflow-y: auto; }
+.artist-auto-resolve-results li { padding: 12px 0; border-top: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.artist-auto-resolve-result-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: .85rem; }
+.artist-auto-resolve-result-heading span { flex-shrink: 0; color: var(--text-muted, #66746f); font-size: .75rem; }
+.artist-auto-resolve-result-heading [data-status="updated"] { color: #0a766b; }
+.artist-auto-resolve-result-heading [data-status="failed"] { color: #b33434; }
+.artist-auto-resolve-links { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.artist-musicbrainz-link { display: inline-flex; align-items: center; gap: 5px; color: #0a766b; font-size: .8rem; text-decoration: underline; text-underline-offset: 3px; }
+.unresolved-artists-table td > .artist-musicbrainz-link { margin-top: 8px; }

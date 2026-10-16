@@ -217,6 +217,7 @@ export function ArtistTimeline({
     void listArtists({
       searchText: "",
       unresolvedOnly: false,
+      missingMbidOnly: false,
       missingInfo: "",
       onlyMissingField: false,
       yearFrom: null,

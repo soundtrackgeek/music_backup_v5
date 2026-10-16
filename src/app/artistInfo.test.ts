@@ -22,5 +22,9 @@ describe("artist information completeness", () => {
     artist.musicBrainzMbid = null;
     expect(matchesArtistInfo(artist, request)).toBe(false);
     expect(matchesArtistInfo(artist, { ...request, onlyMissingField: false })).toBe(true);
+    expect(matchesArtistInfo(artist, { ...request, missingMbidOnly: true })).toBe(false);
+    expect(matchesArtistInfo(artist, { ...request, onlyMissingField: false, missingMbidOnly: true })).toBe(true);
+    artist.musicBrainzMbid = "existing";
+    expect(matchesArtistInfo(artist, { ...request, onlyMissingField: false, missingMbidOnly: true })).toBe(false);
   });
 });

@@ -36,12 +36,14 @@ import type { AppModel } from "../../app/useAppController";
 import { useState } from "react";
 import { SplitArtistDialog } from "./SplitArtistDialog";
 import { UnresolvedArtistFilters, UnresolvedArtistTable } from "./UnresolvedArtists";
+import { ArtistAutoResolve } from "./ArtistAutoResolve";
 export function ArtistsView({
   model,
 }: {
   model: Pick<
     AppModel,
     | "clearArtistQuery"
+    | "artistAutoResolve"
     | "loadData"
     | "setArtistRequest"
     | "statistics"
@@ -349,6 +351,8 @@ export function ArtistsView({
           </div>
         </div>
       </section>
+
+      {unresolved || model.artistAutoResolve.running ? <ArtistAutoResolve batch={model.artistAutoResolve} /> : null}
 
       {splitArtistId ? <SplitArtistDialog key={splitArtistId} artistId={splitArtistId}
         onClose={() => setSplitArtistId(null)} onSaved={(result) => {

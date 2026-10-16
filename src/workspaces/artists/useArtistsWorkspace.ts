@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef } from "react";
+import { useArtistAutoResolve } from "./useArtistAutoResolve";
 import type { SplitArtistResult } from "../../bindings";
 import {
   createArtistAlbumsRequest,
@@ -160,6 +161,10 @@ export function useArtistsWorkspace({
 }: Inputs) {
   const selectedArtistIdRef = useRef(selectedArtistId);
   useEffect(() => { selectedArtistIdRef.current = selectedArtistId; }, [selectedArtistId]);
+  const artistAutoResolve = useArtistAutoResolve(artistRequest, (id) => {
+    setArtistRequest((current) => ({ ...current }));
+    if (selectedArtistIdRef.current === id) setMusicBrainzArtistDiscography(null);
+  });
   const pendingSplitSelection = useRef<{ sourceId: string; targetId: string } | null>(null);
   const artistAlbumsRequest = useMemo(
     () => (selectedArtist ? createArtistAlbumsRequest(selectedArtist) : null),
@@ -1043,6 +1048,7 @@ export function useArtistsWorkspace({
   const selectedArtistAlbumTrackCount =
     selectedArtistAlbum?.totalTracks ?? artistAlbumTracksResponse?.total ?? 0;
   return {
+    artistAutoResolve,
     artistAlbumsRequest,
     selectedArtistAlbum,
     artistAlbumTracksRequest,
