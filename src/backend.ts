@@ -1,5 +1,6 @@
 import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { previewArtistId } from "./backend/artistIdentity";
+import { matchesArtistInfo } from "./app/artistInfo";
 import { artworkUrl, invalidateArtwork, type ThumbnailSize } from "./backend/artwork";
 import { commands, events } from "./bindings";
 import { completed } from "./backend/complete";
@@ -6677,9 +6678,17 @@ export async function searchLibrary(request: BrowseRequest): Promise<BrowseRespo
 
 export async function listArtists(request: ArtistListRequest): Promise<ArtistListResponse> {
   if (!isTauriRuntime()) {
+    for (const year of [request.yearFrom, request.yearTo]) {
+      if (year != null && (!Number.isInteger(year) || year < 1 || year > 9999)) throw new Error("Years must be between 1 and 9999");
+    }
+    if (request.yearFrom != null && request.yearTo != null && request.yearFrom > request.yearTo) throw new Error("Year from must not be later than Year to");
     const searchText = request.searchText.trim().toLowerCase();
     const filtered = mockArtists.filter((artist) =>
-      artist.albumCount > 0 && `${artist.name} ${artist.disambiguation ?? ""}`.toLowerCase().includes(searchText),
+      artist.albumCount > 0 && `${artist.name} ${artist.disambiguation ?? ""}`.toLowerCase().includes(searchText) &&
+      matchesArtistInfo(artist, request) &&
+      ((request.yearFrom == null && request.yearTo == null) || mockRows.some((row) =>
+        row.trackId === null && previewArtistId(row.albumId, row.albumArtistDisplay) === artist.id && row.year != null &&
+        (request.yearFrom == null || row.year >= request.yearFrom) && (request.yearTo == null || row.year <= request.yearTo))),
     );
     const sorted = [...filtered].sort((left, right) =>
       compareArtists(left, right, request.sort.field),
@@ -8102,6 +8111,8 @@ function compareArtists(
 
 function artistSortValue(artist: ArtistSummary, field: string) {
   switch (field) {
+    case "addedAt":
+      return artist.addedAt ?? "";
     case "albumCount":
       return artist.albumCount;
     case "trackCount":

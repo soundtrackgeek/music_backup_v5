@@ -9,6 +9,7 @@ import { type InsightCohort } from "./insightCohorts";
 import { saveSearch, openExternalUrl } from "../backend";
 import { type AlbumTimeRibbonPlaylist } from "../components/AlbumTimeRibbon";
 import type { WorkspaceStores } from "./WorkspaceStoresProvider";
+import type { ArtistDetailTab } from "../workspaces/ArtistsWorkspace";
 
 type Inputs = Pick<
   WorkspaceStores,
@@ -98,8 +99,8 @@ export function useNavigationWorkspace({
   setAlbumPopularityError,
   setRelatedAlbumsError,
 }: Inputs) {
-  function resetDeferredArtistDetails() {
-    setArtistDetailTab("overview");
+  function resetDeferredArtistDetails(detailTab: ArtistDetailTab = "overview") {
+    setArtistDetailTab(detailTab);
     setArtistPopularity(null);
     setArtistPopularityError(null);
     setIsArtistPopularityLoading(false);

@@ -1146,6 +1146,14 @@ pub struct ArtistListRequest {
     #[serde(default)]
     pub search_text: String,
     #[serde(default)]
+    pub unresolved_only: bool,
+    #[serde(default)]
+    pub missing_info: String,
+    #[serde(default)]
+    pub only_missing_field: bool,
+    pub year_from: Option<i32>,
+    pub year_to: Option<i32>,
+    #[serde(default)]
     pub sort: BrowseSort,
     #[serde(default = "default_limit")]
     pub limit: u32,
@@ -1157,6 +1165,11 @@ impl Default for ArtistListRequest {
     fn default() -> Self {
         Self {
             search_text: String::new(),
+            unresolved_only: false,
+            missing_info: String::new(),
+            only_missing_field: false,
+            year_from: None,
+            year_to: None,
             sort: BrowseSort {
                 field: "name".to_string(),
                 direction: default_sort_direction(),
@@ -1174,6 +1187,8 @@ pub struct ArtistSummary {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disambiguation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added_at: Option<String>,
     pub album_count: i64,
     pub rated_album_count: i64,
     pub partial_album_count: i64,

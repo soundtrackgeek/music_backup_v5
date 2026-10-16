@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.191.0] - 2026-10-16
+
+### Added
+- **Artists → Unresolved artists** lists profiles missing core Artist info, with individual missing-field filters and an **Only this field missing** option. Results open directly in the existing Artist info editor for manual MBID/origin corrections and MusicBrainz updates, and refresh after saving.
+- Sort unresolved artists A–Z, Z–A, or recently added; combine name search with an inclusive album **Year** range. Filtering and counts cover the full catalog before pagination and preserve separate same-name profiles. Recently added uses the profile's first recorded creation date, which survives subsequent imports and metadata updates.
+
+### Fixed
+- Settle Artist info loading together with its fetched data so a completed cache lookup cannot leave MBID, country, and Update controls disabled. Keep Artist info open while working through unresolved results and move back to the last available page when corrections shrink the result set.
+
+
 ## [0.190.2] - 2026-10-14
 
 ### Fixed

@@ -782,7 +782,8 @@ const mockArtists: ArtistSummary[] = (
       topGenre: "Post-Punk",
     },
   ] satisfies ArtistSummaryWithoutMusicBrainz[]
-).map((artist) => ({
+).map((artist, index) => ({
+  addedAt: `2026-09-${String(index + 10).padStart(2, "0")} 12:00:00`,
   portraitAvailable: false,
   representativeAlbumId: null,
   representativeAlbum: null,

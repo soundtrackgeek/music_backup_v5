@@ -35,6 +35,7 @@ import { ArtistAlbumCoverBoard } from "./ArtistDetails";
 import type { AppModel } from "../../app/useAppController";
 import { useState } from "react";
 import { SplitArtistDialog } from "./SplitArtistDialog";
+import { UnresolvedArtistFilters, UnresolvedArtistTable } from "./UnresolvedArtists";
 export function ArtistsView({
   model,
 }: {
@@ -182,6 +183,7 @@ export function ArtistsView({
   } = model;
   const [splitArtistId, setSplitArtistId] = useState<string | null>(null);
   const [splitNotice, setSplitNotice] = useState<string | null>(null);
+  const unresolved = artistRequest.unresolvedOnly;
   return (
     <ArtistsWorkspace
       actions={
@@ -212,6 +214,15 @@ export function ArtistsView({
         </>
       }
     >
+      <nav className="artist-page-navigation" aria-label="Artist pages">
+        {[{ label: "All artists", unresolvedOnly: false }, { label: "Unresolved artists", unresolvedOnly: true }].map((page) => (
+          <button key={page.label} className="artist-detail-tab" type="button" aria-current={unresolved === page.unresolvedOnly ? "page" : undefined}
+            onClick={() => {
+              setArtistRequest((previous) => ({ ...previous, unresolvedOnly: page.unresolvedOnly, missingInfo: "", onlyMissingField: false, yearFrom: null, yearTo: null, offset: 0, sort: { field: "name", direction: "asc" } }));
+              if (page.unresolvedOnly) setArtistDetailTab("artist-info");
+            }}>{page.label}</button>
+        ))}
+      </nav>
       <section className="metric-grid" aria-label="Artist summary">
         <Metric
           label="Album artists"
@@ -251,9 +262,10 @@ export function ArtistsView({
                 }))
               }
               placeholder="Search album artists"
+              aria-label="Search album artists"
             />
           </div>
-          <SelectField
+          {!unresolved ? <SelectField
             label="Sort"
             value={artistRequest.sort.field}
             onChange={(field) =>
@@ -275,8 +287,10 @@ export function ArtistsView({
               { value: "lastYear", label: "Last year" },
               { value: "topGenre", label: "Top genre" },
             ]}
-          />
+          /> : null}
         </div>
+
+        {unresolved ? <UnresolvedArtistFilters request={artistRequest} onChange={setArtistRequest} /> : null}
 
         <div className="query-footer">
           <div className="chip-row inline" aria-label="Active artist filters">
@@ -296,12 +310,12 @@ export function ArtistsView({
                 <X size={14} />
               </button>
             ) : (
-              <span className="chip-empty">No active filters</span>
+              <span className="chip-empty">{unresolved ? "Artists with missing core information" : "No active filters"}</span>
             )}
           </div>
 
           <div className="sort-controls">
-            <SelectField
+            {!unresolved ? <SelectField
               label="Direction"
               value={artistRequest.sort.direction}
               onChange={(direction) =>
@@ -318,7 +332,7 @@ export function ArtistsView({
                 { value: "asc", label: "Ascending" },
                 { value: "desc", label: "Descending" },
               ]}
-            />
+            /> : null}
             <NumberField
               label="Rows"
               value={artistRequest.limit}
@@ -344,10 +358,10 @@ export function ArtistsView({
           void loadData();
         }} /> : null}
       {splitNotice ? <p role="status">{splitNotice}</p> : null}
-      <section className="table-panel" aria-label="Artist index">
+      <section className="table-panel" aria-label={unresolved ? "Unresolved artists" : "Artist index"} aria-busy={isArtistLoading}>
         <div className="panel-heading compact">
           <div>
-            <h2>Artist index</h2>
+            <h2>{unresolved ? "Unresolved artists" : "Artist index"}</h2>
             <p>
               {isArtistLoading
                 ? "Loading artists"
@@ -389,12 +403,13 @@ export function ArtistsView({
         </div>
 
         {artistError ? <p className="error-message">{artistError}</p> : null}
-        <ArtistIndexTable
+        {unresolved ? <UnresolvedArtistTable response={artistResponse} selectedArtistId={selectedArtistId}
+          onSelect={(id) => { selectArtist(id); setArtistDetailTab("artist-info"); }} /> : <ArtistIndexTable
           response={artistResponse}
           selectedArtistId={selectedArtistId}
           onSelect={selectArtist}
           countryFlagDisplay={settings.countryFlagDisplay}
-        />
+        />}
       </section>
 
       <ArtistDetailTabs

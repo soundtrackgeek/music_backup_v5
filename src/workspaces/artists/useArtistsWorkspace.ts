@@ -203,6 +203,10 @@ export function useArtistsWorkspace({
       void listArtists(artistRequest)
         .then((nextResponse) => {
           if (!cancelled) {
+            if (nextResponse.offset > 0 && nextResponse.offset >= nextResponse.total) {
+              setArtistRequest((previous) => ({ ...previous, offset: Math.max(0, Math.floor((nextResponse.total - 1) / previous.limit) * previous.limit) }));
+              return;
+            }
             setArtistResponse(nextResponse);
             const pending = pendingSplitSelection.current;
             if (pending && selectedArtistIdRef.current === pending.sourceId) {
@@ -252,7 +256,7 @@ export function useArtistsWorkspace({
       return;
     }
 
-    resetDeferredArtistDetails();
+    resetDeferredArtistDetails(artistRequest.unresolvedOnly ? "artist-info" : "overview");
     setSelectedArtistId(nextArtistId);
   }, [activeSection, artistResponse, selectedArtistId]);
 
@@ -586,22 +590,21 @@ export function useArtistsWorkspace({
     void getMusicBrainzArtistDiscography(selectedArtist.id, selectedArtist.name)
       .then((nextResponse) => {
         if (!cancelled) {
+          // Updating artistKey reruns this effect and cancels its cleanup guard.
+          // Settle loading in the same update, before that dependency changes.
+          setIsMusicBrainzArtistLoading(false);
           setMusicBrainzArtistDiscography(nextResponse);
         }
       })
       .catch((discographyError) => {
         if (!cancelled) {
+          setIsMusicBrainzArtistLoading(false);
           setMusicBrainzArtistError(
             discographyError instanceof Error
               ? discographyError.message
               : String(discographyError),
           );
           setMusicBrainzArtistDiscography(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsMusicBrainzArtistLoading(false);
         }
       });
 
@@ -647,14 +650,15 @@ export function useArtistsWorkspace({
     setArtistRequest((previous) => ({
       ...createArtistListRequest(),
       limit: previous.limit,
+      unresolvedOnly: previous.unresolvedOnly,
     }));
-    resetDeferredArtistDetails();
+    resetDeferredArtistDetails(artistRequest.unresolvedOnly ? "artist-info" : "overview");
     setArtistExportResult(null);
   }
 
   function selectArtist(artistId: string) {
     pendingSplitSelection.current = null;
-    resetDeferredArtistDetails();
+    resetDeferredArtistDetails(artistRequest.unresolvedOnly ? "artist-info" : "overview");
     setSelectedArtistId(artistId);
     setArtistExportResult(null);
   }
@@ -948,6 +952,7 @@ export function useArtistsWorkspace({
       });
       setMusicBrainzArtistOriginResult(origin);
       applyArtistOriginUpdate(origin);
+      setArtistRequest((current) => ({ ...current }));
       await refreshMusicBrainzOriginCountryStatus();
     } catch (error) {
       setMusicBrainzArtistError(
@@ -1021,7 +1026,7 @@ export function useArtistsWorkspace({
 
   function refreshAfterArtistSplit(sourceId: string, result: SplitArtistResult) {
     pendingSplitSelection.current = { sourceId, targetId: result.artistId };
-    resetDeferredArtistDetails();
+    resetDeferredArtistDetails(artistRequest.unresolvedOnly ? "artist-info" : "overview");
     refreshOriginJoinedViews();
   }
 

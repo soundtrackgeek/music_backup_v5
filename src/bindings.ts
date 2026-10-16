@@ -849,6 +849,11 @@ export type ArtistIdentityChoice = {
 
 export type ArtistListRequest = {
 	searchText?: string,
+	unresolvedOnly?: boolean,
+	missingInfo?: string,
+	onlyMissingField?: boolean,
+	yearFrom: number | null,
+	yearTo: number | null,
 	sort?: BrowseSort,
 	limit?: number,
 	offset?: number,
@@ -892,6 +897,7 @@ export type ArtistSummary_Deserialize = {
 	id: string,
 	name: string,
 	disambiguation: string | null,
+	addedAt: string | null,
 	albumCount: number,
 	ratedAlbumCount: number,
 	partialAlbumCount: number,
@@ -933,6 +939,7 @@ export type ArtistSummary_Serialize = {
 	id: string,
 	name: string,
 	disambiguation?: string | null,
+	addedAt?: string | null,
 	albumCount: number,
 	ratedAlbumCount: number,
 	partialAlbumCount: number,

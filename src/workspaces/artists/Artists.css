@@ -1,5 +1,26 @@
 /* artists styles. Selectors retain their feature namespaces. */
 
+.artist-page-navigation { display: flex; flex-wrap: wrap; gap: 6px; }
+.artist-page-navigation [aria-current="page"] { color: #0a625b; background: #e9f0ee; border-color: #b9d8d2; }
+.unresolved-artist-filters { padding-top: 16px; }
+.unresolved-artist-filter-grid { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.unresolved-artist-filter-grid .criterion { min-width: 0; }
+.unresolved-artist-filters p { max-width: 85ch; margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+.unresolved-artists-table-wrap { overflow-x: auto; }
+.unresolved-artists-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.unresolved-artists-table th, .unresolved-artists-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color, #d8e1dd); }
+.unresolved-artists-table th { font-size: 11px; color: var(--text-muted); }
+.unresolved-artists-table td:first-child { min-width: 180px; }
+.unresolved-artists-table td:nth-last-child(-n+2) { white-space: nowrap; }
+.unresolved-artists-table tr.selected { background: color-mix(in srgb, #18887d 10%, transparent); }
+.unresolved-artists-table button { display: grid; gap: 4px; width: 100%; text-align: left; padding: 4px 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.unresolved-artists-table button:focus-visible { outline: 2px solid #18887d; outline-offset: 4px; }
+.unresolved-artists-table button small, .unresolved-artists-table button span { color: var(--text-muted); }
+.artist-missing-fields { display: flex; flex-wrap: wrap; gap: 5px; min-width: 180px; }
+.artist-missing-fields span { padding: 3px 7px; border: 1px solid var(--border-color, #d8e1dd); border-radius: 4px; font-size: 11px; }
+@media (max-width: 850px) { .unresolved-artist-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .unresolved-artist-filter-grid { grid-template-columns: minmax(0, 1fr); } }
+
 .artist-artwork-panel { min-width: 0; padding: 16px 0; }
 .artist-artwork-panel > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .artist-overview > .artist-artwork-panel { grid-column: 1 / -1; }

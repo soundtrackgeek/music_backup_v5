@@ -436,30 +436,13 @@ pub(super) fn list_artists(
 ) -> Result<ArtistListResponse> {
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
-    let (where_sql, values) = artist_search_where(&request.search_text);
+    let (where_sql, mut values) = artist_search_where(&request.search_text);
+    let (info_where, info_values) = artist_info_where(&request)?;
     let album_catalog_artist_key_sql = catalog_artist_key_sql("album_artist_display");
     let album_catalog_artist_key_sql_a2 = catalog_artist_key_sql("a2.album_artist_display");
     let album_catalog_artist_key_sql_a3 = catalog_artist_key_sql("a3.album_artist_display");
 
-    let count_sql = format!(
-        "
-        SELECT COUNT(*)
-        FROM (
-            SELECT {album_catalog_artist_key_sql} AS artist_key
-            FROM albums
-            {where_sql}
-            GROUP BY artist_key
-        )
-        "
-    );
-    let total = conn
-        .query_row(&count_sql, params_from_iter(values.iter()), |row| {
-            row.get(0)
-        })
-        .context("Could not count artist results")?;
-
-    let order_sql = artist_order_clause(&request.sort);
-    let sql = format!(
+    let grouped_sql = format!(
         "
         WITH grouped AS (
             SELECT
@@ -481,8 +464,27 @@ pub(super) fn list_artists(
             FROM albums
             {where_sql}
             GROUP BY artist_key
+        )"
+    );
+    let joined_sql = format!(
+        "FROM grouped
+        LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = grouped.artist_key
+        LEFT JOIN musicbrainz_artist_links link ON link.local_artist_key = grouped.artist_key
+        LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = grouped.artist_key
+        LEFT JOIN artist_identities profile ON profile.id = grouped.artist_key
+        {info_where}"
+    );
+    values.extend(info_values);
+    let total = conn
+        .query_row(
+            &format!("{grouped_sql} SELECT COUNT(*) {joined_sql}"),
+            params_from_iter(values.iter()),
+            |row| row.get(0),
         )
-        SELECT
+        .context("Could not count artist results")?;
+    let order_sql = artist_order_clause(&request.sort);
+    let sql = format!(
+        "{grouped_sql} SELECT
             artist_key,
             artist_name,
             album_count,
@@ -506,7 +508,7 @@ pub(super) fn list_artists(
                 ORDER BY COUNT(*) DESC, LOWER(COALESCE(a2.canonical_genre, '')) ASC
                 LIMIT 1
             ) AS top_genre,
-            COALESCE(link.mbid, info.mbid) AS music_brainz_mbid,
+            COALESCE(NULLIF(TRIM(link.mbid), ''), NULLIF(TRIM(info.mbid), '')) AS music_brainz_mbid,
             info.sort_name AS music_brainz_sort_name,
             info.artist_type AS music_brainz_artist_type,
             info.gender AS music_brainz_gender,
@@ -550,14 +552,9 @@ pub(super) fn list_artists(
                 ORDER BY a3.album_score DESC, a3.year ASC, a3.id ASC
                 LIMIT 1
             ) AS representative_cover_path,
-            (SELECT disambiguation FROM artist_identities WHERE id=grouped.artist_key) AS disambiguation
-        FROM grouped
-        LEFT JOIN musicbrainz_artist_infos info
-          ON info.local_artist_key = grouped.artist_key
-        LEFT JOIN musicbrainz_artist_links link
-          ON link.local_artist_key = grouped.artist_key
-        LEFT JOIN musicbrainz_artist_origin_countries origin
-          ON origin.local_artist_key = grouped.artist_key
+            profile.disambiguation,
+            profile.created_at AS added_at
+        {joined_sql}
         {order_sql}
         LIMIT ? OFFSET ?
         "
@@ -585,6 +582,7 @@ pub(super) fn artist_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Resu
         id: row.get(0)?,
         name: row.get(1)?,
         disambiguation: row.get(37)?,
+        added_at: row.get(38)?,
         album_count: row.get(2)?,
         rated_album_count: row.get(3)?,
         partial_album_count: row.get(4)?,
@@ -657,10 +655,84 @@ pub(super) fn artist_order_clause(sort: &BrowseSort) -> String {
         "firstYear" => "first_year",
         "lastYear" => "last_year",
         "topGenre" => "top_genre",
-        _ => "LOWER(artist_name)",
+        "addedAt" => "added_at",
+        _ => "unicode_lower(artist_name)",
     };
 
-    format!("ORDER BY {field} {direction}, LOWER(artist_name) ASC")
+    format!("ORDER BY {field} IS NULL ASC, {field} {direction}, unicode_lower(artist_name) ASC, artist_key ASC")
+}
+
+// Keep these core-field rules aligned with app/artistInfo.ts. Optional gender
+// and end-area facts do not make an otherwise complete artist unresolved.
+fn artist_info_where(request: &ArtistListRequest) -> Result<(String, Vec<Value>)> {
+    let fields = [
+        ("mbid", "COALESCE(NULLIF(TRIM(link.mbid), ''), NULLIF(TRIM(info.mbid), '')) IS NULL"),
+        ("originCountry", "NULLIF(TRIM(origin.country_code), '') IS NULL"),
+        ("artistType", "NULLIF(TRIM(info.artist_type), '') IS NULL"),
+        ("sortName", "NULLIF(TRIM(info.sort_name), '') IS NULL"),
+        ("beginDate", "NULLIF(TRIM(info.life_begin_date), '') IS NULL AND info.life_begin_year IS NULL"),
+        ("beginArea", "NULLIF(TRIM(info.begin_area_name), '') IS NULL"),
+        ("endStatus", "NULLIF(TRIM(info.life_end_date), '') IS NULL AND info.life_end_year IS NULL AND (info.life_ended IS NULL OR info.life_ended = 1)"),
+    ];
+    let mut clauses = Vec::new();
+    let mut values = Vec::new();
+    if !request.missing_info.is_empty() {
+        let selected = fields
+            .iter()
+            .find(|(key, _)| *key == request.missing_info)
+            .context("Unknown missing artist information field")?;
+        clauses.push(format!("({})", selected.1));
+        if request.only_missing_field {
+            clauses.extend(
+                fields
+                    .iter()
+                    .filter(|(key, _)| *key != request.missing_info)
+                    .map(|(_, sql)| format!("NOT ({sql})")),
+            );
+        }
+    } else if request.unresolved_only {
+        clauses.push(format!(
+            "({})",
+            fields
+                .iter()
+                .map(|(_, sql)| format!("({sql})"))
+                .collect::<Vec<_>>()
+                .join(" OR ")
+        ));
+    }
+    for year in [request.year_from, request.year_to].into_iter().flatten() {
+        anyhow::ensure!(
+            (1..=9999).contains(&year),
+            "Years must be between 1 and 9999"
+        );
+    }
+    if let (Some(from), Some(to)) = (request.year_from, request.year_to) {
+        anyhow::ensure!(from <= to, "Year from must not be later than Year to");
+    }
+    if request.year_from.is_some() || request.year_to.is_some() {
+        let key = catalog_artist_key_sql("year_album.album_artist_display");
+        let mut years = vec![format!("{key} = grouped.artist_key")];
+        if let Some(year) = request.year_from {
+            years.push("year_album.year >= ?".into());
+            values.push(Value::Integer(i64::from(year)));
+        }
+        if let Some(year) = request.year_to {
+            years.push("year_album.year <= ?".into());
+            values.push(Value::Integer(i64::from(year)));
+        }
+        clauses.push(format!(
+            "EXISTS(SELECT 1 FROM albums year_album WHERE {})",
+            years.join(" AND ")
+        ));
+    }
+    Ok((
+        if clauses.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", clauses.join(" AND "))
+        },
+        values,
+    ))
 }
 
 pub(super) fn list_genres(
@@ -1299,6 +1371,109 @@ mod tests {
     use super::*;
     use crate::db::test_support::*;
 
+    fn unresolved_artist_connection() -> Connection {
+        let conn = seeded_connection();
+        conn.execute_batch("UPDATE albums SET year=1980, release_year=2001;
+          CREATE TEMP TABLE extra_artist AS SELECT * FROM albums LIMIT 1;
+          UPDATE extra_artist SET id='alpha-album', album_artist_display='Alpha', year=1979;
+          INSERT INTO albums SELECT * FROM extra_artist;
+          UPDATE extra_artist SET id='zulu-album', album_artist_display='Zulu', year=1985;
+          INSERT INTO albums SELECT * FROM extra_artist;
+          INSERT OR REPLACE INTO musicbrainz_artist_infos(local_artist_key,display_artist,mbid,sort_name,artist_type,life_begin_year,life_ended,begin_area_name,created_at,updated_at)
+            VALUES('pet shop boys','Pet Shop Boys','psb-mbid','Pet Shop Boys','Group',1981,0,'London','now','now'),
+                  ('alpha','Alpha','alpha-mbid','Alpha','Person',1950,0,'Oslo','now','now');
+          INSERT OR IGNORE INTO musicbrainz_origin_countries(country_code,country_name,iso_source,created_at,updated_at) VALUES('NO','Norway','manual','now','now');
+          INSERT OR REPLACE INTO musicbrainz_artist_origin_countries(local_artist_key,display_artist,mbid,country_code,country_name,created_at,updated_at)
+            VALUES('alpha','Alpha','alpha-mbid','NO','Norway','now','now');
+          UPDATE artist_identities SET created_at=CASE id WHEN 'pet shop boys' THEN '2026-10-01 00:00:00' WHEN 'zulu' THEN '2026-10-10 00:00:00' ELSE '2026-10-14 00:00:00' END;").unwrap();
+        conn
+    }
+
+    #[test]
+    fn unresolved_artists_filter_before_pagination_and_sort_by_first_recorded_date() {
+        let conn = unresolved_artist_connection();
+        let mut request = ArtistListRequest {
+            unresolved_only: true,
+            limit: 1,
+            ..Default::default()
+        };
+        let first = list_artists(&conn, request.clone(), 50).unwrap();
+        assert_eq!(first.total, 2);
+        assert_eq!(first.rows[0].id, "pet shop boys");
+        request.offset = 1;
+        assert_eq!(
+            list_artists(&conn, request.clone(), 50).unwrap().rows[0].id,
+            "zulu"
+        );
+        request.offset = 0;
+        request.sort.direction = "desc".into();
+        assert_eq!(
+            list_artists(&conn, request.clone(), 50).unwrap().rows[0].id,
+            "zulu"
+        );
+        request.sort.field = "addedAt".into();
+        let recent = list_artists(&conn, request.clone(), 50).unwrap();
+        assert_eq!(recent.rows[0].id, "zulu");
+        assert_eq!(
+            recent.rows[0].added_at.as_deref(),
+            Some("2026-10-10 00:00:00")
+        );
+        request.missing_info = "originCountry".into();
+        request.only_missing_field = true;
+        let country = list_artists(&conn, request.clone(), 50).unwrap();
+        assert_eq!(country.total, 1);
+        assert_eq!(country.rows[0].id, "pet shop boys");
+        conn.execute_batch("INSERT INTO musicbrainz_artist_origin_countries(local_artist_key,display_artist,mbid,country_code,country_name,created_at,updated_at) VALUES('pet shop boys','Pet Shop Boys','psb-mbid','NO','Norway','now','now');").unwrap();
+        assert_eq!(list_artists(&conn, request, 50).unwrap().total, 0);
+    }
+
+    #[test]
+    fn artist_year_filter_uses_inclusive_album_year_not_release_year_or_lifespan() {
+        let conn = unresolved_artist_connection();
+        let mut request = ArtistListRequest {
+            unresolved_only: true,
+            year_from: Some(1980),
+            year_to: Some(1985),
+            ..Default::default()
+        };
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 2);
+        request.search_text = "pet".into();
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 1);
+        request.year_from = Some(1981);
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 0);
+        request.year_from = Some(2001);
+        request.year_to = Some(2001);
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 0);
+        request.year_to = Some(1980);
+        assert!(list_artists(&conn, request, 50)
+            .unwrap_err()
+            .to_string()
+            .contains("Year from"));
+    }
+
+    #[test]
+    fn artist_missing_fields_handle_blanks_and_only_require_end_date_when_applicable() {
+        let conn = unresolved_artist_connection();
+        let mut request = ArtistListRequest {
+            search_text: "alpha".into(),
+            unresolved_only: true,
+            ..Default::default()
+        };
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 0);
+        conn.execute_batch(
+            "UPDATE musicbrainz_artist_infos SET life_ended=1 WHERE local_artist_key='alpha';",
+        )
+        .unwrap();
+        request.missing_info = "endStatus".into();
+        request.only_missing_field = true;
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 1);
+        conn.execute_batch("UPDATE musicbrainz_artist_infos SET life_end_year=2000,mbid='  ' WHERE local_artist_key='alpha';").unwrap();
+        request.missing_info = "mbid".into();
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 1);
+        request.missing_info = "invalid".into();
+        assert!(list_artists(&conn, request, 50).is_err());
+    }
+
     #[test]
     fn split_same_name_artists_have_independent_index_rows_and_metadata() {
         let conn = seeded_connection();
@@ -1334,6 +1509,27 @@ mod tests {
         assert_eq!(split.disambiguation.as_deref(), Some("French group"));
         assert!(split.music_brainz_mbid.is_none());
         assert!(!split.portrait_available);
+        let mut request = ArtistListRequest {
+            unresolved_only: true,
+            missing_info: "mbid".into(),
+            ..Default::default()
+        };
+        assert_eq!(list_artists(&conn, request.clone(), 50).unwrap().total, 2);
+        conn.execute(
+            "UPDATE albums SET year=1985 WHERE artist_identity_key=?1",
+            [&result.artist_id],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE albums SET year=2000 WHERE artist_identity_key='zoo'",
+            [],
+        )
+        .unwrap();
+        request.year_from = Some(1980);
+        request.year_to = Some(1985);
+        let matching = list_artists(&conn, request, 50).unwrap();
+        assert_eq!(matching.total, 1);
+        assert_eq!(matching.rows[0].id, result.artist_id);
     }
 
     #[test]

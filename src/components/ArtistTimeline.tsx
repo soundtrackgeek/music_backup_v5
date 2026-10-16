@@ -216,6 +216,11 @@ export function ArtistTimeline({
     if (artistOptions.length > 0) return;
     void listArtists({
       searchText: "",
+      unresolvedOnly: false,
+      missingInfo: "",
+      onlyMissingField: false,
+      yearFrom: null,
+      yearTo: null,
       sort: { field: "name", direction: "asc" },
       limit: 500,
       offset: 0,

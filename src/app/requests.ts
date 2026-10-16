@@ -163,6 +163,11 @@ export function createAlbumTracksRequest(albumId: string): BrowseRequest {
 export function createArtistListRequest(): ArtistListRequest {
   return {
     searchText: "",
+    unresolvedOnly: false,
+    missingInfo: "",
+    onlyMissingField: false,
+    yearFrom: null,
+    yearTo: null,
     sort: { field: "name", direction: "asc" },
     limit: 50,
     offset: 0,
