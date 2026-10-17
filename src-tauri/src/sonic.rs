@@ -10,10 +10,12 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom},
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
     time::{Duration, Instant},
 };
 use tauri::AppHandle;
+
+mod analyzer;
 
 /// A problem with this file may be saved and skipped. Launch, protocol and
 /// database failures must stop the job instead of poisoning the whole queue.
@@ -309,46 +311,15 @@ fn analyzer_path() -> Result<PathBuf> {
 }
 
 fn extract(path: &Path, stop: &impl Fn() -> bool) -> Result<Analysis> {
-    let output = tempfile::NamedTempFile::new()?;
-    let errors = tempfile::NamedTempFile::new()?;
     let mut cmd = Command::new(analyzer_path()?);
-    cmd.arg(path)
-        .stdin(Stdio::null())
-        .stdout(output.reopen()?)
-        .stderr(errors.reopen()?);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000 | 0x0000_4000);
+    cmd.arg(path);
+    let output = analyzer::run(&mut cmd, stop, Duration::from_secs(180))?;
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr);
+        return Err(analyzer_failure(output.status.code(), &message));
     }
-    let mut child = cmd.spawn()?;
-    let started = Instant::now();
-    let status = loop {
-        if stop() || started.elapsed() > Duration::from_secs(180) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(track_error(
-                "Analysis interrupted or exceeded the three-minute per-track limit",
-            ));
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-            Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(e.into());
-            }
-        }
-    };
-    if !status.success() {
-        let message = fs::read_to_string(errors.path()).unwrap_or_default();
-        return Err(analyzer_failure(status.code(), &message));
-    }
-    if output.as_file().metadata()?.len() > 64 * 1024 {
-        bail!("Analyzer response exceeded its limit");
-    }
-    let analysis: Analysis = serde_json::from_reader(output.reopen()?)?;
+    let analysis: Analysis = serde_json::from_slice(&output.stdout)
+        .context("Analyzer returned an invalid JSON response")?;
     if !analysis.valid() {
         bail!("Analyzer returned an incompatible or invalid feature profile");
     }

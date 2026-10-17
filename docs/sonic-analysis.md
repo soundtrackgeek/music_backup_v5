@@ -41,6 +41,17 @@ continues to handle other Activity Center jobs while analysis waits. Pause,
 resume, cancel, and retry in Activity Center. Completed files survive pauses,
 restarts, cancellation, and failed batches; retry retains completed checkpoints.
 
+Since 0.192.1, analyzer results and diagnostics travel through pipes, with both
+streams read concurrently and limited to 64 KiB each. Analysis no longer creates
+or reopens temporary output files for each track. This fixes Windows **Access is
+denied** failures when a random `.tmp...` filename collides with an existing Temp
+directory, including names differing only by letter case. After updating, choose
+**Continue analysis** to retry failed entries and resume pending work. Completed
+analysis and the saved queue are retained; no Temp-folder cleanup is needed.
+Excessive analyzer output is treated as a fatal process/protocol error, with
+completed checkpoints saved. Pause/cancel and the per-track timeout still stop
+the child process.
+
 ### Queue storage
 
 `sonic-work.sqlite3` stores file queues and checkpoints, while

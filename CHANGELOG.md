@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.192.1] - 2026-10-17
+
+### Fixed
+- Prevent Audio analysis from stopping with Windows `Access is denied` when a random temporary output filename collides with an existing directory, including a case-insensitive name match. Capture analyzer results and diagnostics through concurrently drained, bounded pipes instead of creating and reopening two Temp files per track.
+- Preserve pause/cancel, per-track timeouts, and the distinction between individual file failures and fatal analyzer errors. Stop excessive output without unbounded memory or disk usage, reap the analyzer on failure, and retain saved results and queue checkpoints for **Continue analysis** after updating.
+
 ## [0.192.0] - 2026-10-16
 
 ### Added

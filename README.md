@@ -1,5 +1,11 @@
 # Music Library
 
+Music Library **0.192.1** fixes Audio analysis stopping with **Access is denied**
+when a randomly named output file collides with an existing Windows Temp folder.
+Analyzer output now uses bounded pipes instead of temporary files. After updating,
+choose **Tools → Audio analysis → Continue analysis** to retry failed entries and
+resume the saved queue; completed analysis is reused.
+
 Music Library **0.190.2** adds **Tools → Audio analysis → Continue analysis**
 with saved progress, errors and a Pause button directly in the analysis panel.
 Continue works while coverage is loading. **Analyze library** also resumes an
