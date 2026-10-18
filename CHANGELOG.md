@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.193.0] - 2026-10-18
+
+### Added
+- **Statistics → In Review** with calendar Year, Month, Monday–Sunday Week, and Rolling 12 months reports, previous-period comparisons, local calendar navigation, and explicit in-progress and history-coverage states.
+- Collection growth, recorded album-rating changes, newly rated tracks, completion gained, listening rankings, first-heard album discovery, top added genres, and biggest net album-rating changes. Listening highlights retain reviewed same-name artist identities and distinguish total from matched plays.
+- A reconstructed yearly **taste drift** chart for 4★+ album ratings with exact genre shares, complete Markdown exports, and a shareable PNG summary card. Reports explain initial-import baselines, current genre labels, missing history, and snapshot limitations.
+
 ## [0.192.1] - 2026-10-17
 
 ### Fixed

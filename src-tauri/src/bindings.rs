@@ -14,6 +14,7 @@ use super::{
     artist_artwork,
     artist_identity,
     listening,
+    review,
     release_radar,
     sonic,
     sonic_failures,
@@ -203,6 +204,8 @@ macro_rules! specta_commands {
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         listening::listening_overview,
+        review::review_report,
+        review::review_export_png,
         listening::listening_list,
         listening::listening_configure_source,
         listening::listening_clear_source,

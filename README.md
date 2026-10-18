@@ -343,6 +343,18 @@ Opening an album track list reuses that artist snapshot and requests `track.getI
 
 SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Schema version 52 stores directed similar-artist snapshots and their ranked relationship scores. Schema version 53 stores API-derived related-album snapshots and local album matches. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
 
+## Year, month, and week in review
+
+Open **Statistics → In Review** for a calendar **Year**, **Month**, Monday–Sunday **Week**, or **Rolling 12 months** ending on a chosen date. Use the date field or previous/next controls to revisit earlier periods; your selection stays when opening an album or artist and returning. Calendar boundaries use your computer's time zone and account for daylight-saving changes. Current periods are marked in progress and stop at the report time; comparisons use the full preceding period.
+
+The review shows first-recorded album additions and new artists, recorded album ratings given, newly rated tracks on existing albums, completion gained in percentage points, plays, and the previous period's values. It includes most-played artists, albums, and tracks; the most-played album first heard during the period; genres of added albums; and the largest net album-rating changes. Album and artist links open their existing library views, preserving reviewed same-name artist identities. Unmatched plays count toward total plays but stay out of library rankings.
+
+**Taste drift** reconstructs the latest recorded 4★+ album ratings at each UTC year end, carrying earlier ratings forward. Its last year stops at the selected review period, and up to twelve years appear. Stacked bars show genre shares; **Show exact genre shares** provides counts and percentages for every genre. Genre labels come from the current catalog because historical labels were not snapshotted. Missing/removed albums have an explicit unknown group.
+
+**Export Markdown** saves the full report, comparisons, genre shares, and calculation notes. **Share PNG card** creates a 1200 × 1000 summary with collection totals and listening highlights. Desktop exports go to the app-data `exports` folder with a copyable path; browser preview downloads illustrative sample exports. Reports are calculated locally without an AI or provider request.
+
+History coverage is shown on the page. First-recorded introductions include the initial library import; re-adding the same album does not count as a new introduction. “Album ratings given” counts non-empty album-rating changes, while “Newly rated tracks” sums positive rated-track gains on existing albums, not individual star clicks. Completion compares saved rated-track shares and is unavailable without a baseline. New artists use current reviewed identities. Discovery means first heard in **imported history**, so missing older plays can make a familiar album look new. The expandable calculation notes and Markdown export retain these limits.
+
 ## Listening history
 
 **Statistics → Listening** imports what you actually play and matches it to library tracks. Plays are read-only copies; Music Library never scrobbles or edits a provider account.

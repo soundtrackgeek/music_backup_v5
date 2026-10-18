@@ -8,9 +8,12 @@ import {
   workspaceReducer,
 } from "../../app/workspaceStore";
 import { useReducer } from "react";
+import { localDate, type ReviewPeriod } from "./reviewPeriods";
 type StatisticsState = {
   yearLedgerSelection: YearLedgerSelection;
-  statisticsView: "overview" | "rating" | "listening";
+  statisticsView: "overview" | "rating" | "listening" | "review";
+  reviewPeriod: ReviewPeriod;
+  reviewAnchor: string;
   statisticsCohort: InsightCohort | null;
   statistics: StatisticsResponse | null;
   statsError: string | null;
@@ -25,7 +28,8 @@ function createInitialState(): StatisticsState {
     excludedGenres: [],
     selectedYear: null,
   };
-  const statisticsView: "overview" | "rating" | "listening" = "overview";
+  const statisticsView: "overview" | "rating" | "listening" | "review" =
+    "overview";
   const statisticsCohort: InsightCohort | null = null;
   const statistics: StatisticsResponse | null = null;
   const statsError: string | null = null;
@@ -33,6 +37,8 @@ function createInitialState(): StatisticsState {
   return {
     yearLedgerSelection,
     statisticsView,
+    reviewPeriod: "year",
+    reviewAnchor: localDate(new Date()),
     statisticsCohort,
     statistics,
     statsError,
@@ -49,6 +55,8 @@ function useStatisticsStoreValue() {
   const {
     yearLedgerSelection,
     statisticsView,
+    reviewPeriod,
+    reviewAnchor,
     statisticsCohort,
     statistics,
     statsError,
@@ -59,6 +67,8 @@ function useStatisticsStoreValue() {
       createWorkspaceSetters<StatisticsState>(dispatch, [
         "yearLedgerSelection",
         "statisticsView",
+        "reviewPeriod",
+        "reviewAnchor",
         "statisticsCohort",
         "statistics",
         "statsError",
@@ -69,6 +79,8 @@ function useStatisticsStoreValue() {
   const {
     setYearLedgerSelection,
     setStatisticsView,
+    setReviewPeriod,
+    setReviewAnchor,
     setStatisticsCohort,
     setStatistics,
     setStatsError,
@@ -79,6 +91,10 @@ function useStatisticsStoreValue() {
     yearLedgerSelection,
     setYearLedgerSelection,
     statisticsView,
+    reviewPeriod,
+    setReviewPeriod,
+    reviewAnchor,
+    setReviewAnchor,
     setStatisticsView,
     statisticsCohort,
     setStatisticsCohort,

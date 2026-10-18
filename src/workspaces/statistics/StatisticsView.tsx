@@ -17,6 +17,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { ListeningHistory } from "./ListeningHistory";
+import { Review } from "./Review";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import {
   YearProgressExplorer,
@@ -160,6 +161,10 @@ export function StatisticsView({
             <Headphones size={16} />
             Listening
           </button>
+          <button type="button" role="tab" id="statistics-review-tab" aria-controls="statistics-review"
+            aria-selected={statisticsView === "review"} onClick={() => setStatisticsView("review")}>
+            <Sparkles size={16} />In Review
+          </button>
         </div>
         <div className="topbar-actions">
           <button
@@ -172,6 +177,13 @@ export function StatisticsView({
           </button>
         </div>
       </header>
+
+      {statisticsView === "review" ? (
+        <section id="statistics-review" role="tabpanel" aria-labelledby="statistics-review-tab">
+          <Review onOpenAlbum={openTimelineAlbum} onOpenArtist={openArtistFromMusicMap}
+            onOpenListening={() => setStatisticsView("listening")} refreshToken={statistics} />
+        </section>
+      ) : null}
 
       {statisticsView === "listening" ? (
         <section

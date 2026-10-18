@@ -422,7 +422,9 @@ The same artist can therefore match in one feature (Wish List auto-complete) and
 - **Aurora:** add a `recordPlays` bridge operation, or have Aurora write a small plays file that Music Library ingests.
 - Store everything in a `plays(track_key, played_at, source)` table with dedupe across sources.
 
-### 2. Year in Review and taste drift
+### 2. Year in Review and taste drift - DONE
+
+**Implemented in 0.193.0 (2026-10-18):** **Statistics → In Review** covers calendar years, months, Monday–Sunday weeks, and rolling twelve months, with previous-period comparisons. Local calendar boundaries account for daylight saving; in-progress reports stop at the report time. Collection introductions, new artists, recorded album ratings, newly rated tracks, completion changes, listening rankings, first-heard album discovery, added genres, and net rating changes use existing history. Same-name artist profiles stay separate. A yearly 4★+ rating-share timeline reconstructs recorded favorites through each UTC year end using current genre labels. Exact shares, complete Markdown exports, and a PNG share card are included. Coverage and calculation notes explain initial imports, missing baselines, current identities/genres, and incomplete listening history. See [reviews guide](../README.md#year-month-and-week-in-review).
 
 **Why:** `rating_events`, `rating_snapshots`, and `library_updates` already hold a time series of your taste: albums added, ratings given, genres growing. Nothing surfaces it as a story yet.
 

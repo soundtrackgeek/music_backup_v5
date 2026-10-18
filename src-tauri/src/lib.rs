@@ -23,6 +23,7 @@ mod jev;
 mod jobs;
 mod lastfm;
 mod listening;
+mod review;
 mod release_radar;
 mod library_completion;
 mod models;

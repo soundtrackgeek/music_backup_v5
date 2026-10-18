@@ -6,6 +6,8 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
+	reviewReport: (request: ReviewRequest) => __TAURI_INVOKE<ReviewReport>("review_report", { request }),
+	reviewExportPng: (png: number[]) => __TAURI_INVOKE<string>("review_export_png", { png }),
 	listeningList: (request: ListeningListRequest) => __TAURI_INVOKE<ListeningRow[]>("listening_list", { request }),
 	listeningConfigureSource: (request: ListeningSourceRequest) => __TAURI_INVOKE<ListeningOverview>("listening_configure_source", { request }),
 	listeningClearSource: (source: string) => __TAURI_INVOKE<ListeningOverview>("listening_clear_source", { source }),
@@ -4043,6 +4045,63 @@ export type ReleaseRadar = {
 	identifiedArtistCount: number,
 	unresolvedArtistIds: string[],
 	releases: RadarRelease[],
+};
+
+export type ReviewDriftYear = {
+	year: number,
+	total: number,
+	genres: ReviewGenre[],
+};
+
+export type ReviewGenre = {
+	genre: string,
+	albums: number,
+};
+
+export type ReviewListening = {
+	plays: number,
+	matchedPlays: number,
+	tracks: number,
+	topTracks: ListeningRow[],
+	topAlbums: ListeningRow[],
+	topArtists: ListeningRow[],
+	discovery: ListeningRow | null,
+	historySince: number | null,
+};
+
+export type ReviewMetrics = {
+	albumsAdded: number,
+	newArtists: number,
+	albumRatingsGiven: number,
+	newlyRatedTracks: number,
+	completionChange: number | null,
+	listening: ReviewListening,
+};
+
+export type ReviewRatingChange = {
+	albumId: string | null,
+	album: string,
+	artist: string,
+	previous: number,
+	current: number,
+};
+
+export type ReviewReport = {
+	startAt: number,
+	endAt: number,
+	previousStartAt: number,
+	activitySince: number | null,
+	current: ReviewMetrics,
+	previous: ReviewMetrics,
+	topGenres: ReviewGenre[],
+	ratingChanges: ReviewRatingChange[],
+	tasteDrift: ReviewDriftYear[],
+};
+
+export type ReviewRequest = {
+	startAt: number,
+	endAt: number,
+	previousStartAt: number,
 };
 
 export type RightSidebarMode = "expanded" | "hidden";

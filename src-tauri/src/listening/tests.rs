@@ -210,6 +210,29 @@ fn catalog() -> Connection {
     conn
 }
 
+#[test]
+fn review_listening_has_exact_boundaries_and_keeps_same_name_profiles_separate() {
+    let conn = catalog();
+    album(&conn,"1","Creed","First",100);
+    album(&conn,"2","Creed","Second",100);
+    track(&conn,1,"1","Creed","Creed","First","Song",100,("D:/First","1.mp3"));
+    track(&conn,2,"2","Creed","Creed","Second","Song",100,("D:/Second","1.mp3"));
+    let second=split_artist(&conn,"Creed","2","Second group");
+    for (title,at) in [("First",NOW-10),("First",NOW),("Second",NOW+1),("Second",NOW+100)] {
+        insert_plays(&conn,"aurora",&[play("Creed","Song",Some(title),at)]).unwrap();
+    }
+    insert_plays(&conn,"lastfm",&[play("Unknown","Outside",None,NOW+2)]).unwrap();
+    refresh_links(&conn).unwrap();
+    let report=review::summarize(&conn,NOW,NOW+100,true).unwrap();
+    assert_eq!(report.plays,3);
+    assert_eq!(report.matched_plays,2);
+    assert_eq!(report.tracks,2);
+    assert_eq!(report.top_artists.len(),2);
+    assert!(report.top_artists.iter().any(|row| row.artist_id.as_deref()==Some(&second)));
+    assert_eq!(report.discovery.unwrap().album_id.as_deref(),Some("2"));
+    assert!(report.top_albums.iter().all(|row| row.plays==1));
+}
+
 fn album(conn: &Connection, id: &str, artist: &str, title: &str, rating: i64) {
     conn.execute(
         "INSERT INTO albums (

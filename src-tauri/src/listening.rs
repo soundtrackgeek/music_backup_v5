@@ -19,6 +19,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 mod artist_profiles;
+pub(crate) mod review;
 use artist_profiles::ArtistProfiles;
 
 pub(crate) const CROSS_SOURCE_WINDOW_SECONDS: i64 = 600;
@@ -1232,7 +1233,7 @@ pub(crate) fn record_bridge_plays_at(app_data_dir: &Path, payload: Value) -> Res
 // ---------------------------------------------------------------------------
 
 #[cfg(not(test))]
-fn ensure_links(app: &tauri::AppHandle) -> Result<()> {
+pub(crate) fn ensure_links(app: &tauri::AppHandle) -> Result<()> {
     let (reader, _) = crate::db::open_read(app)?;
     if links_current(&reader)? {
         return Ok(());

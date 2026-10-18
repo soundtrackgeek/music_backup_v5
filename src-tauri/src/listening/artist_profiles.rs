@@ -166,10 +166,21 @@ impl ArtistProfiles {
         since: i64,
         limit: u32,
     ) -> Result<Vec<ListeningRow>> {
+        self.top_artists_between(conn, since, i64::MAX, limit)
+    }
+
+    pub fn top_artists_between(
+        &self,
+        conn: &Connection,
+        since: i64,
+        until: i64,
+        limit: u32,
+    ) -> Result<Vec<ListeningRow>> {
         let key = crate::identity::catalog_artist_key_sql("t.album_artist_display");
-        let mut statement=conn.prepare(&format!("{} SELECT COALESCE(t.display_artist,''),COALESCE(t.album_artist_display,''),{key},played.plays,played.last_played FROM played JOIN tracks t ON t.id=played.track_id",played_cte()))?;
+        let played = played_cte().replace("p.played_at >= ?1", "p.played_at >= ?1 AND p.played_at < ?2");
+        let mut statement=conn.prepare(&format!("{played} SELECT COALESCE(t.display_artist,''),COALESCE(t.album_artist_display,''),{key},played.plays,played.last_played FROM played JOIN tracks t ON t.id=played.track_id"))?;
         let mut grouped: HashMap<String, ListeningRow> = HashMap::new();
-        for value in statement.query_map([since], |r| {
+        for value in statement.query_map([since, until], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
