@@ -6419,6 +6419,17 @@ mod tests {
         assert_eq!(changed_tracks, 1);
         assert_eq!(changed_albums, 1);
 
+        // Aurora's targeted final-track rating sync feeds the completion journal
+        // in the same transaction as the catalog update.
+        let history = crate::rated_albums::history(&conn).expect("completion history");
+        let completed = history
+            .iter()
+            .find(|album| album.album_id == initial.album_id)
+            .expect("newly completed album in history");
+        assert_eq!(completed.date_kind, "completed");
+        assert!(completed.rated_at.is_some());
+        assert!(completed.currently_complete);
+
         let normalized: (
             Option<String>,
             Option<i32>,

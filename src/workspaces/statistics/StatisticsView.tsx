@@ -15,9 +15,11 @@ import {
   ChevronRight,
   FileSearch,
   Headphones,
+  CheckCheck,
 } from "lucide-react";
 import { ListeningHistory } from "./ListeningHistory";
 import { Review } from "./Review";
+import { RatedAlbums } from "./RatedAlbums";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import {
   YearProgressExplorer,
@@ -86,6 +88,7 @@ export function StatisticsView({
     | "ratingAlbumTotal"
     | "ratingTrackTotal"
     | "openTimelineAlbum"
+    | "catalogRefreshKey"
   > & Partial<Pick<AppModel, "openArtistFromMusicMap">>;
 }) {
   const {
@@ -110,6 +113,7 @@ export function StatisticsView({
     ratingTrackTotal,
     openTimelineAlbum,
     openArtistFromMusicMap,
+    catalogRefreshKey,
   } = model;
   return (
     <section
@@ -161,6 +165,10 @@ export function StatisticsView({
             <Headphones size={16} />
             Listening
           </button>
+          <button type="button" role="tab" id="statistics-rated-albums-tab" aria-controls="statistics-rated-albums"
+            aria-selected={statisticsView === "ratedAlbums"} onClick={() => setStatisticsView("ratedAlbums")}>
+            <CheckCheck size={16} />Rated albums
+          </button>
           <button type="button" role="tab" id="statistics-review-tab" aria-controls="statistics-review"
             aria-selected={statisticsView === "review"} onClick={() => setStatisticsView("review")}>
             <Sparkles size={16} />In Review
@@ -178,6 +186,11 @@ export function StatisticsView({
         </div>
       </header>
 
+      {statisticsView === "ratedAlbums" ? (
+        <section id="statistics-rated-albums" role="tabpanel" aria-labelledby="statistics-rated-albums-tab">
+          <RatedAlbums onOpenAlbum={openTimelineAlbum} refreshToken={statistics} catalogRevision={catalogRefreshKey} />
+        </section>
+      ) : null}
       {statisticsView === "review" ? (
         <section id="statistics-review" role="tabpanel" aria-labelledby="statistics-review-tab">
           <Review onOpenAlbum={openTimelineAlbum} onOpenArtist={openArtistFromMusicMap}

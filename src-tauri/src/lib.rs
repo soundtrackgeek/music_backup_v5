@@ -24,6 +24,7 @@ mod jobs;
 mod lastfm;
 mod listening;
 mod review;
+mod rated_albums;
 mod release_radar;
 mod library_completion;
 mod models;

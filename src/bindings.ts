@@ -7,6 +7,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const commands = {
 	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
 	reviewReport: (request: ReviewRequest) => __TAURI_INVOKE<ReviewReport>("review_report", { request }),
+	ratedAlbumHistory: () => __TAURI_INVOKE<RatedAlbum[]>("rated_album_history"),
 	reviewExportPng: (png: number[]) => __TAURI_INVOKE<string>("review_export_png", { png }),
 	listeningList: (request: ListeningListRequest) => __TAURI_INVOKE<ListeningRow[]>("listening_list", { request }),
 	listeningConfigureSource: (request: ListeningSourceRequest) => __TAURI_INVOKE<ListeningOverview>("listening_configure_source", { request }),
@@ -3971,6 +3972,25 @@ export type RadarRelease = {
 	musicbrainzUrl: string,
 	owned: boolean,
 	onWishList: boolean,
+};
+
+export type RatedAlbum = {
+	albumId: string,
+	album: string,
+	artist: string,
+	year: number | null,
+	genre: string | null,
+	country: string | null,
+	coverPath: string | null,
+	tracks: number,
+	seconds: number | null,
+	albumRating: number | null,
+	score: number | null,
+	ratedAt: number | null,
+	/**  completed = observed transition; firstSeen = already complete; unknown = no evidence. */
+	dateKind: string,
+	inLibrary: boolean,
+	currentlyComplete: boolean,
 };
 
 export type RatingBucket = {

@@ -1,0 +1,75 @@
+.rated-albums-page { --rated-muted: #586d65; --rated-accent: #225f4c; color: var(--color-text); padding-bottom: 24px; }
+.rated-albums-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 18px 0 26px; }
+.rated-albums-heading h2 { font: 600 clamp(32px, 3.4vw, 48px)/1.1 "Cormorant Garamond", Georgia, serif; margin: 0 0 10px; }
+.rated-albums-heading p { color: var(--rated-muted); margin: 0; font-size: 13px; line-height: 1.6; }
+.rated-albums-page .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; }
+.rated-albums-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 20px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-panel); }
+.rated-albums-filters label, .rated-albums-filters legend, .rated-albums-toolbar label { font-size: 12px; font-weight: 600; color: var(--rated-muted); }
+.rated-albums-filters label { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.rated-albums-page input, .rated-albums-page select { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-panel); color: var(--color-text); font: inherit; font-size: 12px; caret-color: var(--rated-accent); }
+.rated-albums-page input::placeholder { color: var(--rated-muted); opacity: 1; }
+.rated-albums-page :is(button, input, select, summary):focus-visible { outline: 2px solid var(--rated-accent); outline-offset: 3px; }
+.rated-albums-page ::selection { background: #c2dfd1; color: #17211f; }
+.rated-albums-filters fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.rated-albums-filters legend { padding: 0; margin-bottom: 7px; }
+.rated-albums-filters fieldset > div { display: flex; gap: 8px; align-items: center; }
+.rated-search > span { position: relative; }
+.rated-search svg { position: absolute; left: 10px; top: 11px; }
+.rated-search input { padding-left: 34px; }
+.rated-reset { justify-self: end; align-self: end; }
+.rated-albums-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 24px 0 12px; }
+.rated-albums-toolbar p { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; color: var(--rated-muted); }
+.rated-albums-toolbar svg, .rated-albums-toolbar strong { color: var(--rated-accent); }
+.rated-albums-toolbar label { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.rated-albums-toolbar select { width: auto; max-width: 260px; }
+.rated-albums-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--color-border); }
+.rated-album-row { display: grid; grid-template-columns: minmax(240px, 2.1fr) minmax(145px, 1.3fr) 128px 60px 150px; align-items: center; gap: 20px; padding: 20px 4px; border-bottom: 1px solid var(--color-border); }
+.rated-album-title { display: flex; align-items: center; gap: 18px; padding: 0; min-width: 0; text-align: left; background: none; color: inherit; border: 0; cursor: pointer; font: inherit; }
+.rated-album-title:disabled { opacity: 1; cursor: default; }
+.rated-album-title:not(:disabled):hover strong { color: var(--rated-accent); text-decoration: underline; text-underline-offset: 4px; }
+.rated-album-title > span:last-child { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.rated-album-title strong { font-size: 16px; font-weight: 650; line-height: 1.4; }
+.rated-album-artist { font-size: 12px; color: var(--rated-muted); }
+.rated-album-cover { flex: 0 0 76px; width: 76px; height: 76px; border-radius: 5px; }
+.rated-album-details, .rated-album-rating, .rated-album-score, .rated-album-date { display: grid; gap: 6px; font-variant-numeric: tabular-nums; font-size: 12px; line-height: 1.5; }
+.rated-album-details { overflow-wrap: anywhere; }
+.rated-album-row small { color: var(--rated-muted); font-size: 11px; }
+.rated-album-score strong { color: var(--rated-accent); font-size: 22px; font-weight: 600; }
+.rated-album-date { text-align: right; }
+.rated-album-date time { font-weight: 600; }
+.rated-album-rating .rating-stars { gap: 2px; color: var(--rated-muted); }
+.rated-album-rating .rating-stars .filled { color: var(--rated-accent); fill: currentColor; }
+.rated-album-rating .rating-stars small { margin-left: 4px; color: var(--color-text); }
+.rated-albums-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 20px; font-size: 12px; }
+.rated-albums-pagination > span { margin-right: auto; }
+.rated-albums-empty { padding: 56px 20px; text-align: center; color: var(--rated-muted); }
+.rated-albums-empty h3 { color: var(--color-text); font-size: 20px; }
+.rated-albums-empty p { max-width: 65ch; margin: 12px auto 20px; line-height: 1.7; }
+.rated-albums-notes { margin-top: 24px; font-size: 12px; color: var(--rated-muted); line-height: 1.8; }
+.rated-albums-notes summary { width: fit-content; cursor: pointer; text-underline-offset: 3px; }
+.rated-albums-notes p { max-width: 75ch; }
+.rated-preview { background: #f6eacb; color: #71501d; padding: 10px 14px; border-radius: 6px; font-size: 12px; }
+.rated-albums-error { margin: 16px 0; color: #a13232; }
+.rated-albums-error small { display: block; margin-top: 8px; }
+:root[data-theme="dark"] .rated-albums-page { --rated-muted: #a6bcb3; --rated-accent: #8fd5b8; }
+@media (max-width: 1250px) {
+  .rated-album-row { grid-template-columns: minmax(220px, 2fr) minmax(130px, 1fr) 120px 55px; gap: 16px; }
+  .rated-album-date { grid-column: 2 / -1; display: flex; gap: 10px; text-align: left; }
+  .rated-album-title { grid-row: span 2; }
+}
+@media (max-width: 800px) {
+  .rated-albums-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rated-album-row { grid-template-columns: minmax(0, 1fr) 120px 55px; }
+  .rated-album-title { grid-column: 1 / -1; grid-row: auto; }
+  .rated-album-date { grid-column: 1 / -1; }
+  .rated-albums-heading { align-items: start; flex-direction: column; }
+}
+@media (max-width: 480px) {
+  .rated-albums-filters { padding: 14px; gap: 14px 10px; }
+  .rated-search { grid-column: 1 / -1; }
+  .rated-albums-toolbar label { width: 100%; }
+  .rated-albums-toolbar select { flex: 1; }
+  .rated-album-row { gap: 12px; grid-template-columns: minmax(0, 1fr) 120px; }
+  .rated-album-score { grid-column: 2; grid-row: 3; }
+  .rated-album-details { grid-row: 2 / 4; }
+}

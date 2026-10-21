@@ -343,6 +343,14 @@ Opening an album track list reuses that artist snapshot and requests `track.getI
 
 SQLite schema version 49 stores artist refresh state and normalized track popularity independently of transient imported track IDs. Schema version 52 stores directed similar-artist snapshots and their ranked relationship scores. Schema version 53 stores API-derived related-album snapshots and local album matches. Successful responses honor provider cache headers with a seven-day fallback, unavailable tracks are retained for 30 days, and stale cached data remains usable when a refresh fails. Text is cached; Last.fm credentials are never stored in SQLite, logs, browser storage, or backups.
 
+## Fully rated album history
+
+Open **Statistics → Rated albums** to browse albums whose tracks have all been rated. The history updates automatically after Aurora successfully syncs ratings to Music Library. Each row shows the cover, album artist, album title, **album year** (not reissue/release year), genre, artist origin country, number of tracks, album length, Album Rating, Album Score, and date recorded. Open an album by clicking its cover or title.
+
+Search by artist/title and combine genre, country, album-year ranges, inclusive local date ranges, and date evidence. Sort by newest/oldest date, highest/lowest score, highest rating, artist, album, or year. Results are paginated; filters and sorting stay selected when opening an album and returning.
+
+Each album appears once at its **first recorded completion**. Later edits or reimports do not move that date. The recorded date is the successful library-sync time, which may be later than the original Aurora rating when sync was delayed. An album that was already fully rated when first recorded is labeled **First seen fully rated**; its original completion date is unknown. Older complete albums with no dated evidence show **Date unknown** and are excluded by date filters. Metadata, ratings, and scores reflect the current catalog. Historical entries remain if ratings are later cleared or an album is removed, with explicit status labels and only the details available from the journal. The history is local and reads the existing rating journal without changing MP3 tags.
+
 ## Year, month, and week in review
 
 Open **Statistics → In Review** for a calendar **Year**, **Month**, Monday–Sunday **Week**, or **Rolling 12 months** ending on a chosen date. Use the date field or previous/next controls to revisit earlier periods; your selection stays when opening an album or artist and returning. Calendar boundaries use your computer's time zone and account for daylight-saving changes. Current periods are marked in progress and stop at the report time; comparisons use the full preceding period.

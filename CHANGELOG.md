@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.194.0] - 2026-10-21
+
+### Added
+- **Statistics → Rated albums**, a cover-led history of fully rated albums with album artist, title, album year, genre, origin country, track count, duration, Album Rating, Album Score, and recorded completion date. Aurora completions appear automatically after a successful catalog sync.
+- Search and combined genre, country, album-year, date-range, and date-evidence filters; sorting by completion date, score, rating, artist, title, and year; paginated results and album navigation with preserved filters.
+- First recorded completion remains stable through reimports and subsequent rating changes. Previously completed imports are explicitly marked “First seen fully rated”; undated legacy albums remain undated, and removed albums retain available historical details.
+
 ## [0.193.0] - 2026-10-18
 
 ### Added

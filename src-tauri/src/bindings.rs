@@ -15,6 +15,7 @@ use super::{
     artist_identity,
     listening,
     review,
+    rated_albums,
     release_radar,
     sonic,
     sonic_failures,
@@ -205,6 +206,7 @@ fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         listening::listening_overview,
         review::review_report,
+        rated_albums::rated_album_history,
         review::review_export_png,
         listening::listening_list,
         listening::listening_configure_source,

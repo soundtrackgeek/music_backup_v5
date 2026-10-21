@@ -9,9 +9,11 @@ import {
 } from "../../app/workspaceStore";
 import { useReducer } from "react";
 import { localDate, type ReviewPeriod } from "./reviewPeriods";
+import { emptyRatedAlbumFilters, type RatedAlbumFilters } from "./ratedAlbumFilters";
 type StatisticsState = {
   yearLedgerSelection: YearLedgerSelection;
-  statisticsView: "overview" | "rating" | "listening" | "review";
+  statisticsView: "overview" | "rating" | "listening" | "review" | "ratedAlbums";
+  ratedAlbumFilters: RatedAlbumFilters;
   reviewPeriod: ReviewPeriod;
   reviewAnchor: string;
   statisticsCohort: InsightCohort | null;
@@ -28,7 +30,7 @@ function createInitialState(): StatisticsState {
     excludedGenres: [],
     selectedYear: null,
   };
-  const statisticsView: "overview" | "rating" | "listening" | "review" =
+  const statisticsView: StatisticsState["statisticsView"] =
     "overview";
   const statisticsCohort: InsightCohort | null = null;
   const statistics: StatisticsResponse | null = null;
@@ -37,6 +39,7 @@ function createInitialState(): StatisticsState {
   return {
     yearLedgerSelection,
     statisticsView,
+    ratedAlbumFilters: { ...emptyRatedAlbumFilters },
     reviewPeriod: "year",
     reviewAnchor: localDate(new Date()),
     statisticsCohort,
@@ -56,6 +59,7 @@ function useStatisticsStoreValue() {
     yearLedgerSelection,
     statisticsView,
     reviewPeriod,
+    ratedAlbumFilters,
     reviewAnchor,
     statisticsCohort,
     statistics,
@@ -67,6 +71,7 @@ function useStatisticsStoreValue() {
       createWorkspaceSetters<StatisticsState>(dispatch, [
         "yearLedgerSelection",
         "statisticsView",
+        "ratedAlbumFilters",
         "reviewPeriod",
         "reviewAnchor",
         "statisticsCohort",
@@ -79,6 +84,7 @@ function useStatisticsStoreValue() {
   const {
     setYearLedgerSelection,
     setStatisticsView,
+    setRatedAlbumFilters,
     setReviewPeriod,
     setReviewAnchor,
     setStatisticsCohort,
@@ -91,6 +97,8 @@ function useStatisticsStoreValue() {
     yearLedgerSelection,
     setYearLedgerSelection,
     statisticsView,
+    ratedAlbumFilters,
+    setRatedAlbumFilters,
     reviewPeriod,
     setReviewPeriod,
     reviewAnchor,
