@@ -1155,6 +1155,23 @@ pub async fn sonic_album_matches(
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+pub async fn sonic_album_sides(
+    app: AppHandle,
+    request: crate::sonic_album_sides::AlbumSidesRequest,
+) -> Result<crate::sonic_album_sides::AlbumSidesResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = directory(&app).map_err(|e| e.to_string())?;
+        let c = catalog(&dir).map_err(|e| e.to_string())?;
+        let has = attach(&c, &dir).map_err(|e| e.to_string())?;
+        crate::sonic_album_sides::query(&c, has, &request, &Default::default())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 pub async fn sonic_save_playlist(
     app: AppHandle,
     seed_key: String,

@@ -232,6 +232,7 @@ fn builder() -> Builder<Wry> {
         sonic::sonic_save_journey,
         sonic::sonic_matches,
         sonic::sonic_album_matches,
+        sonic::sonic_album_sides,
         sonic::sonic_analyze,
         sonic::sonic_save_playlist,
         acknowledge_catalog_revision,

@@ -33,6 +33,7 @@ export const commands = {
 	sonicSaveJourney: (input: SaveJourneyRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_journey", { input }),
 	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
 	sonicAlbumMatches: (request: SonicAlbumRequest) => __TAURI_INVOKE<SonicAlbumMatches>("sonic_album_matches", { request }),
+	sonicAlbumSides: (request: AlbumSidesRequest) => __TAURI_INVOKE<AlbumSidesResponse>("sonic_album_sides", { request }),
 	sonicAnalyze: (request: AnalyzeRequest) => __TAURI_INVOKE<number>("sonic_analyze", { request }),
 	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
@@ -684,6 +685,28 @@ export type AlbumReview = {
 	cached: boolean,
 	stale: boolean,
 	message: string,
+};
+
+export type AlbumSide = {
+	representative: SideTrack,
+	tracks: SideTrack[],
+};
+
+export type AlbumSidesRequest = {
+	albumId: string,
+	strandKey: string | null,
+};
+
+export type AlbumSidesResponse = {
+	version: string,
+	totalTracks: number,
+	analyzedTracks: number,
+	ready: boolean,
+	sides: AlbumSide[],
+	contrastingTrack: SideTrack | null,
+	selectedKey: string | null,
+	matches: SideAlbumMatch[],
+	searchLimited: boolean,
 };
 
 export type AnalysisBackup = {
@@ -4461,6 +4484,19 @@ export type SharedRootSnapshot = {
 	directoryCount: number,
 	totalSizeBytes: number,
 	error: string | null,
+};
+
+export type SideAlbumMatch = {
+	album: SonicAlbum,
+	matchingTrack: SideTrack,
+	distance: number | null,
+};
+
+export type SideTrack = {
+	trackKey: string,
+	albumId: string,
+	title: string,
+	artist: string,
 };
 
 export type Slot = {

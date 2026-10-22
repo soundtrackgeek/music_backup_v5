@@ -583,6 +583,12 @@ Every chart point opens its tracks.
 | 19 More like this moment | 36 | Shared time-resolved extraction; Aurora's waveform cache |
 | 20 Transitions that hear the ending | 27 | Level-matched handoffs; Aurora's waveform cache for track endings |
 
+**Implementation update, 2026-10-22:** Idea 03 now has shared, versioned
+per-album representatives and groups in Music Library 0.197.0 and an Aurora
+0.42.0 listening panel. See [An album’s many sides](album-many-sides.md).
+The structure is available for future 34/35 work; score suites and album-shape
+strips themselves remain proposals.
+
 ## Tested and set aside
 
 These looked promising and the data says not yet, or not this way.

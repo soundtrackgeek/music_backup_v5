@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.197.0] - 2026-10-22
+
+### Added
+- Shared **An album’s many sides** calculation and read-only native query: one to three real representative tracks, supporting groups and a contrasting track, derived from existing complete audio analysis.
+- Track-to-album strand discovery with matching-cue evidence, complete coverage and file-freshness guards, pending Aurora bans, identical-seed-audio exclusion and explicit bounded shortlists. Aurora 0.42.0 provides the listening panel; no reanalysis or metadata changes are needed.
+
 ## [0.196.0] - 2026-10-22
 
 ### Added

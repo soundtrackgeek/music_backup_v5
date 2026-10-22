@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library 0.197.0 adds the shared calculation behind **An album’s many sides**.
+In Aurora 0.42.0, open an album inspector and choose **Explore its sound** to
+hear real representative tracks, explore their groups, and find other albums
+containing the selected sound. Complete usable analysis is required; no new
+audio scan is needed. Discovery waits for the shared sound index if it is still
+being prepared. See [usage, coverage and limits](docs/album-many-sides.md).
+
 Music Library **0.196.0** adds **Discovery → What should I rate next?** Choose
 your available time and an album or mixed mission. Get a likely fit, a choice
 close to completion, and a deliberate stretch using your saved sonic analysis

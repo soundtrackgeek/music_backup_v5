@@ -114,7 +114,13 @@ recording-twin rating carry-over remain future work.
 
 **Proof of value.** Track whether missions are completed and whether they spread attention across more artists and sound regions. Rating count alone is insufficient if it encourages rushed decisions.
 
-### 03. An album’s many sides
+### 03. An album’s many sides - DONE
+
+**Implementation update, 2026-10-22:** Music Library 0.197.0 supplies the shared
+structure and query; Aurora 0.42.0 adds **Explore its sound** to album inspectors.
+Includes representatives, group playback, contrast and matching-cue album
+discovery. See [shipped behavior and boundaries](album-many-sides.md).
+Tonehavn’s card and listening-quality evaluation remain future work.
 
 **The experience.** An album page offers “Explore its sound.” A compact panel presents two or three representative tracks, the most contrasting track, and optional groups such as “tracks close to this one.” Select the strand you like and ask for other albums containing that kind of material.
 
