@@ -134,7 +134,14 @@ Tonehavn’s card and listening-quality evaluation remain future work.
 
 **Proof of value.** Compare the usefulness of recommendations from the selected strand against the existing album-mean results, especially on varied soundtracks and compilations.
 
-### 04. Sonic smart playlists
+### 04. Sonic smart playlists - DONE
+
+**Implementation update, 2026-10-22:** Music Library 0.198.0 and Aurora 0.43.0
+ship positive-example recipes, native filters, distance and artist limits, stable
+nearest-example ordering, versioned seed identities and manual/library refresh.
+Missing seeds retain the saved result; playing queues stay unchanged. See
+[Sonic Smart playlists](sonic-smart-playlists.md). Negative examples and the second
+report's 22/26 nudges and learned tags remain future work.
 
 **The experience.** Save a recipe such as: “Tracks near these four examples, outside this other sound, unrated, from the 1980s, with no more than two tracks per artist.” Newly imported and analyzed music can enter the playlist at its next defined refresh.
 

@@ -589,6 +589,12 @@ per-album representatives and groups in Music Library 0.197.0 and an Aurora
 The structure is available for future 34/35 work; score suites and album-shape
 strips themselves remain proposals.
 
+**Implementation update, 2026-10-22:** First-report idea 04 now ships in Music
+Library 0.198.0 and Aurora 0.43.0 with positive examples, native filters and
+explicit refresh semantics. See [Sonic Smart playlists](sonic-smart-playlists.md).
+Ideas 22 and 26 remain proposals: saved recipes do not yet use query nudges or
+learned personal tags.
+
 ## Tested and set aside
 
 These looked promising and the data says not yet, or not this way.

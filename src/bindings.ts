@@ -296,7 +296,7 @@ export const commands = {
 	listSavedPlaylists: () => __TAURI_INVOKE<SavedPlaylist_Serialize[]>("list_saved_playlists"),
 	refreshSavedSmartPlaylists: () => __TAURI_INVOKE<SavedPlaylist_Serialize[]>("refresh_saved_smart_playlists"),
 	savePlaylist: (input: SavePlaylistRequest_Deserialize) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_playlist", { input }),
-	saveSmartPlaylist: (input: SaveSmartPlaylistRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_smart_playlist", { input }),
+	saveSmartPlaylist: (input: SaveSmartPlaylistRequest_Deserialize) => __TAURI_INVOKE<SavedPlaylist_Serialize>("save_smart_playlist", { input }),
 	deleteSavedPlaylist: (id: number) => __TAURI_INVOKE<null>("delete_saved_playlist", { id }),
 	setPlaylistAutomation: (input: SetPlaylistAutomationRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("set_playlist_automation", { input }),
 	refreshSmartPlaylist: (id: number) => __TAURI_INVOKE<SmartPlaylistRefreshResult_Serialize>("refresh_smart_playlist", { id }),
@@ -537,7 +537,7 @@ export type AiPlaylistTrack = {
 };
 
 export type AiPlaylist_Deserialize = {
-	smartSettings?: SmartPlaylistSettings | null,
+	smartSettings?: SmartPlaylistSettings_Deserialize | null,
 	mixtape?: MixtapeDraft | null,
 	prompt: string,
 	name: string,
@@ -557,7 +557,7 @@ export type AiPlaylist_Deserialize = {
 };
 
 export type AiPlaylist_Serialize = {
-	smartSettings?: SmartPlaylistSettings | null,
+	smartSettings?: SmartPlaylistSettings_Serialize | null,
 	mixtape?: MixtapeDraft | null,
 	prompt: string,
 	name: string,
@@ -4304,12 +4304,22 @@ export type SaveSearchRequest = {
 	request: BrowseRequest,
 };
 
-export type SaveSmartPlaylistRequest = {
+export type SaveSmartPlaylistRequest = SaveSmartPlaylistRequest_Serialize | SaveSmartPlaylistRequest_Deserialize;
+
+export type SaveSmartPlaylistRequest_Deserialize = {
 	id: number | null,
 	expectedUpdatedAt?: string | null,
 	name: string,
 	request: BrowseRequest,
-	settings: SmartPlaylistSettings,
+	settings: SmartPlaylistSettings_Deserialize,
+};
+
+export type SaveSmartPlaylistRequest_Serialize = {
+	id: number | null,
+	expectedUpdatedAt: string | null,
+	name: string,
+	request: BrowseRequest,
+	settings: SmartPlaylistSettings_Serialize,
 };
 
 export type SaveUsenetProfileRequest = {
@@ -4522,9 +4532,18 @@ export type SmartPlaylistRefreshResult_Serialize = {
 	refreshedAt: string,
 };
 
-export type SmartPlaylistSettings = {
+export type SmartPlaylistSettings = SmartPlaylistSettings_Serialize | SmartPlaylistSettings_Deserialize;
+
+export type SmartPlaylistSettings_Deserialize = {
 	trackLimit: number,
 	refreshPolicy: string,
+	sonic?: SonicPlaylistRecipe | null,
+};
+
+export type SmartPlaylistSettings_Serialize = {
+	trackLimit: number,
+	refreshPolicy: string,
+	sonic?: SonicPlaylistRecipe | null,
 };
 
 export type SonicAlbum = {
@@ -4555,6 +4574,22 @@ export type SonicMatches = {
 	total: number,
 	seedReady: boolean,
 	tracks: SonicTrack[],
+};
+
+export type SonicPlaylistRecipe = {
+	version: number,
+	profile: string,
+	seeds: SonicPlaylistSeed[],
+	maxDistance: number | null,
+	maxPerArtist: number,
+	ordering: string,
+};
+
+export type SonicPlaylistSeed = {
+	trackKey: string,
+	title: string,
+	artist: string,
+	audioHash?: string | null,
 };
 
 export type SonicSchedule = {

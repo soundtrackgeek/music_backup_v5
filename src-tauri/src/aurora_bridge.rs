@@ -580,6 +580,7 @@ fn capabilities() -> Result<Value> {
             "hiddenFavoritesV1": true,
             "ratingMissionsV1": true,
             "smartPlaylistAuthoring": true,
+            "sonicSmartPlaylistsV1": true,
             "playlistAuthoring": true,
             "recordPlays": true,
         },

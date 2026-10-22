@@ -62,7 +62,7 @@ describe("playlist builder workspace", () => {
 
   it("keeps manual Smart playlists out of the automatic background refresh", async () => {
     const saved = await smartPlaylistFixture();
-    saved.playlist.smartSettings = { trackLimit: 100, refreshPolicy: "manual" };
+    saved.playlist.smartSettings = { sonic: null, trackLimit: 100, refreshPolicy: "manual" };
     vi.spyOn(backend, "listSavedPlaylists").mockResolvedValue([saved]);
     const refresh = vi.spyOn(backend, "refreshSavedSmartPlaylists");
     render(<PlaylistBuilderWorkspace isAvailable />);

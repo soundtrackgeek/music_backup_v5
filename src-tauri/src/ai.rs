@@ -436,6 +436,8 @@ pub struct AiPlaylist {
 pub struct SmartPlaylistSettings {
     pub track_limit: u32,
     pub refresh_policy: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sonic: Option<super::db::SonicPlaylistRecipe>,
 }
 
 #[derive(Debug, Clone, Deserialize, specta::Type)]

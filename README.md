@@ -1,5 +1,12 @@
 # Music Library
 
+Music Library **0.198.0** adds **Sonic Smart playlists**. In Playlists, choose
+**Create Smart playlist → Sounds like these examples**, select 1–8 analyzed songs,
+and combine their sound with metadata filters, a distance limit and an artist cap.
+Recipes refresh manually or with library/open refreshes; missing seeds retain the
+last result, and playing queues stay stable. Aurora 0.43.0 edits the same recipes.
+See [usage, refresh behavior and limits](docs/sonic-smart-playlists.md).
+
 Music Library 0.197.0 adds the shared calculation behind **An album’s many sides**.
 In Aurora 0.42.0, open an album inspector and choose **Explore its sound** to
 hear real representative tracks, explore their groups, and find other albums

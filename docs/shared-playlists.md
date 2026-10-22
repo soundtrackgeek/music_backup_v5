@@ -62,3 +62,10 @@ and atomic replacement. The revision is checked again after the dialog. Paths us
 the catalog's original filesystem location, so another device may need a path mapping.
 Export supports up to 10,000 songs. Browser preview displays the desktop requirement
 for writes/import/export; it never substitutes a private Aurora playlist store.
+
+## Sonic Smart recipes (Music Library 0.198.0 / Aurora 0.43.0)
+
+`smartSettings.sonic` holds the version-1 positive-example recipe. Authoring uses
+`playlistSaveSmart` only after `sonicSmartPlaylistsV1` is advertised. Refresh uses
+the existing owner-side `playlistRefresh` operation; normal catalog rules retain
+their existing behavior. See the [recipe and refresh contract](sonic-smart-playlists.md).

@@ -351,17 +351,7 @@ pub(crate) fn search_library(
         "
     };
 
-    let from_sql = if is_tracks {
-        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
-        format!(
-            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_track_quality q ON q.file_path = t.file_path AND q.filename = t.filename LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
-        )
-    } else {
-        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
-        format!(
-            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
-        )
-    };
+    let from_sql = browse_from_clause(is_tracks);
 
     let (where_sql, values) = build_where_clause(is_tracks, &request.search_text, filters);
     let count_sql = format!("SELECT COUNT(*) {from_sql} {where_sql}");
@@ -390,6 +380,20 @@ pub(crate) fn search_library(
         limit,
         offset,
     })
+}
+
+pub(super) fn browse_from_clause(is_tracks: bool) -> String {
+    if is_tracks {
+        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
+        format!(
+            "FROM tracks t LEFT JOIN albums a ON a.id = t.album_id LEFT JOIN album_covers c ON c.album_id = t.album_id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_track_quality q ON q.file_path = t.file_path AND q.filename = t.filename LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
+        )
+    } else {
+        let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
+        format!(
+            "FROM albums a LEFT JOIN album_covers c ON c.album_id = a.id LEFT JOIN musicbrainz_artist_origin_countries origin ON origin.local_artist_key = {origin_key_sql} LEFT JOIN musicbrainz_artist_infos info ON info.local_artist_key = {origin_key_sql} LEFT JOIN music_doctor_album_quality aq ON aq.album_id = a.id"
+        )
+    }
 }
 
 pub(super) fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BrowseRow> {

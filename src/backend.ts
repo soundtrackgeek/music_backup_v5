@@ -3987,8 +3987,9 @@ export function refreshSavedSmartPlaylists(): Promise<SavedPlaylist[]> {
 
 export async function saveSmartPlaylist(input: import("./bindings").SaveSmartPlaylistRequest): Promise<SavedPlaylist> {
   if (isTauriRuntime()) return commands.saveSmartPlaylist(input).then(completed);
+  if (input.settings.sonic) throw new Error("Sonic Smart evaluation requires Music Library desktop and saved audio analysis.");
   const draft = await buildPlaylist({ prompt: input.name, sourceRequest: input.request as BrowseRequest });
-  const saved = await savePlaylist({ id: input.id ?? null, expectedUpdatedAt: input.expectedUpdatedAt ?? null, name: input.name, playlist: { ...draft, request: input.request as BrowseRequest, smartSettings: input.settings } });
+  const saved = await savePlaylist({ id: input.id ?? null, expectedUpdatedAt: input.expectedUpdatedAt ?? null, name: input.name, playlist: { ...draft, request: input.request as BrowseRequest, smartSettings: { ...input.settings, sonic: null } } });
   return setPlaylistAutomation({ id: saved.id, smart: true });
 }
 

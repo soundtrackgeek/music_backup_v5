@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.198.0] - 2026-10-22
+
+### Added
+- **Sonic Smart playlists**: save 1–8 positive sound examples alongside native metadata rules, a maximum acoustic distance, song limit, per-track-artist cap and manual/library refresh policy. Persist version, analysis profile and seed audio identities; publish deterministic nearest-example order.
+- Exact indexed selection with adaptive expansion and a streamed fallback, current file/analysis checks, banned-track exclusion, seed failure reporting that retains the saved result, and explicit insufficient-match descriptions. Aurora 0.43.0 authors the same recipes through the new `sonicSmartPlaylistsV1` capability. Saved membership refreshes independently of playback queues.
+
+### Changed
+- Analyzed-song example search filters catalog text before joining audio features, avoiding a full analysis-first join while retaining literal search and existing freshness checks.
+
 ## [0.197.0] - 2026-10-22
 
 ### Added

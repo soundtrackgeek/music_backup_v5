@@ -88,6 +88,8 @@ mod lifecycle;
 mod lifecycle_probe;
 mod migrations;
 mod playlists;
+mod sonic_playlists;
+pub use sonic_playlists::SonicPlaylistRecipe;
 mod provider_cache;
 mod saved_views;
 mod schema;

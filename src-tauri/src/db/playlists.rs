@@ -395,57 +395,72 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
 
     let mut playlist_tracks = Vec::new();
     let mut desired_count = 0_i64;
-    loop {
-        let response = search_library(conn, request.clone(), 1_000)?;
-        if request.offset == 0 {
-            desired_count = response.total.max(0);
-        }
-        let page_count = response.rows.len();
-        for row in response.rows {
-            if request.view == "albums" {
-                let mut album_request = BrowseRequest {
-                    view: "tracks".into(),
-                    limit: 1_000,
-                    sort: BrowseSort {
-                        field: "trackNumber".into(),
-                        direction: "asc".into(),
-                    },
-                    ..Default::default()
-                };
-                album_request.filters.album_ids = vec![row.album_id];
-                loop {
-                    let page = search_library(conn, album_request.clone(), 1_000)?;
-                    let count = page.rows.len();
-                    for track in page.rows {
-                        playlist_tracks.push(playlist_track_from_row(track)?);
-                        if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+    if let Some(recipe) = saved
+        .playlist
+        .smart_settings
+        .as_mut()
+        .and_then(|s| s.sonic.as_mut())
+    {
+        playlist_tracks =
+            sonic_playlists::evaluate(conn, &request, recipe, track_limit.unwrap_or(1000))?;
+        desired_count = playlist_tracks.len() as i64;
+        saved.playlist.description = format!(
+            "Sonic Smart: {} of {} requested songs, nearest to any of {} examples, distance ≤ {}, at most {} per track artist. {}",
+            desired_count, track_limit.unwrap_or(1000), recipe.seeds.len(), recipe.max_distance, recipe.max_per_artist,
+            if desired_count < track_limit.unwrap_or(1000) as i64 { "Insufficient current matches; rules were kept." } else { "Examples excluded. Refresh leaves playback queues unchanged." });
+    } else {
+        loop {
+            let response = search_library(conn, request.clone(), 1_000)?;
+            if request.offset == 0 {
+                desired_count = response.total.max(0);
+            }
+            let page_count = response.rows.len();
+            for row in response.rows {
+                if request.view == "albums" {
+                    let mut album_request = BrowseRequest {
+                        view: "tracks".into(),
+                        limit: 1_000,
+                        sort: BrowseSort {
+                            field: "trackNumber".into(),
+                            direction: "asc".into(),
+                        },
+                        ..Default::default()
+                    };
+                    album_request.filters.album_ids = vec![row.album_id];
+                    loop {
+                        let page = search_library(conn, album_request.clone(), 1_000)?;
+                        let count = page.rows.len();
+                        for track in page.rows {
+                            playlist_tracks.push(playlist_track_from_row(track)?);
+                            if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+                                break;
+                            }
+                        }
+                        album_request.offset += count as u32;
+                        if count == 0
+                            || i64::from(album_request.offset) >= page.total
+                            || track_limit.is_some_and(|limit| playlist_tracks.len() >= limit)
+                        {
                             break;
                         }
                     }
-                    album_request.offset += count as u32;
-                    if count == 0
-                        || i64::from(album_request.offset) >= page.total
-                        || track_limit.is_some_and(|limit| playlist_tracks.len() >= limit)
-                    {
-                        break;
-                    }
+                } else {
+                    playlist_tracks.push(playlist_track_from_row(row)?);
                 }
-            } else {
-                playlist_tracks.push(playlist_track_from_row(row)?);
+                if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
+                    break;
+                }
             }
             if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
                 break;
             }
-        }
-        if track_limit.is_some_and(|limit| playlist_tracks.len() >= limit) {
-            break;
-        }
-        if page_count == 0 {
-            break;
-        }
-        request.offset = request.offset.saturating_add(page_count as u32);
-        if i64::from(request.offset) >= desired_count {
-            break;
+            if page_count == 0 {
+                break;
+            }
+            request.offset = request.offset.saturating_add(page_count as u32);
+            if i64::from(request.offset) >= desired_count {
+                break;
+            }
         }
     }
 
@@ -570,6 +585,9 @@ fn validate_smart_settings(settings: &crate::ai::SmartPlaylistSettings) -> Resul
     {
         bail!("Smart playlists require a limit from 1 to 10000 and a library or manual refresh policy")
     }
+    if let Some(recipe) = &settings.sonic {
+        recipe.validate()?;
+    }
     Ok(())
 }
 
@@ -578,6 +596,9 @@ pub(crate) fn save_smart_playlist_on(
     input: crate::ai::SaveSmartPlaylistRequest,
 ) -> Result<SavedPlaylist> {
     validate_smart_settings(&input.settings)?;
+    if input.settings.sonic.is_some() && input.request.view != "tracks" {
+        bail!("Sonic Smart playlists match songs. Choose Songs before adding sound examples.")
+    }
     if !matches!(input.request.view.as_str(), "tracks" | "albums")
         || !input.request.filters.track_ids.is_empty()
         || input.request.sort.field == "random"
@@ -624,6 +645,9 @@ pub(crate) fn save_smart_playlist_on(
     playlist.name = input.name.clone();
     playlist.request = input.request;
     playlist.request.offset = 0;
+    if input.settings.sonic.is_none() {
+        playlist.description = "Reusable library filters shared by Aurora and Music Library.".into();
+    }
     playlist.smart_settings = Some(input.settings);
     let saved = save_playlist(
         &tx,
@@ -1196,6 +1220,7 @@ mod tests {
                 name: "Instant saved list".into(),
                 request: test_playlist_plan().request,
                 settings: crate::ai::SmartPlaylistSettings {
+                    sonic: None,
                     track_limit: 100,
                     refresh_policy: "library".into(),
                 },
@@ -1205,12 +1230,18 @@ mod tests {
         assert_eq!(saved.automation.desired_count, 1);
         // The rules would now produce no matches, but listing must return the
         // exact stored snapshot using a read-only connection without writes.
-        conn.execute("UPDATE tracks SET canonical_genre='Other',genre_normalized='other'", [])
-            .unwrap();
+        conn.execute(
+            "UPDATE tracks SET canonical_genre='Other',genre_normalized='other'",
+            [],
+        )
+        .unwrap();
         conn.execute_batch("PRAGMA query_only = ON").unwrap();
         let changes = conn.total_changes();
         let listed = list_saved_playlists(&conn).unwrap();
-        assert_eq!(serde_json::to_value(&listed[0]).unwrap(), serde_json::to_value(&saved).unwrap());
+        assert_eq!(
+            serde_json::to_value(&listed[0]).unwrap(),
+            serde_json::to_value(&saved).unwrap()
+        );
         assert_eq!(conn.total_changes(), changes);
 
         conn.execute_batch("PRAGMA query_only = OFF").unwrap();
@@ -1237,6 +1268,7 @@ mod tests {
                 name: "Shared".into(),
                 request: request.clone(),
                 settings: crate::ai::SmartPlaylistSettings {
+                    sonic: None,
                     track_limit: 1,
                     refresh_policy: "manual".into(),
                 },
@@ -1275,6 +1307,7 @@ mod tests {
                 name: "Renamed".into(),
                 request,
                 settings: crate::ai::SmartPlaylistSettings {
+                    sonic: None,
                     track_limit: 10,
                     refresh_policy: "library".into(),
                 },
@@ -1294,6 +1327,7 @@ mod tests {
             name: "Overwrite".into(),
             request: test_playlist_plan().request,
             settings: crate::ai::SmartPlaylistSettings {
+                sonic: None,
                 track_limit: 1,
                 refresh_policy: "library".into(),
             },
@@ -1339,6 +1373,7 @@ mod tests {
                 name: "Albums".into(),
                 request,
                 settings: crate::ai::SmartPlaylistSettings {
+                    sonic: None,
                     track_limit: 100,
                     refresh_policy: "library".into(),
                 },
@@ -1391,6 +1426,7 @@ mod tests {
                 ..Default::default()
             },
             settings: crate::ai::SmartPlaylistSettings {
+                sonic: None,
                 track_limit: 10,
                 refresh_policy: "manual".into(),
             },
@@ -1555,6 +1591,7 @@ mod tests {
                 name: "Shared".into(),
                 request: test_playlist_plan().request,
                 settings: crate::ai::SmartPlaylistSettings {
+                    sonic: None,
                     track_limit: 10,
                     refresh_policy: "manual".into(),
                 },

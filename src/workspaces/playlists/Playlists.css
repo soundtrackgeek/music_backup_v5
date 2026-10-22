@@ -917,3 +917,9 @@
 .smart-playlist-rules label { display: grid; gap: 6px; }
 .smart-playlist-rules .playlist-text-rule { display: grid; gap: 6px; min-width: 0; }
 .smart-playlist-rules input,.smart-playlist-rules select { min-width:0; padding:8px; }
+
+.sonic-smart-rules { margin: 18px 0; padding: 18px; border: 1px solid var(--color-border); border-radius: 8px; }
+.sonic-smart-rules label { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+.sonic-smart-rules input { max-width: 100%; min-width: 0; padding: 8px; }
+.sonic-smart-rules li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0; }
+.sonic-smart-rules li span { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
