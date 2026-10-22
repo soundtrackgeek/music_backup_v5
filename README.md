@@ -1,5 +1,16 @@
 # Music Library
 
+Music Library **0.195.0** adds **Discovery → Hidden favorites → You already own this**.
+Choose **Find hidden favorites** for up to five tracks connected to several five-star
+or loved examples, including rated music worth revisiting and one broader discovery.
+The ranking uses your ratings when a small artist-held-out taste model proves useful;
+otherwise it uses favorite sound neighborhoods. Recent matched plays are excluded,
+and the shelf states how much listening history is available.
+**Keep for later** and **Not today** are shared with Aurora **0.40.0** through Music
+Library. Save the kept shortlist as a regular playlist; play tracks directly in
+Aurora's **Ratings → Hidden favorites**. Reload either shelf to see the other app's
+changes. No new audio scan is needed. See [Hidden favorites](docs/hidden-favorites.md).
+
 Music Library **0.192.1** fixes Audio analysis stopping with **Access is denied**
 when a randomly named output file collides with an existing Windows Temp folder.
 Analyzer output now uses bounded pipes instead of temporary files. After updating,

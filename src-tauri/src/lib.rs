@@ -42,6 +42,7 @@ mod sonic_backup_schedule;
 mod sonic_albums;
 mod sonic_journey;
 mod sonic_index;
+mod hidden_favorites;
 #[cfg(test)]
 mod sonic_performance;
 mod soulseek;

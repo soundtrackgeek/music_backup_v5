@@ -5,6 +5,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	hiddenFavorites: (request: HiddenRequest) => __TAURI_INVOKE<HiddenShelf>("hidden_favorites", { request }),
 	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
 	reviewReport: (request: ReviewRequest) => __TAURI_INVOKE<ReviewReport>("review_report", { request }),
 	ratedAlbumHistory: () => __TAURI_INVOKE<RatedAlbum[]>("rated_album_history"),
@@ -2291,6 +2292,38 @@ export type GenreTimelineYearCount = {
 	genreId: string,
 	year: number,
 	albumCount: number,
+};
+
+export type HiddenRequest = {
+	action: string,
+	revision: string | null,
+	trackKey: string | null,
+	trackKeys: string[] | null,
+};
+
+export type HiddenShelf = {
+	revision: string,
+	generatedAt: string | null,
+	profile: string,
+	modelVersion: string,
+	modelAuc: number | null,
+	trainingTracks: number,
+	validationTracks: number,
+	historySince: number | null,
+	historyPlays: number,
+	excludedDays: number,
+	note: string,
+	suggestions: HiddenSuggestion[],
+	kept: SonicTrack[],
+	message: string | null,
+};
+
+export type HiddenSuggestion = {
+	track: SonicTrack,
+	anchors: SonicTrack[],
+	fit: string,
+	broader: boolean,
+	kept: boolean,
 };
 
 export type ImportPreview = {

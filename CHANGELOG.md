@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.195.0] - 2026-10-22
+
+### Added
+- **Discovery → Hidden favorites**, a shared five-track shelf with recognizable favorite anchors, rated rediscoveries, artist/album diversity, a broader discovery slot, and explicit available-history coverage. Exclude recent matched plays and identical-audio copies, banned/low-rated tracks, stale analysis and missing files.
+- A bounded local five-star versus one-to-three-star ranking model, evaluated on held-out album artists. Show experimental fit bands and evaluation evidence when useful; fall back to favorite neighborhoods otherwise. Reuse saved analysis without decoding audio again.
+- Shared **Keep for later**, **Not today**, reload and reviewed shortlist-to-playlist actions, backed by a durable store and the capability-gated Aurora bridge. Feedback never changes ratings; stale shelf actions and changed track identities are rejected.
+
 ## [0.194.0] - 2026-10-21
 
 ### Added

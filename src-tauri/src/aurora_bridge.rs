@@ -420,6 +420,10 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
     let mut progress = BridgeProgressReporter::new(request_path, &request.operation);
     let result = match request.operation.as_str() {
         "capabilities" => capabilities(),
+        "hiddenFavorites" => {
+            let input = serde_json::from_value(request.payload).context("Invalid Hidden favorites request")?;
+            serde_json::to_value(crate::hidden_favorites::operate_at(&app_data_dir, input)?).map_err(Into::into)
+        }
         "sonicAnalyze" => {
             let key = request
                 .payload
@@ -562,6 +566,7 @@ fn capabilities() -> Result<Value> {
             "boundedExistingFolderSync": true,
             "verifiedTrackDeletionSync": true,
             "sonicJourneyPlaylists": true,
+            "hiddenFavoritesV1": true,
             "smartPlaylistAuthoring": true,
             "playlistAuthoring": true,
             "recordPlays": true,

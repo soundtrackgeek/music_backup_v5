@@ -1,5 +1,9 @@
 # Local sonic analysis
 
+**Discovery → Hidden favorites** reuses completed analysis for a shared shelf
+with Aurora, a ratings-based ranking prior, favorite anchors and recent-play
+exclusions. See [Hidden favorites](hidden-favorites.md) for setup, evidence and limits.
+
 Music Library owns analysis and Aurora reads completed results. MP3 files and
 the music catalog are never rewritten by analysis. Start with an album's
 **Analyze this album** button, or **Tools → Audio analysis → Analyze favorites**.

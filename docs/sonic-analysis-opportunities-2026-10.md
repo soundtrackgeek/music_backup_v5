@@ -75,6 +75,12 @@ The repository’s existing album comparison uses an equal-weight mean of usable
 
 ### 01. Hidden favorites
 
+**Implementation update, 2026-10-22:** The first track-based version ships in
+Music Library 0.195.0 and Aurora 0.40.0. It incorporates the second report's
+thin-history correction with a held-out ratings ranking prior. See the
+[shipped behavior and boundaries](hidden-favorites.md). Album suggestions,
+Tonehavn's native daily sampler, and long-term listening evaluation remain future work.
+
 **The experience.** Open a small shelf titled “You already own this.” It offers perhaps five tracks or three albums connected to several favorites, but neglected in the available listening history. Each suggestion names a recognizable anchor: “Near these two favorites; no recorded play in the last twelve months.” Choose **Play**, **Keep for later**, or **Not today**.
 
 **Why it earns a place.** A huge collection can repeatedly lead you back to the same familiar corner. The reward here is the feeling of finding a record in your own shelves that you had forgotten buying. Sonic analysis helps cross artist and genre labels while the history layer makes the suggestion timely.

@@ -213,6 +213,12 @@ With about 450 rated pairs per profile, the sampling error on those correlations
 
 #### 24. A taste model trained on your ratings
 
+**Implementation update, 2026-10-22:** Opportunity 01 now includes a bounded,
+artist-held-out logistic ranking prior in Music Library 0.195.0, consumed by
+Aurora 0.40.0. See [Hidden favorites](hidden-favorites.md). This is the first
+consumer, not the full scheduled, family-evaluated model and tier-publication
+contract proposed here; other recommendation surfaces retain their current ranking.
+
 **The experience.** No new page. Anywhere you choose what to audition, a quiet ordering signal appears: **Strong fit · Possible · Stretch**. That covers Ratings Studio queues, **Finish what you love**, Tonight's Album Discovery, Daily Edition Deep Cuts, and the first report's 01 and 02. It never shows predicted stars.
 
 **Why it earns a place.** About 86% of the library is unrated. The ratings you have already given are a large, honest record of your taste. A short play history cannot do this job, and distance to a few favorites captures much less than a model trained on all your ratings, including the negative ones.

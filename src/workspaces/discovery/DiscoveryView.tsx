@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { DiscoveryDailyEdition } from "../../components/DiscoveryDailyEdition";
+import { HiddenFavorites } from "../../components/HiddenFavorites";
 import { NewReleases, ReleaseRadarProvider } from "../../components/NewReleases";
 import {
   getDiscoveryShelfExplorer,
@@ -179,6 +180,7 @@ export function DiscoveryView({
       </header>
 
       <ReleaseRadarProvider available={Boolean(status?.hasDatabase)}>
+      {status?.hasDatabase && <HiddenFavorites onOpen={track => openTimelineTrack(track.trackId)} />}
       <DiscoveryDailyEdition
         edition={discovery?.dailyEdition ?? null}
         archive={discovery?.dailyEditionArchive}
