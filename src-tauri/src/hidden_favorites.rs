@@ -7,6 +7,7 @@ use music_sonic_core::{file_is_current, Analysis, Metric, DIMENSIONS, PROFILE};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, time::Duration};
+pub(crate) mod missions;
 mod taste;
 
 const DAYS: i64 = 90;
@@ -665,7 +666,7 @@ pub async fn hidden_favorites(
 mod tests {
     use super::*;
     use music_sonic_core::{file_signature, track_key};
-    fn fixture() -> tempfile::TempDir {
+    pub(super) fn fixture() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let c = crate::db::open_path(&dir.path().join("music-library.sqlite3")).unwrap();
         c.execute("INSERT INTO import_runs(source_path,started_at,status) VALUES('fixture','now','completed')",[]).unwrap();

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.196.0] - 2026-10-22
+
+### Added
+- **Discovery → What should I rate next?**: time-bounded album and mixed audition missions with likely-fit, close-to-completion and deliberate-stretch choices. Reuse saved sonic analysis and the artist-held-out taste prior; preserve disc/track order for remaining album tracks and favor different sound anchors/artists in mixes.
+- Shared active missions, actual-rating progress, completion/artist/anchor evidence, reviewed mission-to-playlist saving and capability-gated Aurora integration. Validate revisions, unrated order, bans, membership and exact recording identities; preserve unchanged audio after retagging. Selection and mission feedback never assign ratings.
+
 ## [0.195.0] - 2026-10-22
 
 ### Added

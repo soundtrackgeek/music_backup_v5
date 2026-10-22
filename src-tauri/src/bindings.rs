@@ -205,6 +205,7 @@ macro_rules! specta_commands {
 fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         crate::hidden_favorites::hidden_favorites,
+        crate::hidden_favorites::missions::rating_missions,
         listening::listening_overview,
         review::review_report,
         rated_albums::rated_album_history,

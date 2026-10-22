@@ -1,5 +1,14 @@
 # Music Library
 
+Music Library **0.196.0** adds **Discovery → What should I rate next?** Choose
+your available time and an album or mixed mission. Get a likely fit, a choice
+close to completion, and a deliberate stretch using your saved sonic analysis
+and rating evidence. Review the tracks, start a shared mission, and track progress
+from actual ratings. Aurora **0.41.0** plays the remaining mission directly from
+**Ratings**. Save the exact reviewed order as a regular Music Library playlist.
+Reload progress after ratings sync; missions survive restarts and refreshes.
+See [rating missions](docs/rating-missions.md) for selection limits and evidence.
+
 Music Library **0.195.0** adds **Discovery → Hidden favorites → You already own this**.
 Choose **Find hidden favorites** for up to five tracks connected to several five-star
 or loved examples, including rated music worth revisiting and one broader discovery.

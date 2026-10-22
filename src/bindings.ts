@@ -6,6 +6,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	hiddenFavorites: (request: HiddenRequest) => __TAURI_INVOKE<HiddenShelf>("hidden_favorites", { request }),
+	ratingMissions: (request: MissionRequest) => __TAURI_INVOKE<MissionShelf>("rating_missions", { request }),
 	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
 	reviewReport: (request: ReviewRequest) => __TAURI_INVOKE<ReviewReport>("review_report", { request }),
 	ratedAlbumHistory: () => __TAURI_INVOKE<RatedAlbum[]>("rated_album_history"),
@@ -3073,6 +3074,34 @@ export type MissingAnalysis = {
 	failed: boolean,
 };
 
+export type MissionRequest = {
+	action: string,
+	revision: string | null,
+	missionId: string | null,
+	minutes: number | null,
+	mode: string | null,
+	trackKeys: string[] | null,
+};
+
+export type MissionShelf = {
+	revision: string,
+	generatedAt: string | null,
+	minutes: number,
+	mode: string,
+	note: string,
+	modelVersion: string,
+	modelAuc: number | null,
+	trainingTracks: number,
+	validationTracks: number,
+	choices: RatingMission[],
+	active: RatingMission | null,
+	startedMissions: number,
+	completedMissions: number,
+	completedArtists: number,
+	completedNeighborhoods: number,
+	message: string | null,
+};
+
 export type MixtapeConfig = {
 	briefs: [string, string],
 	minutes: [number, number],
@@ -4062,6 +4091,23 @@ export type RatingHistoryPoint = {
 	averageAlbumRating: number | null,
 	averageAlbumScore: number | null,
 	ratingEventsCount: number,
+};
+
+export type RatingMission = {
+	id: string,
+	kind: string,
+	title: string,
+	reason: string,
+	fit: string,
+	tracks: SonicTrack[],
+	anchors: SonicTrack[],
+	seconds: number,
+	albumTotal: number,
+	albumRated: number,
+	completedTracks: number,
+	status: string,
+	startedAt: string | null,
+	completedAt: string | null,
 };
 
 export type RatingProgressStats = {

@@ -421,8 +421,19 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
     let result = match request.operation.as_str() {
         "capabilities" => capabilities(),
         "hiddenFavorites" => {
-            let input = serde_json::from_value(request.payload).context("Invalid Hidden favorites request")?;
-            serde_json::to_value(crate::hidden_favorites::operate_at(&app_data_dir, input)?).map_err(Into::into)
+            let input = serde_json::from_value(request.payload)
+                .context("Invalid Hidden favorites request")?;
+            serde_json::to_value(crate::hidden_favorites::operate_at(&app_data_dir, input)?)
+                .map_err(Into::into)
+        }
+        "ratingMissions" => {
+            let input = serde_json::from_value(request.payload)
+                .context("Invalid rating mission request")?;
+            serde_json::to_value(crate::hidden_favorites::missions::operate_at(
+                &app_data_dir,
+                input,
+            )?)
+            .map_err(Into::into)
         }
         "sonicAnalyze" => {
             let key = request
@@ -567,6 +578,7 @@ fn capabilities() -> Result<Value> {
             "verifiedTrackDeletionSync": true,
             "sonicJourneyPlaylists": true,
             "hiddenFavoritesV1": true,
+            "ratingMissionsV1": true,
             "smartPlaylistAuthoring": true,
             "playlistAuthoring": true,
             "recordPlays": true,

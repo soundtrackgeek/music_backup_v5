@@ -93,7 +93,14 @@ Tonehavn's native daily sampler, and long-term listening evaluation remain futur
 
 **Proof of value.** Compare with the current Discovery shelf over repeated sessions: more voluntarily kept or replayed discoveries, without becoming dominated by one favorite artist.
 
-### 02. What should I rate next?
+### 02. What should I rate next? - DONE
+
+**Implementation update, 2026-10-22:** Music Library 0.196.0 and Aurora 0.41.0
+ship time-bounded album and mixed rating missions, three audition intents,
+shared persistence, actual-rating progress, and reviewed playlist saving. Reuse
+the held-out ranking prior introduced for 01. See [rating missions](rating-missions.md)
+for the shipped behavior, validation and limits. Tonehavn-native missions and
+recording-twin rating carry-over remain future work.
 
 **The experience.** Choose “I have 40 minutes” or “Help me finish these albums.” Receive a manageable listening mission: one partially rated album close to music you love, or a short set of unrated tracks from several different sound neighborhoods. Keep album order where that matters. Finish with the existing rating workflow.
 

@@ -250,7 +250,6 @@ fn signature(path: &Path) -> Result<(u64, String)> {
     Ok(file_signature(path)?)
 }
 
-#[cfg(test)]
 pub(crate) fn audio_hash(path: &Path) -> Result<String> {
     audio_hash_with_stop(path, &|| false)
 }
