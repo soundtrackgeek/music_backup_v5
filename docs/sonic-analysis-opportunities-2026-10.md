@@ -73,7 +73,7 @@ The repository’s existing album comparison uses an equal-weight mean of usable
 
 ## The ideas in detail
 
-### 01. Hidden favorites
+### 01. Hidden favorites - DONE
 
 **Implementation update, 2026-10-22:** The first track-based version ships in
 Music Library 0.195.0 and Aurora 0.40.0. It incorporates the second report's
