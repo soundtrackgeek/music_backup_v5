@@ -1156,3 +1156,13 @@ Origin Country/Artist Info imports, covers and portraits support cancellation at
 Jobs persist in the app-data **jobs.sqlite3** database, separate from **music-library.sqlite3**, so progress and controls remain responsive during catalog transactions. Payloads and results stay local and are not exposed in Activity events. Running verification resumes from its checkpoints after restart, paused work stays paused, and cancelling work remains cancelled. Interrupted work without checkpoints is marked failed for review instead of automatically replaying writes. Recent finished history is bounded in the drawer; this machine-local database is not copied with the music catalog. In browser preview, verification uses in-memory demo jobs; durable recovery belongs to the desktop backend.
 
 Catalog restore/rollback requires active jobs to finish or cancel first. A successful catalog replacement invalidates waiting requests and attaches the restored catalog's verification checkpoints, preventing an old queued import from running against the replacement catalog. Reviewed intake preparation/apply, downloads and updater installation retain their existing safety workflows.
+
+### A journey that fits your time
+
+In **Playlist Builder > Sonic journey**, choose **Fit my time**. Set a time budget
+(1-720 minutes) and optional source-audio limit, then choose beginning, middle and
+ending tracks. An interior stop can expand to its complete album. Review actual
+time, unused time, audio size and the final track before saving. Identical MP3
+audio payloads do not repeat. Aurora 0.44.0 previews and plays the same plan;
+Tonehavn 0.52.0 carries a published linked playlist through Trip Tape. See
+[Timed sonic journeys](docs/timed-sonic-journeys.md) for workflow and limits.

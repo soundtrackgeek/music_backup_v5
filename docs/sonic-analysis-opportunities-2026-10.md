@@ -183,7 +183,14 @@ report's 22/26 nudges and learned tags remain future work.
 
 **Proof of value.** The next few additions respond audibly to steering without undoing queued choices, overplaying one artist, or drifting away indefinitely. Small eligible pools should produce an honest explanation.
 
-### 07. A journey that fits your time
+### 07. A journey that fits your time - DONE
+
+**Implementation update, 2026-10-23:** Music Library 0.199.0 and Aurora 0.44.0
+add timed plans, required stops, whole-album blocks and exact reviewed saving.
+Tonehavn 0.52.0 carries the complete published sequence through Trip Tape with
+hard duration/storage limits. See [shipped behavior and limits](timed-sonic-journeys.md).
+Native timed authoring in Tonehavn, estimated leveling (27), and non-identical
+recording twins (28) remain separate work; exact payload repeats are excluded.
 
 **The experience.** “I have 55 minutes. Begin near this song, get more adventurous in the middle, and land near this other one.” Preview a complete session with a real duration, known ending and optional album block. If it cannot fit exactly, offer the nearest under-budget option and its actual length.
 

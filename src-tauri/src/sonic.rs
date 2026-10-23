@@ -800,7 +800,7 @@ pub(crate) fn save_journey_at(
     if !attach(&c, dir)? {
         bail!("Analyze your chosen stops and more music before saving a journey");
     }
-    let tx = c.unchecked_transaction()?;
+    let tx = rusqlite::Transaction::new_unchecked(&c, rusqlite::TransactionBehavior::Immediate)?;
     let tracks = crate::sonic_journey::reviewed(
         &tx,
         &input.journey,
@@ -836,13 +836,20 @@ pub(crate) fn save_journey_at(
     let playlist = crate::ai::AiPlaylist {
         smart_settings: None,
         mixtape: None,
-        prompt: format!("Sonic journey through {} chosen stops, in the reviewed order.", input.journey.stop_keys.len()),
+        prompt: format!(
+            "Sonic journey through {} chosen stops, in the reviewed order.",
+            input.journey.stop_keys.len()
+        ),
         name: input.name.trim().into(),
-        description: format!("Sonic journey through {} chosen stops with {} connecting tracks between stops. Profile {PROFILE}. Keep playlist order for the journey.", input.journey.stop_keys.len(), input.journey.connecting_tracks),
+        description: if let Some(limit) = input.journey.target_seconds {
+            format!("Timed sonic journey v1 · {} seconds of a {} second limit · {} required stops. Complete tracks in the reviewed order. Profile {PROFILE}.", tracks.iter().map(|t|t.seconds).sum::<i64>(),limit,input.journey.stop_keys.len())
+        } else {
+            format!("Sonic journey through {} chosen stops with {} connecting tracks between stops. Profile {PROFILE}. Keep playlist order for the journey.", input.journey.stop_keys.len(), input.journey.connecting_tracks)
+        },
         request,
         strategy: "ranked".into(),
         target_track_count: count as u32,
-        target_minutes: 0,
+        target_minutes: input.journey.target_seconds.map(|s| s / 60).unwrap_or(0),
         max_tracks_per_artist: 10,
         max_tracks_per_album: 10,
         matching_track_count: count as i64,
@@ -850,7 +857,11 @@ pub(crate) fn save_journey_at(
         total_seconds: tracks.iter().map(|t| t.seconds).sum(),
         tracks,
         model: "Sonic Journey".into(),
-        usage: crate::ai::AiUsage { input_tokens: None, cached_input_tokens: None, output_tokens: None },
+        usage: crate::ai::AiUsage {
+            input_tokens: None,
+            cached_input_tokens: None,
+            output_tokens: None,
+        },
     };
     let saved = crate::db::save_journey_playlist(
         &tx,
@@ -1665,6 +1676,9 @@ mod tests {
         let input = crate::sonic_journey::SaveJourneyRequest {
             journey: crate::sonic_journey::JourneyRequest {
                 stop_keys: keys.iter().step_by(2).cloned().collect(),
+                target_seconds: None,
+                max_mib: None,
+                album_stop_key: None,
                 connecting_tracks: 1,
                 minimum_rating: None,
                 same_genre: false,
@@ -1696,6 +1710,14 @@ mod tests {
             saved.playlist.request.filters.track_ids,
             (1..=9).collect::<Vec<_>>()
         );
+        let mut timed = input.clone();
+        timed.journey.target_seconds = Some(1621);
+        timed.journey.max_mib = Some(1);
+        let timed_saved = save_journey_at(dir.path(), timed.clone()).unwrap();
+        assert_eq!(timed_saved.playlist.total_seconds, 1620);
+        assert_eq!(timed_saved.playlist.tracks.iter().map(|t|t.track_id).collect::<Vec<_>>(), (1..=9).collect::<Vec<_>>());
+        timed.journey.target_seconds = Some(1500);
+        assert!(save_journey_at(dir.path(), timed).is_err());
         fs::write(dir.path().join("1.mp3"), [255; 257]).unwrap();
         assert!(save_journey_at(dir.path(), input).is_err());
         let c = crate::db::open_path(&database).unwrap();
@@ -1703,7 +1725,7 @@ mod tests {
             c.query_row("SELECT COUNT(*) FROM saved_playlists", [], |r| r
                 .get::<_, i64>(0))
                 .unwrap(),
-            1
+            2
         );
         drop(c);
         crate::db::pool_for_path(&database)

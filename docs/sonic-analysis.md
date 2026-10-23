@@ -400,3 +400,11 @@ about 5.8 days of raw extraction for 1.1 million MP3s. Allow roughly 7–10 days
 continuous work, or 2–3 weeks at eight hours daily. This small, warm-cache sample
 does not measure the full job's hashing/checkpoint overhead or the duration
 distribution of the whole library; it is a planning estimate.
+
+### Timed journeys
+
+The **Fit my time** mode extends Sonic journeys with time and optional source-audio
+byte budgets, required stops and one complete album block. The shared planner
+never truncates tracks or repeats identical analyzed payloads. See
+[timed sonic journeys](timed-sonic-journeys.md) for the versioned contract,
+review/save guarantees, publication path and bounded-search limitations.

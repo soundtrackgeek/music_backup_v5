@@ -28,9 +28,9 @@ export const commands = {
 	sonicBackupConfigure: (schedule: BackupSchedule) => __TAURI_INVOKE<BackupStatus>("sonic_backup_configure", { schedule }),
 	sonicConfigure: (schedule: SonicSchedule) => __TAURI_INVOKE<SonicStatus>("sonic_configure", { schedule }),
 	sonicSeeds: () => __TAURI_INVOKE<SonicTrack[]>("sonic_seeds"),
-	sonicJourney: (request: JourneyRequest) => __TAURI_INVOKE<JourneyResponse>("sonic_journey", { request }),
+	sonicJourney: (request: JourneyRequest_Deserialize) => __TAURI_INVOKE<JourneyResponse>("sonic_journey", { request }),
 	sonicJourneySearch: (text: string) => __TAURI_INVOKE<JourneyTrack[]>("sonic_journey_search", { text }),
-	sonicSaveJourney: (input: SaveJourneyRequest) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_journey", { input }),
+	sonicSaveJourney: (input: SaveJourneyRequest_Deserialize) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_journey", { input }),
 	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
 	sonicAlbumMatches: (request: SonicAlbumRequest) => __TAURI_INVOKE<SonicAlbumMatches>("sonic_album_matches", { request }),
 	sonicAlbumSides: (request: AlbumSidesRequest) => __TAURI_INVOKE<AlbumSidesResponse>("sonic_album_sides", { request }),
@@ -2456,12 +2456,30 @@ export type Job = {
 
 export type JobState = "queued" | "running" | "pausing" | "paused" | "cancelling" | "cancelled" | "failed" | "completed";
 
-export type JourneyRequest = {
+export type JourneyRequest = JourneyRequest_Serialize | JourneyRequest_Deserialize;
+
+export type JourneyRequest_Deserialize = {
 	stopKeys: string[],
 	connectingTracks: number,
 	/**  Catalog scale, 0–100. Applies to connectors, not explicitly chosen stops. */
 	minimumRating: number | null,
 	sameGenre: boolean,
+	targetSeconds?: number | null,
+	maxMib?: number | null,
+	/**  Expand one interior stop to its complete catalog album, in disc/track order. */
+	albumStopKey?: string | null,
+};
+
+export type JourneyRequest_Serialize = {
+	stopKeys: string[],
+	connectingTracks: number,
+	/**  Catalog scale, 0–100. Applies to connectors, not explicitly chosen stops. */
+	minimumRating: number | null,
+	sameGenre: boolean,
+	targetSeconds?: number | null,
+	maxMib?: number | null,
+	/**  Expand one interior stop to its complete catalog album, in disc/track order. */
+	albumStopKey?: string | null,
 };
 
 export type JourneyResponse = {
@@ -2469,6 +2487,14 @@ export type JourneyResponse = {
 	analyzed: number,
 	complete: boolean,
 	tracks: JourneyTrack[],
+	timing: JourneyTiming | null,
+};
+
+export type JourneyTiming = {
+	totalSeconds: number,
+	totalBytes: number,
+	shortfallSeconds: number,
+	albumTrackKeys: string[],
 };
 
 export type JourneyTrack = {
@@ -4273,8 +4299,16 @@ export type SaveFanartKeysRequest = {
 	personalKey: string | null,
 };
 
-export type SaveJourneyRequest = {
-	journey: JourneyRequest,
+export type SaveJourneyRequest = SaveJourneyRequest_Serialize | SaveJourneyRequest_Deserialize;
+
+export type SaveJourneyRequest_Deserialize = {
+	journey: JourneyRequest_Deserialize,
+	trackKeys: string[],
+	name: string,
+};
+
+export type SaveJourneyRequest_Serialize = {
+	journey: JourneyRequest_Serialize,
 	trackKeys: string[],
 	name: string,
 };

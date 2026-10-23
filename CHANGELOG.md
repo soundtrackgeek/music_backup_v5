@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.199.0] - 2026-10-23
+
+### Added
+- **A journey that fits your time** in Sonic journey: 1-720 minute budgets, optional audio storage limits, ordered beginning/middle/ending tracks and an indivisible complete album at an interior stop. Preview actual duration, unused time, file bytes and track start times; save the exact reviewed sequence.
+- Shared bounded sonic planner with exact whole-second packing within its shortlist, identical-audio exclusion and current-file/duration validation. Aurora uses the same planner and the `timedSonicJourneysV1` save capability; Tonehavn Trip Tape can carry the complete published playlist without reselection.
+
 ## [0.198.1] - 2026-10-23
 
 ### Fixed

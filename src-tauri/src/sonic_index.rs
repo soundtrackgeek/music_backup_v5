@@ -802,6 +802,9 @@ pub(crate) mod tests {
             .to_vec();
         let request = crate::sonic_journey::JourneyRequest {
             stop_keys,
+            target_seconds: None,
+            max_mib: None,
+            album_stop_key: None,
             connecting_tracks: 3,
             minimum_rating: Some(70),
             same_genre: true,

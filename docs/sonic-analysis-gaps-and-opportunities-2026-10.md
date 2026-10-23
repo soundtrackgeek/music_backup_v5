@@ -702,3 +702,9 @@ Music Library remains the source of analysis, models and recipes. Aurora remains
 - [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770): K-weighted loudness, the basis of EBU R128
 - [Schnitzer, Flexer, Schedl and Widmer, 2012](https://jmlr.org/papers/v13/schnitzer12a.html): hubness in music similarity spaces
 - [Ellis and Poliner, 2007](https://www.ee.columbia.edu/~dpwe/pubs/EllisP07-coversongs.pdf): cover-song identification with chroma and beat tracking
+
+**Implementation update, 2026-10-23:** First-report idea 07 now ships as
+[timed sonic journeys](timed-sonic-journeys.md), including repeat exclusion for
+identical MP3 payload hashes from the existing analysis store. This does not
+ship the reviewed near-twin tooling from 28 or the calibrated level estimate
+from 27. Existing player normalization remains in charge of playback gain.

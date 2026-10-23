@@ -577,6 +577,7 @@ fn capabilities() -> Result<Value> {
             "boundedExistingFolderSync": true,
             "verifiedTrackDeletionSync": true,
             "sonicJourneyPlaylists": true,
+            "timedSonicJourneysV1": true,
             "hiddenFavoritesV1": true,
             "ratingMissionsV1": true,
             "smartPlaylistAuthoring": true,
