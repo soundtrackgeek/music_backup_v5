@@ -240,7 +240,7 @@ selection remain future work.
 
 **Proof of value.** Results satisfy the chosen boundary and are interesting enough to hear again. Evaluate the sonic result separately from whether the reveal happened to be surprising.
 
-### 10. Blind tasting
+### 10. Blind tasting - DONE
 
 **The experience.** Listen to a familiar seed, then two concealed candidates from your own collection. Choose the one you would keep playing. Reveal artist, album and artwork afterward, with **Save**, **Hear the album**, and **Another round**.
 
