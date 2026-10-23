@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.200.1] - 2026-10-23
+
+### Fixed
+- Manual artist Origin Country saves now reserve database write access and retry temporary SQLite contention up to three times. Country reference and artist rows commit together, so a failed save leaves the previous values intact.
+- Artist info now reports the underlying origin-country save error and gives retry guidance when the library remains busy, instead of showing only a generic reference-row error.
+
 ## [0.200.0] - 2026-10-23
 
 ### Added

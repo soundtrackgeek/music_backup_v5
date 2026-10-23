@@ -1,6 +1,9 @@
 use crate::db;
 #[path = "artist_auto_resolve.rs"]
 pub(crate) mod auto_resolve;
+#[cfg(test)]
+#[path = "musicbrainz_origin_tests.rs"]
+mod origin_tests;
 use crate::models::{
     ExportResult, MusicBrainzArtistCandidateRow, MusicBrainzArtistDiscographyRequest,
     MusicBrainzArtistDiscographyResponse, MusicBrainzArtistExportRequest,
@@ -246,8 +249,19 @@ pub fn set_artist_origin_country_for_app(
     app: &AppHandle,
     request: MusicBrainzArtistOriginCountryRequest,
 ) -> Result<MusicBrainzArtistOriginCountryUpdate> {
-    let (conn, _) = db::open(app)?;
-    set_artist_origin_country_for_connection(&conn, request)
+    let (mut conn, _) = db::open(app)?;
+    set_artist_origin_country_for_connection(&mut conn, request)
+}
+
+pub(crate) fn artist_origin_country_error(error: anyhow::Error) -> String {
+    if musicbrainz_database_is_busy(&error) {
+        format!(
+            "Origin country could not be saved because the library database is busy. \
+             Wait for the current import or sync to finish, then try saving again. Details: {error:#}"
+        )
+    } else {
+        format!("Could not save artist origin country: {error:#}")
+    }
 }
 
 fn musicbrainz_database_is_busy(error: &anyhow::Error) -> bool {
@@ -2390,11 +2404,9 @@ fn save_refreshed_artist_origin_country(
 }
 
 fn set_artist_origin_country_for_connection(
-    conn: &Connection,
+    conn: &mut Connection,
     request: MusicBrainzArtistOriginCountryRequest,
 ) -> Result<MusicBrainzArtistOriginCountryUpdate> {
-    db::ensure_musicbrainz_origin_country_tables(conn)?;
-
     let artist_name = normalize_display_name(&request.artist_name, &request.artist_key);
     let artist_key = normalize_local_artist_key(&request.artist_key, &artist_name);
     let country_code = normalized_country_code(&request.country_code)
@@ -2405,69 +2417,81 @@ fn set_artist_origin_country_for_connection(
         .and_then(country_level_name)
         .or_else(|| country_name_from_code(&country_code).map(ToOwned::to_owned))
         .unwrap_or_else(|| country_code.clone());
-    let mbid = manual_origin_mbid(conn, &artist_key, request.musicbrainz_mbid.as_deref())?
-        .unwrap_or_else(|| "manual".to_string());
     let saved_at = Utc::now().to_rfc3339();
 
-    conn.execute(
-        "
-        INSERT INTO musicbrainz_origin_countries (
-            country_code, country_name, iso_source, is_historical,
-            is_special, created_at, updated_at
-        ) VALUES (
-            ?1, ?2, 'manual', 0, 0, ?3, ?3
-        )
-        ON CONFLICT(country_code) DO UPDATE SET
-            country_name = excluded.country_name,
-            iso_source = excluded.iso_source,
-            updated_at = excluded.updated_at
-        ",
-        params![country_code, country_name, saved_at],
-    )
-    .context("Could not save manual MusicBrainz origin-country reference row")?;
+    retry_musicbrainz_write(|| {
+        // Reserve the writer before reading the artist identity. Both reference
+        // and artist rows must commit together, including on a retried save.
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .context("Could not start manual artist origin-country transaction")?;
+        db::ensure_musicbrainz_origin_country_tables(&tx)?;
+        let mbid = manual_origin_mbid(&tx, &artist_key, request.musicbrainz_mbid.as_deref())?
+            .unwrap_or_else(|| "manual".to_string());
 
-    conn.execute(
-        "
-        INSERT INTO musicbrainz_artist_origin_countries (
-            local_artist_key, display_artist, mbid, country_code, country_name,
-            raw_area_mbid, raw_area_name, raw_area_type, begin_area_mbid,
-            begin_area_name, begin_area_type, derived_from, confidence,
-            review_state, source, fetched_at, created_at, updated_at
-        ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL, NULL, NULL, NULL,
-            'manual', 1.0, 'manual', 'manual', ?6, ?6, ?6
+        tx.execute(
+            "
+            INSERT INTO musicbrainz_origin_countries (
+                country_code, country_name, iso_source, is_historical,
+                is_special, created_at, updated_at
+            ) VALUES (
+                ?1, ?2, 'manual', 0, 0, ?3, ?3
+            )
+            ON CONFLICT(country_code) DO UPDATE SET
+                country_name = excluded.country_name,
+                iso_source = excluded.iso_source,
+                updated_at = excluded.updated_at
+            ",
+            params![country_code, country_name, saved_at],
         )
-        ON CONFLICT(local_artist_key) DO UPDATE SET
-            display_artist = excluded.display_artist,
-            mbid = excluded.mbid,
-            country_code = excluded.country_code,
-            country_name = excluded.country_name,
-            raw_area_mbid = excluded.raw_area_mbid,
-            raw_area_name = excluded.raw_area_name,
-            raw_area_type = excluded.raw_area_type,
-            begin_area_mbid = excluded.begin_area_mbid,
-            begin_area_name = excluded.begin_area_name,
-            begin_area_type = excluded.begin_area_type,
-            derived_from = excluded.derived_from,
-            confidence = excluded.confidence,
-            review_state = excluded.review_state,
-            source = excluded.source,
-            fetched_at = excluded.fetched_at,
-            updated_at = excluded.updated_at
-        ",
-        params![
-            artist_key,
-            artist_name,
-            mbid,
-            country_code,
-            country_name,
-            saved_at
-        ],
-    )
-    .context("Could not save manual MusicBrainz artist origin-country row")?;
+        .context("Could not save manual MusicBrainz origin-country reference row")?;
 
-    artist_origin_country_update_for_connection(conn, &artist_key, &artist_name)?
-        .context("Saved manual MusicBrainz origin-country row was not found")
+        tx.execute(
+            "
+            INSERT INTO musicbrainz_artist_origin_countries (
+                local_artist_key, display_artist, mbid, country_code, country_name,
+                raw_area_mbid, raw_area_name, raw_area_type, begin_area_mbid,
+                begin_area_name, begin_area_type, derived_from, confidence,
+                review_state, source, fetched_at, created_at, updated_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL, NULL, NULL, NULL,
+                'manual', 1.0, 'manual', 'manual', ?6, ?6, ?6
+            )
+            ON CONFLICT(local_artist_key) DO UPDATE SET
+                display_artist = excluded.display_artist,
+                mbid = excluded.mbid,
+                country_code = excluded.country_code,
+                country_name = excluded.country_name,
+                raw_area_mbid = excluded.raw_area_mbid,
+                raw_area_name = excluded.raw_area_name,
+                raw_area_type = excluded.raw_area_type,
+                begin_area_mbid = excluded.begin_area_mbid,
+                begin_area_name = excluded.begin_area_name,
+                begin_area_type = excluded.begin_area_type,
+                derived_from = excluded.derived_from,
+                confidence = excluded.confidence,
+                review_state = excluded.review_state,
+                source = excluded.source,
+                fetched_at = excluded.fetched_at,
+                updated_at = excluded.updated_at
+            ",
+            params![
+                artist_key,
+                artist_name,
+                mbid,
+                country_code,
+                country_name,
+                saved_at
+            ],
+        )
+        .context("Could not save manual MusicBrainz artist origin-country row")?;
+
+        let saved = artist_origin_country_update_for_connection(&tx, &artist_key, &artist_name)?
+            .context("Saved manual MusicBrainz origin-country row was not found")?;
+        tx.commit()
+            .context("Could not commit manual artist origin country")?;
+        Ok(saved)
+    })
 }
 
 fn manual_origin_mbid(
@@ -6360,9 +6384,9 @@ mod tests {
 
     #[test]
     fn saves_manual_artist_origin_country_with_uk_alias() {
-        let app_conn = create_artist_app_db();
+        let mut app_conn = create_artist_app_db();
         let saved = set_artist_origin_country_for_connection(
-            &app_conn,
+            &mut app_conn,
             MusicBrainzArtistOriginCountryRequest {
                 artist_key: "the smiths".to_string(),
                 artist_name: "The Smiths".to_string(),

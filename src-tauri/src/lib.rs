@@ -1330,7 +1330,7 @@ async fn set_musicbrainz_artist_origin_country(
     })
     .await
     .map_err(|error| format!("MusicBrainz artist origin-country task failed: {error}"))?
-    .map_err(|error| error.to_string())
+    .map_err(musicbrainz::artist_origin_country_error)
 }
 
 #[cfg(not(test))]

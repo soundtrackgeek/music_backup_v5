@@ -270,7 +270,7 @@ mod tests {
     fn saves_unverified_link_with_info_and_preserves_manual_country() {
         let mut conn = connection();
         set_artist_origin_country_for_connection(
-            &conn,
+            &mut conn,
             MusicBrainzArtistOriginCountryRequest {
                 artist_key: "example".into(),
                 artist_name: "Example".into(),

@@ -1,5 +1,11 @@
 # Music Library
 
+Music Library **0.200.1** fixes manual **Artist info → Origin Country** saves
+during temporary database contention. The country reference and artist values
+save together, with up to three attempts. If the library stays busy, the error
+shows the underlying cause; wait for the current import or sync to finish and
+save again. Failed saves preserve the previous stored values.
+
 Music Library **0.200.0** supplies the shared metadata boundary policy for
 Aurora **0.45.0**'s **Same sound, different world** listening challenge. From a
 track inspector, compare nearby sounds within or across decades, album-artist
@@ -835,7 +841,7 @@ npm run security:check
 - Origin Countries preview now renders a filterable coverage report for skipped, unresolved, eligible, imported, and all artist rows.
 - SQLite schema version 17 adds app-owned origin-country reference rows, one local album-artist origin row per normalized artist key, and import-run logging; schema version 18 adds the persisted Origin Country display preference.
 - Origin-country import trusts verified or unverified attached MusicBrainz MBIDs first, then cache MBIDs; duplicate-heavy cache mappings are imported and can be corrected later from the Artist page.
-- The Artist MusicBrainz Artist Info box refreshes selected-artist Origin Country from MusicBrainz and includes manual Origin Country code/name saves.
+- The Artist MusicBrainz Artist Info box refreshes selected-artist Origin Country from MusicBrainz and includes manual Origin Country code/name saves. Manual saves commit the country reference and artist row together and retry temporary database locks up to three times; persistent failures include the underlying cause and leave previous stored values intact. Manual values remain authoritative during later MusicBrainz updates.
 - Search and Charts support Origin Country include/exclude and missing-origin filters using local SQLite joins, token-aware live country suggestions for comma-separated lists, code-and-name labels such as `RO - Romania`, plus optional Origin Country exports and chart columns.
 - Artists, Albums, Search results, Charts, MusicBrainz review panels, filter chips, country suggestions, and web-preview mocks show country-level imported, reviewed/manual, skipped, unresolved, and missing origin states without appending town/raw-area parentheticals to the country label.
 - Settings can render Origin Country values as bundled SVG flag plus country name, country name only, or flag only.
