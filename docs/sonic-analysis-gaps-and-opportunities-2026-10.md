@@ -385,6 +385,12 @@ Both work on anything: albums, playlists, Aurora's Random sort, and Tonehavn's A
 
 #### 31. Crowd + ear, with a coherence dial
 
+**Related implementation, 2026-10-23:** Opportunity 09 now ships a three-position
+metadata control for decade, album-artist credit and catalog genre in Aurora's
+listening challenge. This addresses the correction above in both directions;
+it does not implement Last.fm blending or change station behavior. See
+[Same sound, different world](same-sound-different-world.md).
+
 **The experience.** One control on stations: **Stay in style ⟷ Cross borders.** Every queued track carries its evidence: *sound + listeners*, *sound only*, or *listeners only*.
 
 **Why it earns a place.** Pure sonic radio crosses borders constantly; Tonehavn's Last.fm Artist Radio stays coherent but cannot hear anything. You want to choose where you are on that line tonight.

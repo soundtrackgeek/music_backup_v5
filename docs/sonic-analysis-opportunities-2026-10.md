@@ -218,7 +218,15 @@ recording twins (28) remain separate work; exact payload repeats are excluded.
 
 **Proof of value.** Both participants recognize their contribution and choose to keep part of the result. Mathematical closeness to a blended center is not the success metric.
 
-### 09. Same sound, different world
+### 09. Same sound, different world - DONE
+
+**Implementation update, 2026-10-23:** Music Library 0.200.0 and Aurora 0.45.0
+ship a three-track listening/reveal challenge with decade, album-artist and
+catalog-genre boundaries, and Stay close / Either / Cross borders controls.
+This applies the second report's correction that crossing is already common.
+See [shipped behavior, validation and limits](same-sound-different-world.md).
+Country/history challenges, full Last.fm station blending and Tonehavn-native
+selection remain future work.
 
 **The experience.** Choose a favorite and a challenge: **Different decade**, **Outside this genre**, **Another country in my catalog**, or **An artist I have barely played**. Hear three candidates before revealing the connection.
 

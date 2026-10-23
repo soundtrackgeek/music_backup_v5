@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.200.0] - 2026-10-23
+
+### Added
+- Shared **Same sound, different world** boundary policy for Aurora 0.45.0: stay within, ignore, or cross album-year decades, album-artist credits and catalog genres. Unknown metadata never proves a boundary; distances remain whole-track acoustic evidence.
+- Document the three-track listening/reveal workflow, existing Music Library playlist saving, bounded selection and deferred country/history/Tonehavn features. Incorporate the companion report's correction that sonic neighbors already cross metadata borders frequently.
+
 ## [0.199.0] - 2026-10-23
 
 ### Added

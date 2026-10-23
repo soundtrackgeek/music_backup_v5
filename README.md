@@ -1,5 +1,11 @@
 # Music Library
 
+Music Library **0.200.0** supplies the shared metadata boundary policy for
+Aurora **0.45.0**'s **Same sound, different world** listening challenge. From a
+track inspector, compare nearby sounds within or across decades, album-artist
+credits or catalog genres, listen before revealing, then save discoveries to
+Music Library playlists. No reanalysis is required. See [usage and limits](docs/same-sound-different-world.md).
+
 Music Library **0.198.1** fixes Smart playlist saves and refreshes failing with
 `database is locked` during background catalog activity. Saves reserve catalog
 write access before evaluating rules and use bounded retries for temporary
