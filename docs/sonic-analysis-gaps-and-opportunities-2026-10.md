@@ -714,3 +714,6 @@ Music Library remains the source of analysis, models and recipes. Aurora remains
 identical MP3 payload hashes from the existing analysis store. This does not
 ship the reviewed near-twin tooling from 28 or the calibrated level estimate
 from 27. Existing player normalization remains in charge of playback gain.
+
+
+**Implementation update, 2026-10-23:** Idea 10 now has [Blind tasting](blind-tasting.md) in Aurora 0.46.0 and Tonehavn 0.53.0 / iOS build 70. Tonehavn now has the sonic publication contract introduced in 0.51.0. The game provides concealed A/B listening, explicit reveal/save/album actions and one downloadable iPhone round. Level handling reuses Aurora's calibrated estimate and Tonehavn's measured normalization; estimates and device verification limits remain explicit.

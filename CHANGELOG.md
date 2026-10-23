@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.200.2] - 2026-10-23
+
+### Changed
+- Document delivered **Blind tasting** in Aurora 0.46.0 and Tonehavn 0.53.0 / iOS build 70, including explicit saves, normalized listening, one downloadable iPhone round, sonic publication ownership and verification limits. Update both October opportunity reports with the implementation status.
+
 ## [0.200.1] - 2026-10-23
 
 ### Fixed

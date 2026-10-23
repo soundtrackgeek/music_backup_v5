@@ -542,3 +542,6 @@ Some sonic documentation retains historical prose about earlier retrieval implem
 [th-downloads]: https://github.com/soundtrackgeek/plexamp-replacement/blob/998f389/apps/ios/Tonehavn/Features/Downloads/DownloadStore.swift#L382
 [th-spec]: https://github.com/soundtrackgeek/plexamp-replacement/blob/998f389/SPEC.md#L319
 [th-readme]: https://github.com/soundtrackgeek/plexamp-replacement/blob/998f389/README.md
+
+
+**Implementation update, 2026-10-23:** Idea 10 now has [Blind tasting](blind-tasting.md) in Aurora 0.46.0 and Tonehavn 0.53.0 / iOS build 70. Tonehavn now has the sonic publication contract introduced in 0.51.0. The game provides concealed A/B listening, explicit reveal/save/album actions and one downloadable iPhone round. Level handling reuses Aurora's calibrated estimate and Tonehavn's measured normalization; estimates and device verification limits remain explicit.

@@ -1178,3 +1178,8 @@ time, unused time, audio size and the final track before saving. Identical MP3
 audio payloads do not repeat. Aurora 0.44.0 previews and plays the same plan;
 Tonehavn 0.52.0 carries a published linked playlist through Trip Tape. See
 [Timed sonic journeys](docs/timed-sonic-journeys.md) for workflow and limits.
+
+
+### Blind tasting
+
+Listen to a familiar seed and two concealed acoustic neighbors in Aurora or Tonehavn, then reveal, save a discovery or hear its album. Choices do not become ratings. Tonehavn iPhone can retain and download one round for offline play; new rounds and playlist saves need a connection. See [Blind tasting](docs/blind-tasting.md) for entry points, level handling and verification limits.
