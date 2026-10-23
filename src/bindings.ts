@@ -7,6 +7,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const commands = {
 	hiddenFavorites: (request: HiddenRequest) => __TAURI_INVOKE<HiddenShelf>("hidden_favorites", { request }),
 	ratingMissions: (request: MissionRequest) => __TAURI_INVOKE<MissionShelf>("rating_missions", { request }),
+	sonicAtlas: (request: AtlasRequest) => __TAURI_INVOKE<SonicAtlas>("sonic_atlas", { request }),
 	listeningOverview: () => __TAURI_INVOKE<ListeningOverview>("listening_overview"),
 	reviewReport: (request: ReviewRequest) => __TAURI_INVOKE<ReviewReport>("review_report", { request }),
 	ratedAlbumHistory: () => __TAURI_INVOKE<RatedAlbum[]>("rated_album_history"),
@@ -1105,6 +1106,39 @@ export type Assessment = {
 	builder: Score,
 	breather: Score,
 	closer: Score,
+};
+
+export type AtlasCounts = {
+	owned: number,
+	rated: number,
+	loved: number,
+	absentFromHistory: number,
+	unavailable: number,
+};
+
+export type AtlasPoint = {
+	track: SonicTrack,
+	x: number | null,
+	y: number | null,
+	available: boolean,
+	inHistory: boolean,
+};
+
+export type AtlasRegion = {
+	id: string,
+	representativeKey: string,
+	label: string,
+	points: AtlasPoint[],
+	counts: AtlasCounts,
+};
+
+export type AtlasRequest = {
+	action: string,
+	seedKey: string,
+	revision: string | null,
+	regionId: string | null,
+	trackKeys: string[] | null,
+	name: string | null,
 };
 
 export type BackupSchedule = {
@@ -4601,6 +4635,19 @@ export type SonicAlbumRequest = {
 	albumId: string,
 	limit: number,
 	minimumCoverage: number,
+};
+
+export type SonicAtlas = {
+	version: string,
+	profile: string,
+	revision: string,
+	generatedAt: string,
+	seed: SonicTrack,
+	regions: AtlasRegion[],
+	counts: AtlasCounts,
+	historyPlays: number,
+	historySince: number | null,
+	message: string | null,
 };
 
 export type SonicMatches = {

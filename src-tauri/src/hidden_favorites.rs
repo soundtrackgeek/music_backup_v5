@@ -8,6 +8,7 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, time::Duration};
 pub(crate) mod missions;
+pub(crate) mod atlas;
 mod taste;
 
 const DAYS: i64 = 90;

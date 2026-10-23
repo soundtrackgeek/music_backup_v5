@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.201.0] - 2026-10-23
+
+### Added
+- **Playable sonic atlas**: Music Library computes and persists versioned sound neighborhoods, representative tracks, stable brightness/level maps, and owned/rated/loved/available-history counts. Open Tools → Audio analysis → Open sonic atlas; search a track, explore regions, open albums and save reviewed region playlists.
+- Explicit rebuilds, revision checks, recording freshness validation and unavailable states preserve reviewed regions. Two readable axes describe the map; full-profile sound distance selects neighbors and regions. Counts cover the bounded neighborhood, and absent history never implies unheard music.
+
 ## [0.200.2] - 2026-10-23
 
 ### Changed

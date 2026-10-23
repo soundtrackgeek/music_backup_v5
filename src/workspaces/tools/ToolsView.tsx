@@ -35,6 +35,7 @@ export function ToolsView({
   model: Pick<
     AppModel,
     | "clearToolQuery"
+    | "openTimelineAlbum"
     | "refreshMusicTools"
     | "musicTools"
     | "totalToolIssues"
@@ -126,7 +127,7 @@ export function ToolsView({
         </div>
       </header>
 
-      <SonicAnalysisPanel />
+      <SonicAnalysisPanel onOpenAlbum={model.openTimelineAlbum} />
       <section className="metric-grid" aria-label="Tools summary">
         <Metric
           label="Validators"

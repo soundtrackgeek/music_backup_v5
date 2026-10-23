@@ -426,6 +426,10 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
             serde_json::to_value(crate::hidden_favorites::operate_at(&app_data_dir, input)?)
                 .map_err(Into::into)
         }
+        "sonicAtlas" => {
+            let input = serde_json::from_value(request.payload).context("Invalid sonic atlas request")?;
+            serde_json::to_value(crate::hidden_favorites::atlas::operate_at(&app_data_dir, input)?).map_err(Into::into)
+        }
         "ratingMissions" => {
             let input = serde_json::from_value(request.payload)
                 .context("Invalid rating mission request")?;
@@ -580,6 +584,7 @@ fn capabilities() -> Result<Value> {
             "timedSonicJourneysV1": true,
             "hiddenFavoritesV1": true,
             "ratingMissionsV1": true,
+            "sonicAtlasV1": true,
             "smartPlaylistAuthoring": true,
             "sonicSmartPlaylistsV1": true,
             "playlistAuthoring": true,

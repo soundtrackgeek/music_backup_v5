@@ -2,6 +2,7 @@ import { commands, type JourneyRequest, type JourneyResponse, type JourneyTrack 
 import { isTauriRuntime } from "./tauriClient";
 import { mockRows } from "./webPreview";
 export type { JourneyRequest, JourneyResponse, JourneyTrack } from "../bindings";
+export { demo as journeyPreviewTracks };
 const demo: JourneyTrack[] = [...mockRows.filter(row => row.trackId !== null).map(row => ({ trackId: row.trackId!, trackKey: `preview:journey-${row.trackId}`, title: row.title ?? "Untitled", artist: row.displayArtist ?? row.albumArtistDisplay ?? "Unknown artist", album: row.album ?? "Unknown album", albumId: row.albumId, albumArtist: row.albumArtistDisplay ?? "Unknown artist", filePath: "Preview", filename: `${row.trackId}.mp3`, genre: row.canonicalGenre, rating: row.normalizedRating, seconds: row.trackSeconds ?? 180, loved: row.love === "L" })),
   ...mockRows.filter(row => row.trackId === null).flatMap((row, index) => Array.from({ length: 3 }, (_, i) => ({ trackId: 1000 + index * 3 + i, trackKey: `preview:journey-example-${index}-${i}`, title: `Example track ${i + 1}`, artist: row.albumArtistDisplay ?? "Unknown artist", album: row.album ?? "Unknown album", albumId: row.albumId, albumArtist: row.albumArtistDisplay ?? "Unknown artist", filePath: "Preview", filename: `example-${index}-${i}.mp3`, genre: row.canonicalGenre, rating: 80, seconds: 180, loved: false })))];
 export async function searchJourneyTracks(text: string): Promise<JourneyTrack[]> {

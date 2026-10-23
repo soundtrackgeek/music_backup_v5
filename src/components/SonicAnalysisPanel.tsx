@@ -5,7 +5,9 @@ import "./SonicAnalysisPanel.css";
 import { SonicBackupPanel } from "./SonicBackupPanel";
 import { SonicFailuresPanel } from "./SonicFailuresPanel";
 import { SonicCoveragePanel } from "./SonicCoveragePanel";
-export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
+import { SonicAtlas } from "./SonicAtlas";
+export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string; onOpenAlbum?: (id: string) => void }) {
+  const [atlasOpen, setAtlasOpen] = useState(false);
   const [status, setStatus] = useState<SonicStatus | null>(null);
   const [seeds, setSeeds] = useState<SonicTrack[]>([]);
   const [seed, setSeed] = useState("");
@@ -109,6 +111,7 @@ export function SonicAnalysisPanel({ albumId }: { albumId?: string }) {
     finally { if (live.current) setBusy(false); }
   }
   return <section className="sonic-analysis" aria-label="Audio analysis">
+    {onOpenAlbum && <><button type="button" onClick={() => setAtlasOpen(true)}>Open sonic atlas</button>{atlasOpen && <SonicAtlas onClose={() => setAtlasOpen(false)} onOpenAlbum={t => onOpenAlbum(t.albumId)} />}</>}
     <div><h2>Audio analysis</h2><p>Discover connections by sound. Analysis runs locally and resumes from saved track checkpoints.</p></div>
     <p>{status ? `${status.analyzed.toLocaleString()} of ${status.total.toLocaleString()} tracks analyzed · ${status.pending.toLocaleString()} pending · ${status.failed.toLocaleString()} failed` : "Reading analysis coverage…"}</p>
     {saved && <div className="sonic-current-work" aria-label="Saved audio analysis">

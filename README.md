@@ -1,5 +1,12 @@
 # Music Library
 
+## Playable sonic atlas (0.201.0)
+
+Music Library computes and persists versioned sound neighborhoods, representative tracks, stable brightness/level maps, and owned/rated/loved/available-history counts. Open Tools → Audio analysis → Open sonic atlas; search a track, explore regions, open albums and save reviewed region playlists.
+
+Music Library owns the saved map, progress and playlist writes; Aurora supplies playback and navigation. Reload counts keeps positions and region membership fixed. Rebuild neighborhood explicitly updates the sound selection. Each atlas covers up to 180 distinct recordings, with bounded indexed retrieval, fresh analysis checks, readable brightness/average-level axes and numbered regions. The map does not establish mood, genre, musical key or LUFS. See [behavior, evidence and limits](docs/sonic-atlas.md).
+
+
 Music Library **0.200.1** fixes manual **Artist info → Origin Country** saves
 during temporary database contention. The country reference and artist values
 save together, with up to three attempts. If the library stays busy, the error

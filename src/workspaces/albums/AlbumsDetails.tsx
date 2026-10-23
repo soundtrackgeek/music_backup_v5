@@ -32,7 +32,7 @@ export function AlbumsDetails({
   } = model;
   return (
     <TransitionRegion>
-      {selectedAlbum && <SonicAnalysisPanel key={selectedAlbum.albumId} albumId={selectedAlbum.albumId} />}
+      {selectedAlbum && <SonicAnalysisPanel key={selectedAlbum.albumId} albumId={selectedAlbum.albumId} onOpenAlbum={openTimelineAlbum} />}
       {selectedAlbum && <SonicAlbumPanel key={`sonic-album:${selectedAlbum.albumId}`} albumId={selectedAlbum.albumId} onOpenAlbum={openTimelineAlbum} />}
       <AlbumDetailPanel
         album={selectedAlbum}

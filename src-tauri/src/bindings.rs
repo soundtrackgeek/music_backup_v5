@@ -206,6 +206,7 @@ fn builder() -> Builder<Wry> {
     let commands = specta_commands![
         crate::hidden_favorites::hidden_favorites,
         crate::hidden_favorites::missions::rating_missions,
+        crate::hidden_favorites::atlas::sonic_atlas,
         listening::listening_overview,
         review::review_report,
         rated_albums::rated_album_history,

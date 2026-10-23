@@ -717,3 +717,12 @@ from 27. Existing player normalization remains in charge of playback gain.
 
 
 **Implementation update, 2026-10-23:** Idea 10 now has [Blind tasting](blind-tasting.md) in Aurora 0.46.0 and Tonehavn 0.53.0 / iOS build 70. Tonehavn now has the sonic publication contract introduced in 0.51.0. The game provides concealed A/B listening, explicit reveal/save/album actions and one downloadable iPhone round. Level handling reuses Aurora's calibrated estimate and Tonehavn's measured normalization; estimates and device verification limits remain explicit.
+
+
+**Implementation update, 2026-10-23:** First-report idea 11 now ships as a
+[playable local sonic atlas](sonic-atlas.md) in Music Library 0.201.0 and Aurora
+0.47.0. Brightness and average frame-level axes make the view readable; region
+selection retains the original full-profile metric. Snapshots, recording
+fingerprints and explicit rebuilds keep layouts stable. This uses the baseline
+weights; it does not claim to ship the alternative metric validation from 23
+or the full descriptor system from 21.

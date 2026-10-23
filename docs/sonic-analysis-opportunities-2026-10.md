@@ -254,7 +254,13 @@ selection remain future work.
 
 **Proof of value.** Rounds lead to voluntary reveals, saves and full-album listening. This is an excellent inexpensive experiment because its enjoyable part does not depend on sophisticated new modeling.
 
-### 11. A playable sonic atlas
+### 11. A playable sonic atlas - DONE
+
+**Implementation update, 2026-10-23:** Music Library 0.201.0 and Aurora 0.47.0
+ship the local-neighborhood first version: stable versioned regions, readable
+brightness/level maps, progress counts, entry-point and region playback, album
+navigation, recenter/back and reviewed playlist saving. See [behavior and limits](sonic-atlas.md).
+The collection-wide hierarchy and Tonehavn shelves/packs remain future work.
 
 **The experience.** Browse a map of sound neighborhoods. Each region has a few recognizable representatives and meaningful counts: owned, rated, loved, and absent from available play history. Select a region to hear an entry point, open its albums, or create a listening shortlist.
 

@@ -1,6 +1,7 @@
 //! App-independent result contract. No decoder, SQLite, or Bliss dependency.
 use serde::{Deserialize, Serialize};
 pub mod album_sides;
+pub mod atlas;
 pub mod index;
 pub mod timed_journey;
 pub mod worlds;
