@@ -43,6 +43,18 @@ it("saves sound examples with native filters, stable ordering and manual refresh
     request:expect.objectContaining({filters:expect.objectContaining({yearFrom:1980,yearTo:1989,missingFields:["rating"]})})
   })));
   expect(await screen.findByRole("alert")).toHaveTextContent("Desktop evaluation required");
+  expect(screen.getByLabelText("Name")).toHaveValue("Late train home");
+  expect(screen.getByRole("list",{name:"Sound examples"})).toHaveTextContent("The Journey");
+  expect(screen.getByRole("button",{name:"Save Smart playlist"})).toBeEnabled();
+});
+
+it("explains why Save is disabled while the playlist name is missing",()=>{
+  render(<SmartPlaylistRules onSaved={vi.fn()} onCancel={vi.fn()} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Enter a playlist name above");
+  expect(screen.getByRole("button",{name:"Save Smart playlist"})).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Named mix"}});
+  expect(screen.queryByText("Enter a playlist name above to enable Save Smart playlist.")).not.toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Save Smart playlist"})).toBeEnabled();
 });
 
 it("ignores an old example search after the query changes",async()=>{

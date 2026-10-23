@@ -445,6 +445,177 @@ mod tests {
             playing_queue
         );
     }
+
+    fn file_fixture() -> (
+        tempfile::TempDir,
+        Connection,
+        crate::ai::SaveSmartPlaylistRequest,
+    ) {
+        let (dir, memory, input) = fixture();
+        let path = dir.path().join("music-library.sqlite3");
+        memory
+            .backup(rusqlite::DatabaseName::Main, &path, None)
+            .unwrap();
+        memory
+            .backup(
+                rusqlite::DatabaseName::Attached("sonic"),
+                &dir.path().join("music-analysis.sqlite3"),
+                None,
+            )
+            .unwrap();
+        drop(memory);
+        let c = Connection::open(&path).unwrap();
+        configure(&c).unwrap();
+        let analysis = Connection::open(dir.path().join("music-analysis.sqlite3")).unwrap();
+        analysis.pragma_update(None, "journal_mode", "WAL").unwrap();
+        drop(analysis);
+        (dir, c, input)
+    }
+
+    fn competing_catalog_write_on_read(
+        c: &Connection,
+        dir: &Path,
+    ) -> Arc<std::sync::atomic::AtomicBool> {
+        let other = Connection::open(dir.join("music-library.sqlite3")).unwrap();
+        configure(&other).unwrap();
+        other.busy_timeout(Duration::ZERO).unwrap();
+        let attempted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed = attempted.clone();
+        // Force a real competing commit during the initial rule SELECT. A
+        // deferred reader cannot then upgrade its WAL snapshot to a writer.
+        c.create_scalar_function("lower", 1, FunctionFlags::SQLITE_UTF8, move |ctx| {
+            if !observed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                match other.execute(
+                    "UPDATE albums SET publisher='Background sync' WHERE id='mb:test'",
+                    [],
+                ) {
+                    Ok(_) => {}
+                    Err(rusqlite::Error::SqliteFailure(code, _))
+                        if matches!(
+                            code.code,
+                            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                        ) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(ctx.get::<String>(0)?.to_lowercase())
+        })
+        .unwrap();
+        attempted
+    }
+
+    #[test]
+    fn sonic_save_survives_a_catalog_writer_during_rule_reads() {
+        use std::sync::atomic::Ordering;
+        let (dir, c, mut input) = file_fixture();
+        let attempted = competing_catalog_write_on_read(&c, dir.path());
+        input.request.filters.track_title = TextFilter {
+            operator: "equals".into(),
+            value: "2.mp3".into(),
+        };
+        let saved = playlists::save_smart_playlist_on(&c, input)
+            .expect("concurrent catalog work must not invalidate the Smart save");
+        assert!(attempted.load(Ordering::SeqCst));
+        assert_eq!(
+            saved
+                .playlist
+                .tracks
+                .iter()
+                .map(|t| t.track_id)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM saved_playlists", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert!(c.is_autocommit());
+    }
+
+    #[test]
+    fn sonic_save_and_edit_can_run_while_the_analysis_writer_is_active() {
+        let (dir, c, mut input) = file_fixture();
+        let analysis = Connection::open(dir.path().join("music-analysis.sqlite3")).unwrap();
+        analysis
+            .execute_batch("BEGIN IMMEDIATE; UPDATE sonic_audio SET features=features;")
+            .unwrap();
+        let saved = playlists::save_smart_playlist_on(&c, input.clone()).unwrap();
+        input.id = Some(saved.id);
+        input.expected_updated_at = Some(saved.updated_at);
+        input.name = "Edited during analysis".into();
+        let edited = playlists::save_smart_playlist_on(&c, input).unwrap();
+        assert_eq!(edited.id, saved.id);
+        assert_eq!(edited.playlist.tracks.len(), 3);
+        assert!(
+            !analysis.is_autocommit(),
+            "the analyzer still owns its separate writer"
+        );
+        analysis.execute_batch("COMMIT").unwrap();
+        assert!(
+            c.execute("DELETE FROM sonic.sonic_audio", []).is_err(),
+            "analysis stays read-only on the playlist connection"
+        );
+    }
+    #[test]
+    fn sonic_refresh_reserves_the_writer_on_desktop_background_and_bridge_paths() {
+        use std::sync::atomic::Ordering;
+        for mode in ["desktop", "background", "bridge"] {
+            let (dir, c, mut input) = file_fixture();
+            input.request.filters.track_title = TextFilter {
+                operator: "equals".into(),
+                value: "2.mp3".into(),
+            };
+            let saved = playlists::save_smart_playlist_on(&c, input).unwrap();
+            let attempted = if mode == "bridge" {
+                // Keep the pool alive so the bridge checks out the connection
+                // whose first catalog read attempts the competing commit.
+                let pool =
+                    crate::db::lifecycle::pool_for_path(&dir.path().join("music-library.sqlite3"))
+                        .unwrap();
+                let lease = pool.checkout(crate::db::lifecycle::Access::Write).unwrap();
+                let attempted = competing_catalog_write_on_read(&lease, dir.path());
+                drop(lease);
+                let result = playlists::playlist_bridge_at(
+                    dir.path(),
+                    "playlistRefresh",
+                    serde_json::json!({"id":saved.id}),
+                )
+                .unwrap();
+                assert_eq!(result["id"].as_i64(), Some(saved.id));
+                attempted
+            } else {
+                let attempted = competing_catalog_write_on_read(&c, dir.path());
+                if mode == "desktop" {
+                    playlists::evaluate_smart_playlist(&c, saved.id).unwrap();
+                } else {
+                    assert_eq!(
+                        playlists::refresh_all_smart_playlists_for_connection(&c).unwrap(),
+                        1
+                    );
+                }
+                attempted
+            };
+            assert!(
+                attempted.load(Ordering::SeqCst),
+                "{mode} must evaluate the saved rules"
+            );
+            let current = playlists::load_saved_playlist(&c, saved.id).unwrap();
+            assert_eq!(
+                current
+                    .playlist
+                    .tracks
+                    .iter()
+                    .map(|t| t.track_id)
+                    .collect::<Vec<_>>(),
+                vec![2]
+            );
+            assert!(current.automation.last_error.is_none());
+            assert!(c.is_autocommit());
+        }
+    }
+
     #[test]
     fn missing_or_replaced_seed_keeps_publication_and_records_refresh_failure() {
         let (_dir, c, input) = fixture();

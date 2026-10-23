@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.198.1] - 2026-10-23
+
+### Fixed
+- Smart playlist creation, editing and refresh failing with `database is locked` when a background catalog writer committed after rule reads. Reserve catalog write access before reading rules, keep the analysis store read-only, and retry only SQLite BUSY/LOCKED failures from a fully rolled-back attempt. The desktop, automatic refresh and Aurora bridge paths share the same transaction ownership.
+- Preserve the draft and existing saved playlist after persistent contention, report actionable busy guidance with the SQLite cause, and explain the disabled Save button when the playlist name is empty.
+
 ## [0.198.0] - 2026-10-22
 
 ### Added

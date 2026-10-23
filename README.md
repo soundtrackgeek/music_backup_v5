@@ -1,5 +1,14 @@
 # Music Library
 
+Music Library **0.198.1** fixes Smart playlist saves and refreshes failing with
+`database is locked` during background catalog activity. Saves reserve catalog
+write access before evaluating rules and use bounded retries for temporary
+contention. Audio analysis can keep writing its separate store. Persistent
+contention retains your editor entries and existing saved result; wait for the
+current library write to finish, then retry Save or Refresh. The editor also
+explains when Save needs a playlist name. Aurora uses this fix through the
+existing Music Library bridge; no Aurora update is needed.
+
 Music Library **0.198.0** adds **Sonic Smart playlists**. In Playlists, choose
 **Create Smart playlist → Sounds like these examples**, select 1–8 analyzed songs,
 and combine their sound with metadata filters, a distance limit and an artist cap.

@@ -34,6 +34,14 @@ in either desktop app explicitly reevaluates even a manual recipe. Analysis
 completion alone does not schedule a new playlist evaluation. Aurora needs the
 Windows companion bridge for authoring; read-only catalogs retain published songs.
 
+Music Library 0.198.1 reserves the catalog writer before reading rules, avoiding
+a stale WAL read snapshot when another catalog task commits. Temporary SQLite
+BUSY/LOCKED failures get at most three attempts, each from a fresh transaction
+after rollback, with the normal busy timeout on each attempt. The analysis attachment stays read-only,
+so an active analyzer writer does not prevent saving. Persistent contention keeps
+your draft and previous saved result and shows actionable retry guidance. No
+partial playlist or automation rows survive a failed attempt.
+
 Saving or refreshing updates only the saved recipe/result. It does not call
 playback or replace a playing queue. Aurora's existing revision guards still
 apply if a consumer later requests another page of an older playlist revision.

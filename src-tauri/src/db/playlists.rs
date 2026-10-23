@@ -1,5 +1,49 @@
 use super::*;
 
+fn playlist_database_is_busy(error: &anyhow::Error) -> bool {
+    matches!(error.downcast_ref::<rusqlite::Error>(),
+        Some(rusqlite::Error::SqliteFailure(code, _))
+            if matches!(code.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked))
+}
+
+fn retry_smart_playlist_write<T>(mut write: impl FnMut() -> Result<T>) -> Result<T> {
+    for attempt in 0..3 {
+        match write() {
+            Err(error) if playlist_database_is_busy(&error) && attempt < 2 => {
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) if playlist_database_is_busy(&error) => {
+                return Err(error.context("The library database is still busy after waiting for another write. Your Smart playlist changes were not saved; your draft is retained. Try Save or Refresh again after the current library write finishes."));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the last Smart write attempt always returns")
+}
+
+fn smart_playlist_write<T>(
+    conn: &Connection,
+    mut write: impl FnMut(&Connection) -> Result<T>,
+) -> Result<T> {
+    if !conn.is_autocommit() {
+        // Imports and Smart creation already own a write transaction. They
+        // retain responsibility for rollback; never retry inside its snapshot.
+        return write(conn);
+    }
+    retry_smart_playlist_write(|| {
+        // A deferred SELECT can become SQLITE_BUSY_SNAPSHOT when a background
+        // catalog writer commits before publication. Reserve the writer first.
+        // The sonic attachment remains read-only, so analysis can still write.
+        let tx =
+            rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+                .context("Could not reserve the Smart playlist catalog writer")?;
+        let result = write(&tx)?;
+        tx.commit()
+            .context("Could not commit the Smart playlist changes")?;
+        Ok(result)
+    })
+}
+
 pub(super) fn playlist_value_key(value: Option<&str>, fallback: &str) -> String {
     value
         .map(str::trim)
@@ -362,11 +406,10 @@ pub(super) fn delete_saved_playlist(conn: &Connection, id: i64) -> Result<()> {
 }
 
 pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
-    let transaction = if conn.is_autocommit() {
-        Some(conn.unchecked_transaction()?)
-    } else {
-        None
-    };
+    smart_playlist_write(conn, |conn| evaluate_smart_playlist_once(conn, id))
+}
+
+fn evaluate_smart_playlist_once(conn: &Connection, id: i64) -> Result<SavedPlaylist> {
     let mut saved = load_saved_playlist(conn, id)?;
     if saved.playlist.mixtape.is_some() {
         bail!("A mixtape cannot be refreshed as a Smart playlist")
@@ -512,11 +555,7 @@ pub(super) fn evaluate_smart_playlist(conn: &Connection, id: i64) -> Result<Save
         params![refreshed_at, desired_count, id],
     )?;
 
-    let result = load_saved_playlist(conn, id)?;
-    if let Some(transaction) = transaction {
-        transaction.commit()?;
-    }
-    Ok(result)
+    load_saved_playlist(conn, id)
 }
 
 pub(super) fn set_playlist_automation(
@@ -595,6 +634,13 @@ pub(crate) fn save_smart_playlist_on(
     conn: &Connection,
     input: crate::ai::SaveSmartPlaylistRequest,
 ) -> Result<SavedPlaylist> {
+    smart_playlist_write(conn, |conn| save_smart_playlist_once(conn, input.clone()))
+}
+
+fn save_smart_playlist_once(
+    conn: &Connection,
+    input: crate::ai::SaveSmartPlaylistRequest,
+) -> Result<SavedPlaylist> {
     validate_smart_settings(&input.settings)?;
     if input.settings.sonic.is_some() && input.request.view != "tracks" {
         bail!("Sonic Smart playlists match songs. Choose Songs before adding sound examples.")
@@ -605,9 +651,8 @@ pub(crate) fn save_smart_playlist_on(
     {
         bail!("Smart playlists need reusable track filters and a stable sort")
     }
-    let tx = conn.unchecked_transaction()?;
     let mut playlist = if let Some(id) = input.id {
-        let saved = load_saved_playlist(&tx, id)?;
+        let saved = load_saved_playlist(conn, id)?;
         if input
             .expected_updated_at
             .as_ref()
@@ -622,7 +667,7 @@ pub(crate) fn save_smart_playlist_on(
         saved.playlist
     } else {
         build_playlist(
-            &tx,
+            conn,
             AiPlaylistPlan {
                 prompt: "Shared local Smart playlist rules".into(),
                 name: input.name.clone(),
@@ -646,11 +691,12 @@ pub(crate) fn save_smart_playlist_on(
     playlist.request = input.request;
     playlist.request.offset = 0;
     if input.settings.sonic.is_none() {
-        playlist.description = "Reusable library filters shared by Aurora and Music Library.".into();
+        playlist.description =
+            "Reusable library filters shared by Aurora and Music Library.".into();
     }
     playlist.smart_settings = Some(input.settings);
     let saved = save_playlist(
-        &tx,
+        conn,
         SavePlaylistRequest {
             expected_updated_at: None,
             id: input.id,
@@ -659,13 +705,12 @@ pub(crate) fn save_smart_playlist_on(
         },
     )?;
     let saved = set_playlist_automation(
-        &tx,
+        conn,
         SetPlaylistAutomationRequest {
             id: saved.id,
             smart: true,
         },
     )?;
-    tx.commit()?;
     Ok(saved)
 }
 
@@ -674,15 +719,16 @@ pub(crate) fn playlist_bridge_at(
     operation: &str,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value> {
-    let conn = super::open_path(&dir.join("music-library.sqlite3"))?;
+    let conn = if matches!(operation, "playlistSaveSmart" | "playlistRefresh") {
+        retry_smart_playlist_write(|| super::open_path(&dir.join("music-library.sqlite3")))?
+    } else {
+        super::open_path(&dir.join("music-library.sqlite3"))?
+    };
     let result = match operation {
         "playlistSaveSmart" => save_smart_playlist_on(&conn, serde_json::from_value(payload)?)?,
         "playlistRefresh" => {
             let id = payload["id"].as_i64().context("Playlist ID is required")?;
-            let tx = conn.unchecked_transaction()?;
-            let saved = evaluate_smart_playlist(&tx, id)?;
-            tx.commit()?;
-            saved
+            evaluate_smart_playlist(&conn, id)?
         }
         "playlistSaveSelection" => save_playlist_selection(&conn, payload)?,
         "playlistAuthor" => return author_playlist(&conn, payload),
@@ -1013,7 +1059,7 @@ pub fn save_smart_playlist_for_app(
     app: &AppHandle,
     input: crate::ai::SaveSmartPlaylistRequest,
 ) -> Result<SavedPlaylist> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = retry_smart_playlist_write(|| open(app))?;
     save_smart_playlist_on(&conn, input)
 }
 
@@ -1088,7 +1134,7 @@ fn refresh_saved_smart_playlists(conn: &Connection) -> Result<Vec<SavedPlaylist>
 
 #[cfg(not(test))]
 pub fn refresh_saved_smart_playlists_for_app(app: &AppHandle) -> Result<Vec<SavedPlaylist>> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = retry_smart_playlist_write(|| open(app))?;
     refresh_saved_smart_playlists(&conn)
 }
 
@@ -1140,7 +1186,7 @@ pub fn refresh_smart_playlist_for_app(
     app: &AppHandle,
     id: i64,
 ) -> Result<SmartPlaylistRefreshResult> {
-    let (conn, _) = open(app)?;
+    let (conn, _) = retry_smart_playlist_write(|| open(app))?;
     let evaluation = evaluate_smart_playlist(&conn, id)?;
     let refreshed_at = evaluation
         .automation
@@ -1208,6 +1254,127 @@ pub fn export_playlist_for_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write_fixture() -> (
+        tempfile::TempDir,
+        Connection,
+        Connection,
+        crate::ai::SaveSmartPlaylistRequest,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("music-library.sqlite3");
+        seeded_connection()
+            .backup(rusqlite::DatabaseName::Main, &path, None)
+            .unwrap();
+        let c = Connection::open(&path).unwrap();
+        configure(&c).unwrap();
+        c.busy_timeout(Duration::ZERO).unwrap();
+        let other = Connection::open(&path).unwrap();
+        configure(&other).unwrap();
+        other.busy_timeout(Duration::ZERO).unwrap();
+        let input = crate::ai::SaveSmartPlaylistRequest {
+            id: None,
+            expected_updated_at: None,
+            name: "Concurrent Smart save".into(),
+            request: test_playlist_plan().request,
+            settings: crate::ai::SmartPlaylistSettings {
+                track_limit: 10,
+                refresh_policy: "manual".into(),
+                sonic: None,
+            },
+        };
+        (dir, c, other, input)
+    }
+
+    #[test]
+    fn smart_writer_retries_a_real_lock_then_saves_exactly_once() {
+        let (_dir, c, other, input) = write_fixture();
+        other
+            .execute_batch("BEGIN IMMEDIATE; UPDATE albums SET publisher='Concurrent writer';")
+            .unwrap();
+        let mut attempts = 0;
+        let saved = retry_smart_playlist_write(|| {
+            attempts += 1;
+            if attempts == 2 {
+                other.execute_batch("COMMIT")?;
+            }
+            let tx =
+                rusqlite::Transaction::new_unchecked(&c, rusqlite::TransactionBehavior::Immediate)?;
+            let saved = save_smart_playlist_once(&tx, input.clone())?;
+            tx.commit()?;
+            Ok(saved)
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(saved.playlist.tracks.len(), 1);
+        assert_eq!(list_saved_playlists(&c).unwrap().len(), 1);
+        assert!(c.is_autocommit());
+    }
+
+    #[test]
+    fn smart_writer_rolls_back_before_retrying_and_keeps_permanent_errors() {
+        let (_dir, c, other, input) = write_fixture();
+        let mut attempts = 0;
+        smart_playlist_write(&c, |tx| {
+            attempts += 1;
+            let saved = save_smart_playlist_once(tx, input.clone())?;
+            if attempts == 1 {
+                // Obtain an actual SQLITE_BUSY after the playlist and its
+                // automation have been written, then verify rollback on retry.
+                other.execute("UPDATE albums SET publisher='Busy'", [])?;
+            }
+            Ok(saved)
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(list_saved_playlists(&c).unwrap().len(), 1);
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM playlist_automations", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        for code in [
+            rusqlite::ffi::SQLITE_READONLY,
+            rusqlite::ffi::SQLITE_CONSTRAINT,
+            rusqlite::ffi::SQLITE_CORRUPT,
+        ] {
+            let mut attempts = 0;
+            let result: Result<()> = retry_smart_playlist_write(|| {
+                attempts += 1;
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(code),
+                    Some("database is locked is only message text".into()),
+                )
+                .into())
+            });
+            assert_eq!(attempts, 1);
+            assert!(!playlist_database_is_busy(&result.unwrap_err()));
+        }
+    }
+
+    #[test]
+    fn smart_writer_contention_is_bounded_and_preserves_the_sqlite_cause() {
+        let (_dir, c, other, input) = write_fixture();
+        other
+            .execute_batch("BEGIN IMMEDIATE; UPDATE albums SET publisher='Held writer';")
+            .unwrap();
+        let mut attempts = 0;
+        let error = retry_smart_playlist_write(|| {
+            attempts += 1;
+            let tx =
+                rusqlite::Transaction::new_unchecked(&c, rusqlite::TransactionBehavior::Immediate)?;
+            save_smart_playlist_once(&tx, input.clone())
+        })
+        .unwrap_err();
+        assert_eq!(attempts, 3);
+        assert!(playlist_database_is_busy(&error));
+        assert!(format!("{error:#}").contains("database is locked"));
+        assert!(error.to_string().contains("draft is retained"));
+        assert!(list_saved_playlists(&c).unwrap().is_empty());
+        other.execute_batch("ROLLBACK").unwrap();
+        assert!(c.is_autocommit());
+    }
 
     #[test]
     fn saved_playlist_listing_reads_snapshots_without_evaluating_smart_rules() {

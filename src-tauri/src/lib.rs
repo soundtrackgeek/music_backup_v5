@@ -775,7 +775,7 @@ async fn delete_saved_playlist(app: AppHandle, id: i64) -> Result<(), String> {
 #[specta::specta]
 async fn save_smart_playlist(app: AppHandle, input: ai::SaveSmartPlaylistRequest) -> Result<ai::SavedPlaylist, String> {
     tauri::async_runtime::spawn_blocking(move || db::save_smart_playlist_for_app(&app, input))
-        .await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+        .await.map_err(|e| e.to_string())?.map_err(|e| format!("{e:#}"))
 }
 
 #[cfg(not(test))]
@@ -801,7 +801,7 @@ async fn refresh_smart_playlist(
     tauri::async_runtime::spawn_blocking(move || db::refresh_smart_playlist_for_app(&app, id))
         .await
         .map_err(|error| format!("Smart playlist refresh task failed: {error}"))?
-        .map_err(|error| error.to_string())
+        .map_err(|error| format!("{error:#}"))
 }
 
 #[cfg(not(test))]

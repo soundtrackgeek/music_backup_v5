@@ -40,6 +40,7 @@ export function SmartPlaylistRules({ saved, onSaved, onCancel }: { saved?:SavedP
       <label><input type="checkbox" checked={(request.filters.lovedTracksMin??0)>0} onChange={e=>update({lovedTracksMin:e.target.checked?1:null})} />{album?"Albums with loved songs":"Loved songs only"}</label>
     </fieldset>
     <SonicSmartRules value={sonic} disabled={busy} onChange={value=>{setSonic(value);if(value)setRequest(r=>({...r,view:"tracks"}));}} />
+    {!busy&&!name.trim()&&<p role="status">Enter a playlist name above to enable Save Smart playlist.</p>}
     {error&&<p role="alert" className="error-message">{error}</p>}<div className="playlist-result-actions"><button type="submit" className="primary-button" disabled={busy||!name.trim()||(sonic!==null&&!sonic.seeds.length)}>{busy?"Saving…":"Save Smart playlist"}</button><button className="secondary-button" type="button" disabled={busy} onClick={onCancel}>Cancel</button></div>
   </form>;
 }
