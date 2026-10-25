@@ -582,13 +582,20 @@ pub(crate) fn prepare_bridge_import_preview(
 ) -> Result<ImportPreview> {
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
     let cancel_requested = AtomicBool::new(false);
-    let fingerprint = source_fingerprint(snapshot_path.to_string_lossy().as_ref())?;
+    let source = snapshot_path.to_string_lossy();
+    let fingerprint = source_fingerprint(source.as_ref())?;
+    // An additions-only snapshot holds just the new albums' rows; the delta is those rows.
+    let scope = if crate::folder_sync::snapshot_is_additions_only(source.as_ref()) {
+        ImportPreviewScope::BridgeAdditions
+    } else {
+        ImportPreviewScope::Bridge
+    };
     prepare_import_preview_for_connection_scoped(
         conn,
         &fingerprint,
         &cancel_requested,
         &|_, _, _, _, _, _| {},
-        ImportPreviewScope::Bridge,
+        scope,
     )
 }
 
@@ -2238,6 +2245,13 @@ fn apply_bridge_import_preview_with_published_source(
     } else {
         crate::folder_sync::prepare_source_apply_guard(conn, &session.source_path)?
     };
+    // An Aurora add stages only its new albums; the guard above pinned the catalog. Such a
+    // stage must never reach the full snapshot replacement, which would read it as the
+    // whole library, so refuse any other combination before touching anything.
+    let additions_scope = crate::folder_sync::snapshot_is_additions_only(&session.source_path);
+    if additions_scope && !(source_is_published && source_apply_guard.is_some()) {
+        bail!("An additions-only preview can only be applied by the Aurora bridge. Prepare the batch again");
+    }
     let fingerprint = source_fingerprint(&session.source_path)?;
     ensure_session_source_matches(&session, &fingerprint)?;
     let reported_source_path = crate::folder_sync::original_folder_path(&session.source_path)
@@ -2289,6 +2303,7 @@ fn apply_bridge_import_preview_with_published_source(
         &reported_source_path,
         source_apply_guard.as_ref(),
         source_is_published && source_apply_guard.is_some(),
+        additions_scope,
         progress,
     );
     match result {
@@ -2748,6 +2763,9 @@ fn prepare_import_preview_for_connection(
 enum ImportPreviewScope {
     FullLibrary,
     Bridge,
+    /// The staged rows are only the albums an Aurora add brings in; the existing catalog
+    /// is pinned by the snapshot manifest's catalog fingerprint instead of being restaged.
+    BridgeAdditions,
 }
 
 fn prepare_import_preview_for_connection_scoped(
@@ -2979,9 +2997,21 @@ fn prepare_import_preview_inner(
     ensure_preparation_not_cancelled(cancel_requested)?;
     persist_stage_final_albums(conn, session_id, &final_albums, cancel_requested)?;
     ensure_preparation_not_cancelled(cancel_requested)?;
-    let changes = calculate_staged_changes(conn, session_id, &final_albums, cancel_requested)?;
+    let additions_only = scope == ImportPreviewScope::BridgeAdditions;
+    let changes = calculate_staged_changes(
+        conn,
+        session_id,
+        &final_albums,
+        cancel_requested,
+        additions_only,
+    )?;
     ensure_preparation_not_cancelled(cancel_requested)?;
-    let suspicious = find_suspicious_albums(conn, &final_albums, cancel_requested)?;
+    // Nothing can be removed by an addition, so there is nothing suspicious to flag.
+    let suspicious = if additions_only {
+        Vec::new()
+    } else {
+        find_suspicious_albums(conn, &final_albums, cancel_requested)?
+    };
     ensure_preparation_not_cancelled(cancel_requested)?;
     persist_import_delta(
         conn,
@@ -3306,15 +3336,22 @@ fn calculate_staged_changes(
     session_id: i64,
     final_albums: &[FinalAlbum],
     cancel_requested: &AtomicBool,
+    additions_only: bool,
 ) -> Result<ImportChanges> {
     ensure_preparation_not_cancelled(cancel_requested)?;
-    let added_tracks = conn.query_row(ADDED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
+    let added_tracks: i64 =
+        conn.query_row(ADDED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
     ensure_preparation_not_cancelled(cancel_requested)?;
     let changed_tracks =
         conn.query_row(CHANGED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
     ensure_preparation_not_cancelled(cancel_requested)?;
-    let removed_tracks =
-        conn.query_row(REMOVED_TRACKS_SQL, params![session_id], |row| row.get(0))?;
+    // An additions-only stage holds just the new rows, so the existing catalog is not
+    // "missing" from it; counting it as removed would be wrong.
+    let removed_tracks = if additions_only {
+        0
+    } else {
+        conn.query_row(REMOVED_TRACKS_SQL, params![session_id], |row| row.get(0))?
+    };
     ensure_preparation_not_cancelled(cancel_requested)?;
 
     let mut previous_albums = load_previous_albums(conn)?;
@@ -3334,7 +3371,26 @@ fn calculate_staged_changes(
             None => changes.added_albums += 1,
         }
     }
-    changes.removed_albums = previous_albums.len() as i64;
+    if additions_only {
+        // Every staged row must be new: an album that already exists in the catalog is a
+        // replacement, which this staging cannot describe.
+        let staged_rows: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM import_stage_tracks WHERE session_id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )?;
+        if staged_rows != added_tracks
+            || changes.changed_tracks != 0
+            || changes.changed_albums != 0
+            || changes.added_albums != final_albums.len() as i64
+        {
+            bail!(
+                "The selected albums are already represented in the catalog. Preview them again as a replacement"
+            );
+        }
+    } else {
+        changes.removed_albums = previous_albums.len() as i64;
+    }
     Ok(changes)
 }
 
@@ -3567,6 +3623,7 @@ fn apply_staged_import(
         reported_source_path,
         source_apply_guard,
         allow_removal_only,
+        false,
         &mut |_, _| {},
     )
 }
@@ -3579,6 +3636,7 @@ fn staged_delta_adds_only_new_albums(
     tx: &Connection,
     session: &ImportSessionRecord,
     new_album_ids_json: &str,
+    additions_scope: bool,
 ) -> Result<bool> {
     let count = |sql: &str, with_ids: bool| -> Result<i64> {
         Ok(if with_ids {
@@ -3591,7 +3649,9 @@ fn staged_delta_adds_only_new_albums(
     };
     Ok(count(ADDED_TRACKS_SQL, false)? == session.added_tracks
         && count(CHANGED_TRACKS_SQL, false)? == 0
-        && count(REMOVED_TRACKS_SQL, false)? == 0
+        // An additions-only stage does not hold the existing catalog, so every existing
+        // track would look removed; the catalog fingerprint guard covers that case.
+        && (additions_scope || count(REMOVED_TRACKS_SQL, false)? == 0)
         && count(
             "SELECT COUNT(*) FROM import_stage_tracks
              WHERE session_id = ?1 AND album_id IN (SELECT value FROM json_each(?2))",
@@ -3611,6 +3671,7 @@ fn apply_staged_import_with_progress(
     reported_source_path: &str,
     source_apply_guard: Option<&crate::folder_sync::SourceApplyGuard>,
     allow_removal_only: bool,
+    additions_scope: bool,
     progress: &mut dyn FnMut(&str, &str),
 ) -> Result<(u64, u64, i64)> {
     let tx = conn
@@ -3653,21 +3714,33 @@ fn apply_staged_import_with_progress(
             }
         }
     }
-    for previous in previous_albums.values() {
-        library_updates.push(library_update_for_removed_album(previous));
-        if let Some(event) = rating_event_for_removed_album(previous) {
-            rating_events.push(event);
+    // An additions-only stage holds just the new albums, so the existing albums left
+    // unmatched were never staged and are not removed.
+    if !additions_scope {
+        for previous in previous_albums.values() {
+            library_updates.push(library_update_for_removed_album(previous));
+            if let Some(event) = rating_event_for_removed_album(previous) {
+                rating_events.push(event);
+            }
         }
     }
 
     // A verified addition delta keeps every existing row, id and search entry and inserts
     // only the new albums. Anything the checks cannot prove falls back to the full
-    // snapshot replacement below.
+    // snapshot replacement below, which an additions-only stage cannot support.
     let new_album_ids_json = serde_json::to_string(&new_album_ids)?;
     let addition_only = addition_candidate
-        && previous_albums.is_empty()
+        && (additions_scope || previous_albums.is_empty())
         && new_album_ids.len() as i64 == session.added_albums
-        && staged_delta_adds_only_new_albums(&tx, session, &new_album_ids_json)?;
+        && staged_delta_adds_only_new_albums(
+            &tx,
+            session,
+            &new_album_ids_json,
+            additions_scope,
+        )?;
+    if additions_scope && !addition_only {
+        return Err(crate::folder_sync::PreparedCatalogChanged.into());
+    }
 
     // A verified removal delta can preserve the identities, ratings and search rows of
     // every retained track. Ordinary imports still replace the complete snapshot.
@@ -3854,7 +3927,14 @@ fn apply_staged_import_with_progress(
     progress("committing", "Recording the import history.");
     insert_rating_events(&tx, import_run_id, &rating_events)?;
     insert_library_updates(&tx, import_run_id, reported_source_path, &library_updates)?;
-    insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
+    // A full staging describes the whole library; an additions-only one holds just the new
+    // albums, so the snapshot and run totals come from the catalog itself.
+    let (catalog_track_rows, catalog_album_count) = if additions_scope {
+        insert_rating_snapshot_from_catalog(&tx, import_run_id)?
+    } else {
+        insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
+        (session.track_rows, session.album_count)
+    };
     if addition_only {
         progress("searchIndex", "Adding the new albums to search.");
         db::index_added_albums(&tx, &new_album_ids_json)?;
@@ -3892,8 +3972,8 @@ fn apply_staged_import_with_progress(
         ",
         params![
             &completed_at,
-            session.track_rows,
-            session.album_count,
+            catalog_track_rows,
+            catalog_album_count,
             duration_ms,
             rating_events.len() as i64,
             import_run_id,
@@ -3916,8 +3996,8 @@ fn apply_staged_import_with_progress(
     tx.commit()
         .context("Could not commit the atomic staged import")?;
     Ok((
-        session.track_rows.max(0) as u64,
-        session.album_count.max(0) as u64,
+        catalog_track_rows.max(0) as u64,
+        catalog_album_count.max(0) as u64,
         rating_events.len() as i64,
     ))
 }

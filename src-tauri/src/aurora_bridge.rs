@@ -737,13 +737,19 @@ fn preview_selection_once(
     let snapshot_path = app_data_dir
         .join("album-folder-imports")
         .join(format!("album-folder-batch-{plan_id}.tsv"));
-    let snapshot = match folder_sync::build_batch_snapshot(
+    // A pure addition leaves every existing row unchanged, so the preview stages only the
+    // new albums. Replacements and removals still compare the complete library.
+    let additions_only = inputs
+        .iter()
+        .all(|input| input.action == BatchAlbumAction::Add);
+    let snapshot = match folder_sync::build_batch_snapshot_scoped(
         &conn,
         &source,
         &inputs,
         &snapshot_path,
         &std::sync::atomic::AtomicBool::new(false),
         &mut |_, _, _| {},
+        additions_only,
     ) {
         Ok(snapshot) => snapshot,
         Err(error) => {
@@ -4617,6 +4623,23 @@ mod tests {
 
         let seventh = SelectionFixture::write_album(fixture.temp.path(), 6);
         let preview = fixture.preview_targets(vec![seventh]);
+        // The preview of a pure addition stages and writes only the new album's rows.
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM import_stage_tracks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        let snapshot = app_data.join("album-folder-imports").join(format!(
+            "album-folder-batch-{}.tsv",
+            preview["planId"].as_str().unwrap()
+        ));
+        assert_eq!(fs::read_to_string(snapshot).unwrap().lines().count(), 2);
+        assert_eq!(preview["albumCount"], 1);
+        assert_eq!(preview["delta"]["addedTracks"], 1);
+        assert_eq!(preview["delta"]["removedTracks"], 0);
+        assert_eq!(preview["delta"]["removedAlbums"], 0);
+        assert_eq!(preview["canApply"], true);
         let receipt = fixture.apply(&preview).expect("incremental second batch");
         assert_eq!(receipt["albumCount"], 1);
 
@@ -4648,6 +4671,38 @@ mod tests {
         }
         // Smart playlists refresh later, in the desktop app, not while Aurora waits.
         assert!(db::smart_playlist_refresh_pending(&app_data));
+    }
+
+    #[test]
+    fn catalog_edit_after_an_additions_only_preview_is_refused_without_changes() {
+        let fixture = SelectionFixture::new();
+        let first = fixture.preview();
+        fixture.apply(&first).expect("first batch");
+        let database = bridge_app_data_dir()
+            .unwrap()
+            .join("music-library.sqlite3");
+        let conn = open_database(&database).unwrap();
+        let seventh = SelectionFixture::write_album(fixture.temp.path(), 6);
+        let source = PathBuf::from(&seventh.source_path);
+        let preview = fixture.preview_targets(vec![seventh]);
+
+        // The existing catalog changes after the review. The preview staged none of it, so
+        // only the catalog fingerprint can notice; the apply must refuse and change nothing.
+        conn.execute("UPDATE tracks SET title = 'Edited after review'", [])
+            .unwrap();
+        assert!(fixture.apply(&preview).is_err());
+        for (sql, expected) in [
+            ("SELECT COUNT(*) FROM tracks", 6),
+            ("SELECT COUNT(*) FROM albums", 6),
+            ("SELECT COUNT(*) FROM import_runs WHERE status='completed'", 1),
+        ] {
+            assert_eq!(
+                conn.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap(),
+                expected,
+                "{sql}"
+            );
+        }
+        assert!(source.join("01.mp3").is_file(), "the source must remain");
     }
 
     #[test]

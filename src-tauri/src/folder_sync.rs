@@ -109,6 +109,10 @@ struct BatchSnapshotManifest {
     source_path: String,
     catalog_fingerprint: CatalogFingerprint,
     albums: Vec<BatchSnapshotAlbumManifest>,
+    /// The snapshot file holds only the new albums' rows, not the existing catalog.
+    /// The catalog fingerprint still pins the catalog the preview was built against.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    additions_only: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -825,9 +829,47 @@ pub(crate) fn build_batch_snapshot(
     cancel_requested: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64, &str),
 ) -> Result<BatchSnapshotResult> {
+    build_batch_snapshot_scoped(
+        conn,
+        selected_source,
+        albums,
+        output,
+        cancel_requested,
+        progress,
+        false,
+    )
+}
+
+/// True when the snapshot was built with `additions_only`: its file holds only the new
+/// albums, so the importer must not read it as the complete catalog.
+pub(crate) fn snapshot_is_additions_only(snapshot_source: &str) -> bool {
+    let snapshot = Path::new(snapshot_source);
+    is_generated_snapshot(snapshot)
+        && matches!(
+            read_snapshot_manifest(snapshot),
+            Ok(SnapshotManifest::Batch(manifest)) if manifest.additions_only
+        )
+}
+
+/// With `additions_only`, every album must be an `Add` and the snapshot omits the existing
+/// catalog rows: an add leaves them unchanged by construction, and copying a million of them
+/// out and back in made every preview slow. The catalog is still read in full for the
+/// fingerprint that the apply step verifies, so a catalog changed in the meantime is refused.
+pub(crate) fn build_batch_snapshot_scoped(
+    conn: &Connection,
+    selected_source: &Path,
+    albums: &[BatchAlbumInput],
+    output: &Path,
+    cancel_requested: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64, &str),
+    additions_only: bool,
+) -> Result<BatchSnapshotResult> {
     ensure_not_cancelled(cancel_requested)?;
     if albums.is_empty() {
         bail!("The selected folder does not contain any complete tagged albums");
+    }
+    if additions_only && albums.iter().any(|album| album.action != BatchAlbumAction::Add) {
+        bail!("An additions-only snapshot can only add new albums");
     }
     let canonical_selected_source = selected_source.canonicalize().with_context(|| {
         format!(
@@ -966,6 +1008,9 @@ pub(crate) fn build_batch_snapshot(
                     "An intake destination is already represented in the active catalog: {}",
                     values[13]
                 );
+            }
+            if additions_only {
+                continue;
             }
             write_catalog_record(&mut writer, values.iter().map(String::as_str))?;
             written_rows += 1;
@@ -1124,6 +1169,7 @@ pub(crate) fn build_batch_snapshot(
                 source_path: display_path(&canonical_selected_source),
                 catalog_fingerprint,
                 albums: manifest_albums,
+                additions_only,
             },
         )?;
         progress(written_rows, written_rows, "Album batch snapshot built.");

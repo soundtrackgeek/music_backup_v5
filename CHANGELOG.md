@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.203.0] - 2026-10-25
+
+### Changed
+- **Aurora previews of pure additions no longer copy the whole library**: previewing albums that are only being added used to write every catalog row (about 1.1 million) to a snapshot file, read it back and stage it into the database just to confirm that nothing existing changed, which took 40 to 124 seconds. The preview now writes and stages only the new albums' rows. The catalog is still read in full for the fingerprint that the apply step verifies, so a catalog edited after the review is refused and nothing is changed. Replacements and move-backs still stage the complete library.
+- Applying such a preview inserts the new albums as before, takes the import history and rating snapshot totals from the catalog itself, and refuses any other combination of an additions-only preview, so a partial stage can never be read as the whole library.
+
+### Added
+- Tests that a second batch stages and writes only its own rows, with an unchanged delta of one added album and nothing removed, and that a catalog edit after an additions-only preview is refused without changing the catalog or the source.
+
 ## [0.202.2] - 2026-10-25
 
 ### Changed
