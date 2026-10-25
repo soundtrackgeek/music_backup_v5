@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.202.1] - 2026-10-25
+
+### Changed
+- **Chart relinking writes only what changed**: reconciling singles charts (after an Aurora import that adds a charting track, a chart import or an album removal) used to clear every chart column on all ~1.1 million tracks and every matched chart entry, then rewrite the matches. It now stages the desired links and updates only the rows whose stored values differ, clears only links that no longer match, and leaves unchanged rows untouched. The resulting data is identical; a chart relink that took about a minute in an Aurora import writes a small fraction of the pages.
+
+### Added
+- Test that unchanged chart links are not rewritten, changed ones are, and links that no longer match are cleared.
+
 ## [0.202.0] - 2026-10-25
 
 ### Changed

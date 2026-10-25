@@ -722,50 +722,84 @@ pub(super) fn apply_track_chart_reconciliation(
     entries: &[StoredTrackChartEntry],
     matches: &[ReconciledTrackChartMatch],
 ) -> Result<()> {
+    // Stage the desired links, then write only the rows whose stored values differ.
+    // Clearing and rewriting every track and chart row rewrote over a million rows and
+    // gigabytes of pages to change a handful. A later match for the same track or entry
+    // replaces an earlier one, as the sequential updates did.
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS temp_chart_track_desired;
+        DROP TABLE IF EXISTS temp_chart_entry_desired;
+        CREATE TEMP TABLE temp_chart_track_desired (
+            track_id INTEGER PRIMARY KEY, rank INTEGER, year INTEGER, debut_date TEXT,
+            debut_year INTEGER, debut_month INTEGER, debut_week INTEGER, debut_week_key TEXT
+        );
+        CREATE TEMP TABLE temp_chart_entry_desired (
+            entry_id INTEGER PRIMARY KEY, track_id INTEGER NOT NULL
+        );
+        ",
+    )
+    .with_context(|| format!("Could not prepare {column_prefix} track chart reconciliation"))?;
+    {
+        let mut stage_track = conn.prepare(
+            "INSERT OR REPLACE INTO temp_chart_track_desired
+             (track_id, rank, year, debut_date, debut_year, debut_month, debut_week, debut_week_key)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )?;
+        let mut stage_entry = conn.prepare(
+            "INSERT OR REPLACE INTO temp_chart_entry_desired (entry_id, track_id) VALUES (?1, ?2)",
+        )?;
+        for chart_match in matches {
+            stage_track.execute(params![
+                chart_match.track_id,
+                chart_match.rank,
+                chart_match.chart_year,
+                &chart_match.debut_date,
+                chart_match.debut_year,
+                chart_match.debut_month,
+                chart_match.debut_week,
+                &chart_match.debut_week_key,
+            ])?;
+            for &entry_index in &chart_match.entry_indexes {
+                stage_entry.execute(params![entries[entry_index].entry_id, chart_match.track_id])?;
+            }
+        }
+    }
+    let p = column_prefix;
     conn.execute_batch(&format!(
         "
         UPDATE tracks
-        SET {column_prefix}_rank = NULL,
-            {column_prefix}_year = NULL,
-            {column_prefix}_debut_date = NULL,
-            {column_prefix}_debut_year = NULL,
-            {column_prefix}_debut_month = NULL,
-            {column_prefix}_debut_week = NULL,
-            {column_prefix}_debut_week_key = NULL;
-        UPDATE {table} SET matched_track_id = NULL;
+        SET {p}_rank = NULL, {p}_year = NULL, {p}_debut_date = NULL, {p}_debut_year = NULL,
+            {p}_debut_month = NULL, {p}_debut_week = NULL, {p}_debut_week_key = NULL
+        WHERE ({p}_rank IS NOT NULL OR {p}_year IS NOT NULL OR {p}_debut_date IS NOT NULL
+               OR {p}_debut_year IS NOT NULL OR {p}_debut_month IS NOT NULL
+               OR {p}_debut_week IS NOT NULL OR {p}_debut_week_key IS NOT NULL)
+          AND id NOT IN (SELECT track_id FROM temp_chart_track_desired);
+
+        UPDATE tracks
+        SET {p}_rank = d.rank, {p}_year = d.year, {p}_debut_date = d.debut_date,
+            {p}_debut_year = d.debut_year, {p}_debut_month = d.debut_month,
+            {p}_debut_week = d.debut_week, {p}_debut_week_key = d.debut_week_key
+        FROM temp_chart_track_desired d
+        WHERE tracks.id = d.track_id
+          AND ({p}_rank IS NOT d.rank OR {p}_year IS NOT d.year
+               OR {p}_debut_date IS NOT d.debut_date OR {p}_debut_year IS NOT d.debut_year
+               OR {p}_debut_month IS NOT d.debut_month OR {p}_debut_week IS NOT d.debut_week
+               OR {p}_debut_week_key IS NOT d.debut_week_key);
+
+        UPDATE {table} SET matched_track_id = NULL
+        WHERE matched_track_id IS NOT NULL
+          AND id NOT IN (SELECT entry_id FROM temp_chart_entry_desired);
+
+        UPDATE {table} SET matched_track_id = d.track_id
+        FROM temp_chart_entry_desired d
+        WHERE {table}.id = d.entry_id AND {table}.matched_track_id IS NOT d.track_id;
+
+        DROP TABLE temp_chart_track_desired;
+        DROP TABLE temp_chart_entry_desired;
         "
     ))
-    .with_context(|| format!("Could not clear stale {column_prefix} track chart matches"))?;
-
-    let update_track_sql = format!(
-        "UPDATE tracks
-         SET {column_prefix}_rank = ?1,
-             {column_prefix}_year = ?2,
-             {column_prefix}_debut_date = ?3,
-             {column_prefix}_debut_year = ?4,
-             {column_prefix}_debut_month = ?5,
-             {column_prefix}_debut_week = ?6,
-             {column_prefix}_debut_week_key = ?7
-         WHERE id = ?8"
-    );
-    let update_entry_sql = format!("UPDATE {table} SET matched_track_id = ?1 WHERE id = ?2");
-    let mut update_track = conn.prepare(&update_track_sql)?;
-    let mut update_entry = conn.prepare(&update_entry_sql)?;
-    for chart_match in matches {
-        update_track.execute(params![
-            chart_match.rank,
-            chart_match.chart_year,
-            &chart_match.debut_date,
-            chart_match.debut_year,
-            chart_match.debut_month,
-            chart_match.debut_week,
-            &chart_match.debut_week_key,
-            chart_match.track_id,
-        ])?;
-        for &entry_index in &chart_match.entry_indexes {
-            update_entry.execute(params![chart_match.track_id, entries[entry_index].entry_id])?;
-        }
-    }
+    .with_context(|| format!("Could not apply {column_prefix} track chart matches"))?;
     Ok(())
 }
 
@@ -926,6 +960,116 @@ pub(super) fn reconcile_weekly_album_summaries(
 mod tests {
     use super::*;
     use crate::db::test_support::*;
+
+    #[test]
+    fn track_chart_links_rewrite_only_rows_whose_values_change() {
+        let conn = seeded_connection();
+        let track_id: i64 = conn
+            .query_row("SELECT MIN(id) FROM tracks", [], |row| row.get(0))
+            .unwrap();
+        for week in [1, 2] {
+            conn.execute(
+                "INSERT INTO ti_i_skuddet_chart_entries (
+                    source_file, year, week, chart_date, rank, rank_raw, artist, title,
+                    artist_key, title_key, imported_at
+                 ) VALUES ('ti.csv', 2025, ?1, '2025-01-06', 3, '3', 'Artist', 'Song',
+                           'artist', 'song', 'now')",
+                [week],
+            )
+            .unwrap();
+        }
+        let entry_ids: Vec<i64> = conn
+            .prepare("SELECT id FROM ti_i_skuddet_chart_entries ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        // Stale state from an earlier reconciliation: the track links to the first entry.
+        conn.execute(
+            "UPDATE tracks SET ti_i_skuddet_rank = 9 WHERE id = ?1",
+            [track_id],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE ti_i_skuddet_chart_entries SET matched_track_id = ?1 WHERE id = ?2",
+            params![track_id, entry_ids[0]],
+        )
+        .unwrap();
+        conn.execute_batch(
+            "CREATE TEMP TABLE track_update_log (id INTEGER);
+             CREATE TEMP TRIGGER log_track_updates AFTER UPDATE ON tracks
+             BEGIN INSERT INTO track_update_log VALUES (NEW.id); END;",
+        )
+        .unwrap();
+        let entry = |entry_id| StoredTrackChartEntry {
+            title: "Song".into(),
+            entry_id,
+            match_artist_keys: vec!["artist".into()],
+            main_performers: vec!["artist".into()],
+            source_artist_key: "artist".into(),
+            title_key: "song".into(),
+            source_album_key: String::new(),
+            rank: 3,
+            chart_year: 2025,
+            chart_week: Some(1),
+            debut_date: Some("2025-01-06".into()),
+            debut_year: Some(2025),
+            debut_month: Some(1),
+            debut_week: Some(1),
+            debut_week_key: Some("2025-W01".into()),
+        };
+        let entries: Vec<_> = entry_ids.iter().map(|id| entry(*id)).collect();
+        let matches = vec![ReconciledTrackChartMatch {
+            track_id,
+            rank: 3,
+            chart_year: 2025,
+            debut_date: Some("2025-01-06".into()),
+            debut_year: Some(2025),
+            debut_month: Some(1),
+            debut_week: Some(1),
+            debut_week_key: Some("2025-W01".into()),
+            entry_indexes: vec![1],
+        }];
+        let state = |conn: &Connection| -> (Option<i32>, Vec<Option<i64>>) {
+            let rank = conn
+                .query_row(
+                    "SELECT ti_i_skuddet_rank FROM tracks WHERE id = ?1",
+                    [track_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let links = conn
+                .prepare("SELECT matched_track_id FROM ti_i_skuddet_chart_entries ORDER BY id")
+                .unwrap()
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            (rank, links)
+        };
+        let updates = |conn: &Connection| -> i64 {
+            conn.query_row("SELECT COUNT(*) FROM track_update_log", [], |row| row.get(0))
+                .unwrap()
+        };
+
+        apply_track_chart_reconciliation(&conn, "ti_i_skuddet_chart_entries", "ti_i_skuddet", &entries, &matches)
+            .unwrap();
+        assert_eq!(state(&conn), (Some(3), vec![None, Some(track_id)]));
+        let after_change = updates(&conn);
+        assert_eq!(after_change, 1);
+
+        // Reapplying identical links changes nothing, so no track row is rewritten.
+        apply_track_chart_reconciliation(&conn, "ti_i_skuddet_chart_entries", "ti_i_skuddet", &entries, &matches)
+            .unwrap();
+        assert_eq!(state(&conn), (Some(3), vec![None, Some(track_id)]));
+        assert_eq!(updates(&conn), after_change);
+
+        // A track that no longer matches is cleared, along with its entries.
+        apply_track_chart_reconciliation(&conn, "ti_i_skuddet_chart_entries", "ti_i_skuddet", &entries, &[])
+            .unwrap();
+        assert_eq!(state(&conn), (None, vec![None, None]));
+    }
 
     #[test]
     fn chart_source_health_rebuild_repairs_owned_links() {
