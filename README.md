@@ -2,7 +2,7 @@
 
 ## Faster Aurora imports (0.202.0)
 
-Adding albums from Aurora no longer rewrites the whole catalog. When an import only adds new albums, Music Library inserts just those albums, tracks and search entries, keeps every existing id, and rechecks chart links only if a new album or track could appear on a chart. Replacements, edits and removals still use the complete, verified snapshot replacement. When a new track does appear on a chart, only the chart links that actually change are written (0.202.1). Previews of pure additions stage only the new albums instead of copying the whole library (0.203.0). Smart playlists refresh in the background after the import instead of holding Aurora's dialog open, and the bridge reports named catalog steps for Aurora to display.
+Adding albums from Aurora no longer rewrites the whole catalog. When an import only adds new albums, Music Library inserts just those albums, tracks and search entries, keeps every existing id, and rechecks chart links only if a new album or track could appear on a chart. Replacements, edits and removals still use the complete, verified snapshot replacement. When a new track does appear on a chart, only the chart links that actually change are written (0.202.1). Previews of pure additions stage only the new albums instead of copying the whole library (0.203.0). Smart playlists refresh in the background after an Aurora import, whether or not the desktop app is open (0.203.1). Smart playlists refresh in the background after the import instead of holding Aurora's dialog open, and the bridge reports named catalog steps for Aurora to display.
 
 ## Playable sonic atlas (0.201.0)
 

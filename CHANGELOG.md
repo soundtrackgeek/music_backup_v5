@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.203.1] - 2026-10-25
+
+### Fixed
+- **Smart playlists now refresh after an Aurora import even when the desktop app is closed**: since 0.202.0 the import only left a marker for the desktop app to act on, so a library that is only ever updated through Aurora never refreshed its smart playlists. After a successful import the bridge now starts a small detached helper (music-library.exe --aurora-maintenance) that refreshes them and exits, without holding up Aurora and without taking the intake lock, so the next preview is never blocked. A refresh lock keeps the helper and the desktop app from evaluating every playlist at once, and a marker rewritten by a newer import is refreshed again. If the helper cannot start, the marker stays and the desktop app refreshes the playlists as before.
+
+### Added
+- Tests for the refresh lock (a holder keeps the marker, a release lets the refresh run), and for the helper refreshing the playlists and clearing the marker after a second batch.
+
 ## [0.203.0] - 2026-10-25
 
 ### Changed

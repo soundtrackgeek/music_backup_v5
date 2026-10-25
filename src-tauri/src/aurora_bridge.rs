@@ -361,8 +361,72 @@ struct StagingOwner {
     album_index: usize,
 }
 
+const MAINTENANCE_FLAG: &str = "--aurora-maintenance";
+
+/// Starts a detached helper that refreshes the smart playlists an Aurora import deferred.
+/// They search the whole catalog, so refreshing them inside the import kept Aurora waiting
+/// for minutes; this way they refresh whether or not the desktop app is open. Best effort:
+/// the marker stays pending if the helper cannot start, and the desktop app picks it up.
+fn start_deferred_maintenance(app_data_dir: &Path) {
+    if !db::smart_playlist_refresh_pending(app_data_dir) {
+        return;
+    }
+    let Ok(executable) = std::env::current_exe() else {
+        return;
+    };
+    let mut command = std::process::Command::new(executable);
+    command
+        .arg(MAINTENANCE_FLAG)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+    }
+    if let Err(error) = command.spawn() {
+        eprintln!("Could not start the deferred smart playlist refresh: {error}");
+    }
+}
+
+fn run_deferred_maintenance() -> Result<()> {
+    let app_data_dir = bridge_app_data_dir()?;
+    let database = app_data_dir.join("music-library.sqlite3");
+    let pool = db::pool_for_path(&database)?;
+    let outcome = (|| -> Result<()> {
+        // A newer import can rewrite the marker while a refresh runs; refresh again for it.
+        for _ in 0..3 {
+            if !db::smart_playlist_refresh_pending(&app_data_dir) {
+                break;
+            }
+            let conn = open_database(&database)?;
+            let ran = db::run_deferred_smart_playlist_refresh(&app_data_dir, &conn)?;
+            drop(conn);
+            if ran.is_none() {
+                // Another process holds the refresh; it will see the marker again.
+                break;
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = pool.shutdown() {
+        eprintln!("Could not optimize/checkpoint the catalog after maintenance: {error:#}");
+    }
+    outcome
+}
+
 pub(crate) fn run_from_process_args() -> bool {
     let args = std::env::args_os().collect::<Vec<_>>();
+    if args.get(1).and_then(|value| value.to_str()) == Some(MAINTENANCE_FLAG) {
+        if let Err(error) = run_deferred_maintenance() {
+            eprintln!("Deferred smart playlist refresh failed: {error:#}");
+        }
+        return true;
+    }
     if args.get(1).and_then(|value| value.to_str()) != Some("--aurora-bridge") {
         return false;
     }
@@ -505,6 +569,11 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
     };
     if let Err(error) = catalog_pool.shutdown() {
         eprintln!("Could not optimize/checkpoint the bridge catalog: {error:#}");
+    }
+    // After the catalog is checkpointed, hand the deferred smart playlist refresh to a
+    // detached helper so this process can finish and Aurora can continue.
+    if result.is_ok() && matches!(request.operation.as_str(), "applyBatch" | "repairBatch") {
+        start_deferred_maintenance(&app_data_dir);
     }
     result
 }
@@ -4669,8 +4738,14 @@ mod tests {
                 "{sql}"
             );
         }
-        // Smart playlists refresh later, in the desktop app, not while Aurora waits.
+        // Smart playlists refresh later, not while Aurora waits.
         assert!(db::smart_playlist_refresh_pending(&app_data));
+        // The detached helper's work: it refreshes them without the desktop app and clears
+        // the marker, and running it again with nothing pending is harmless.
+        drop(conn);
+        run_deferred_maintenance().expect("deferred maintenance");
+        assert!(!db::smart_playlist_refresh_pending(&app_data));
+        run_deferred_maintenance().expect("nothing left to refresh");
     }
 
     #[test]

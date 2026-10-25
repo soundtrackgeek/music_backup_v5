@@ -652,14 +652,81 @@ pub(crate) fn smart_playlist_refresh_pending(app_data_dir: &Path) -> bool {
     pending_smart_refresh_path(app_data_dir).is_file()
 }
 
+/// Held while one process refreshes the deferred smart playlists, so the desktop app and
+/// the helper an Aurora import starts never evaluate every playlist twice at once. It is
+/// deliberately not the intake lock: a refresh must never block the next album intake.
+struct SmartRefreshLock {
+    _file: fs::File,
+    #[cfg(not(windows))]
+    path: PathBuf,
+}
+
+impl SmartRefreshLock {
+    fn try_acquire(app_data_dir: &Path) -> Result<Option<Self>> {
+        let path = app_data_dir
+            .join("aurora-bridge")
+            .join("smart-playlist-refresh.lock");
+        if let Some(directory) = path.parent() {
+            fs::create_dir_all(directory)?;
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // Windows releases the lock when its process ends, even after a crash.
+            Ok(fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .share_mode(0)
+                .open(&path)
+                .ok()
+                .map(|file| Self { _file: file }))
+        }
+        #[cfg(not(windows))]
+        {
+            // A crashed holder cannot release this lock, so an old one is stale.
+            let stale = fs::metadata(&path)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_some_and(|age| age > std::time::Duration::from_secs(30 * 60));
+            if stale {
+                let _ = fs::remove_file(&path);
+            }
+            Ok(fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .ok()
+                .map(|file| Self { _file: file, path }))
+        }
+    }
+}
+
+#[cfg(not(windows))]
+impl Drop for SmartRefreshLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
 /// Runs a refresh recorded by `defer_smart_playlist_refresh`. Returns `None` when
-/// nothing was pending. The marker is removed only if no newer import rewrote it
-/// while the refresh ran, so that import's playlists are refreshed again.
+/// nothing was pending or another process is already refreshing. The marker is removed
+/// only if no newer import rewrote it while the refresh ran, so that import's
+/// playlists are refreshed again.
 pub(crate) fn run_deferred_smart_playlist_refresh(
     app_data_dir: &Path,
     conn: &Connection,
 ) -> Result<Option<usize>> {
     let path = pending_smart_refresh_path(app_data_dir);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let Some(_lock) = SmartRefreshLock::try_acquire(app_data_dir)? else {
+        return Ok(None);
+    };
     let marker = match fs::read(&path) {
         Ok(marker) => marker,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1348,6 +1415,26 @@ mod tests {
             run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
             None
         );
+
+        // Another process already refreshing keeps the marker for itself to finish.
+        defer_smart_playlist_refresh(directory.path(), 6).unwrap();
+        let held = SmartRefreshLock::try_acquire(directory.path())
+            .unwrap()
+            .expect("lock is free");
+        assert!(SmartRefreshLock::try_acquire(directory.path())
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
+            None
+        );
+        assert!(smart_playlist_refresh_pending(directory.path()));
+        drop(held);
+        assert_eq!(
+            run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
+            Some(0)
+        );
+        assert!(!smart_playlist_refresh_pending(directory.path()));
 
         // A newer import rewrites the marker while a refresh is running.
         defer_smart_playlist_refresh(directory.path(), 8).unwrap();
