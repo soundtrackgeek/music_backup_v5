@@ -2031,6 +2031,9 @@ fn apply_batch(
             &mut conn,
             &database_path,
             request.session_id,
+            &mut |stage, message| {
+                progress.report(stage, message, plan.albums.len());
+            },
         )
     };
     let import_summary = match import_result {
@@ -4189,7 +4192,6 @@ mod tests {
 
     impl SelectionFixture {
         fn new() -> Self {
-            use id3::TagLike;
             let temp = tempdir().unwrap();
             let mut previous_roots = vec![(APP_DATA_OVERRIDE, std::env::var_os(APP_DATA_OVERRIDE))];
             std::env::set_var(APP_DATA_OVERRIDE, temp.path());
@@ -4207,39 +4209,52 @@ mod tests {
                 std::env::set_var(variable, root);
             }
             let targets = (0..6)
-                .map(|index| {
-                    let source = temp.path().join(format!("inbox-{index}/Album {index}"));
-                    fs::create_dir_all(&source).unwrap();
-                    let path = source.join("01.mp3");
-                    let mut audio = Vec::new();
-                    for _ in 0..40 {
-                        let mut frame = vec![0; 417];
-                        frame[..4].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
-                        audio.extend(frame);
-                    }
-                    fs::write(&path, audio).unwrap();
-                    let mut tags = id3::Tag::new();
-                    tags.set_artist("Batch Artist");
-                    tags.set_album_artist("Batch Artist");
-                    tags.set_album(format!("Album {index}"));
-                    tags.set_title("Track");
-                    tags.set_genre("Score");
-                    tags.set_year(2026);
-                    tags.set_track(1);
-                    tags.set_duration(1000);
-                    tags.write_to_path(&path, id3::Version::Id3v24).unwrap();
-                    SelectionTarget {
-                        source_path: display_path(&source),
-                        category: ["general", "scores", "synthwave"][index % 3].to_owned(),
-                        album_only: true,
-                    }
-                })
+                .map(|index| Self::write_album(temp.path(), index))
                 .collect();
             Self {
                 temp,
                 targets,
                 previous_roots,
             }
+        }
+
+        fn write_album(temp: &Path, index: usize) -> SelectionTarget {
+            use id3::TagLike;
+            let source = temp.join(format!("inbox-{index}/Album {index}"));
+            fs::create_dir_all(&source).unwrap();
+            let path = source.join("01.mp3");
+            let mut audio = Vec::new();
+            for _ in 0..40 {
+                let mut frame = vec![0; 417];
+                frame[..4].copy_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+                audio.extend(frame);
+            }
+            fs::write(&path, audio).unwrap();
+            let mut tags = id3::Tag::new();
+            tags.set_artist("Batch Artist");
+            tags.set_album_artist("Batch Artist");
+            tags.set_album(format!("Album {index}"));
+            tags.set_title("Track");
+            tags.set_genre("Score");
+            tags.set_year(2026);
+            tags.set_track(1);
+            tags.set_duration(1000);
+            tags.write_to_path(&path, id3::Version::Id3v24).unwrap();
+            SelectionTarget {
+                source_path: display_path(&source),
+                category: ["general", "scores", "synthwave"][index % 3].to_owned(),
+                album_only: true,
+            }
+        }
+
+        fn preview_targets(&self, targets: Vec<SelectionTarget>) -> Value {
+            let app_data_dir = bridge_app_data_dir().unwrap();
+            preview_selection(
+                &app_data_dir,
+                PreviewSelectionRequest { targets },
+                &mut BridgeProgressReporter::disabled("previewSelection"),
+            )
+            .unwrap()
         }
 
         fn preview(&self) -> Value {
@@ -4575,6 +4590,64 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn adding_a_seventh_album_keeps_every_existing_row_and_defers_smart_playlists() {
+        let fixture = SelectionFixture::new();
+        let first = fixture.preview();
+        fixture.apply(&first).expect("first batch");
+        let app_data = bridge_app_data_dir().unwrap();
+        let database = app_data.join("music-library.sqlite3");
+        let conn = open_database(&database).unwrap();
+        // A marker from the first import is consumed before the second one.
+        assert!(db::smart_playlist_refresh_pending(&app_data));
+        fs::remove_file(app_data.join(BRIDGE_DIRECTORY).join("pending-smart-playlist-refresh.json"))
+            .unwrap();
+        let ids = |sql: &str| -> Vec<(String, i64)> {
+            conn.prepare(sql)
+                .unwrap()
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap()
+        };
+        let tracks_before = ids("SELECT file_path || filename, id FROM tracks ORDER BY id");
+        assert_eq!(tracks_before.len(), 6);
+
+        let seventh = SelectionFixture::write_album(fixture.temp.path(), 6);
+        let preview = fixture.preview_targets(vec![seventh]);
+        let receipt = fixture.apply(&preview).expect("incremental second batch");
+        assert_eq!(receipt["albumCount"], 1);
+
+        // Existing rows keep their identity; only the new album was inserted.
+        let tracks_after = ids("SELECT file_path || filename, id FROM tracks ORDER BY id");
+        assert_eq!(tracks_after.len(), 7);
+        assert_eq!(&tracks_after[..6], &tracks_before[..]);
+        for (sql, expected) in [
+            ("SELECT COUNT(*) FROM albums", 7),
+            ("SELECT COUNT(*) FROM raw_tracks", 7),
+            ("SELECT COUNT(*) FROM import_runs WHERE status='completed'", 2),
+            ("SELECT COUNT(*) FROM import_stage_tracks", 0),
+            ("SELECT COUNT(*) FROM track_search_fts", 7),
+            ("SELECT COUNT(*) FROM album_search_fts", 7),
+            (
+                "SELECT COUNT(*) FROM track_search_fts WHERE track_search_fts MATCH 'album : \"Album 6\"'",
+                1,
+            ),
+            (
+                "SELECT COUNT(*) FROM library_updates WHERE import_run_id = (SELECT MAX(id) FROM import_runs)",
+                1,
+            ),
+        ] {
+            assert_eq!(
+                conn.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap(),
+                expected,
+                "{sql}"
+            );
+        }
+        // Smart playlists refresh later, in the desktop app, not while Aurora waits.
+        assert!(db::smart_playlist_refresh_pending(&app_data));
     }
 
     #[test]

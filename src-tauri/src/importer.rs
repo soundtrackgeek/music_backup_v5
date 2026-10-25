@@ -2201,15 +2201,23 @@ pub(crate) fn apply_bridge_import_preview(
     db_path: &Path,
     session_id: i64,
 ) -> Result<BridgeImportSummary> {
-    apply_bridge_import_preview_with_published_source(conn, db_path, session_id, false)
+    apply_bridge_import_preview_with_published_source(
+        conn,
+        db_path,
+        session_id,
+        false,
+        &mut |_, _| {},
+    )
 }
 
+/// `progress` receives `(stage, message)` for each named step of the catalog update.
 pub(crate) fn apply_published_bridge_import_preview(
     conn: &mut Connection,
     db_path: &Path,
     session_id: i64,
+    progress: &mut dyn FnMut(&str, &str),
 ) -> Result<BridgeImportSummary> {
-    apply_bridge_import_preview_with_published_source(conn, db_path, session_id, true)
+    apply_bridge_import_preview_with_published_source(conn, db_path, session_id, true, progress)
 }
 
 fn apply_bridge_import_preview_with_published_source(
@@ -2217,6 +2225,7 @@ fn apply_bridge_import_preview_with_published_source(
     db_path: &Path,
     session_id: i64,
     source_is_published: bool,
+    progress: &mut dyn FnMut(&str, &str),
 ) -> Result<BridgeImportSummary> {
     let _workflow_guard = ImportWorkflowGuard::acquire()?;
     let started = Instant::now();
@@ -2234,6 +2243,10 @@ fn apply_bridge_import_preview_with_published_source(
     let reported_source_path = crate::folder_sync::original_folder_path(&session.source_path)
         .unwrap_or_else(|| session.source_path.clone());
     let settings = db::settings_for_connection(conn)?;
+    progress(
+        "backingUp",
+        "Saving a recovery copy of the catalog before it changes.",
+    );
     let backup_path = create_backup(
         conn,
         db_path,
@@ -2268,7 +2281,7 @@ fn apply_bridge_import_preview_with_published_source(
     .context("Could not create import run for the prepared Aurora batch")?;
     let import_run_id = conn.last_insert_rowid();
 
-    let result = apply_staged_import(
+    let result = apply_staged_import_with_progress(
         conn,
         &session,
         import_run_id,
@@ -2276,15 +2289,31 @@ fn apply_bridge_import_preview_with_published_source(
         &reported_source_path,
         source_apply_guard.as_ref(),
         source_is_published && source_apply_guard.is_some(),
+        progress,
     );
     match result {
         Ok((_track_rows, _album_count, rating_events_count)) => {
+            progress("maintenance", "Checking the wish list against the new albums.");
             if let Err(error) = wishlist::reconcile_for_connection(conn) {
                 eprintln!(
                     "Could not reconcile the wish list after committed Aurora import: {error:#}"
                 );
             }
-            if let Err(error) = db::refresh_all_smart_playlists_for_connection(conn) {
+            // Smart playlists search the whole catalog. An Aurora import hands their
+            // refresh to the desktop app instead of holding the import open for it.
+            let deferred = source_is_published
+                && db_path
+                    .parent()
+                    .map(|directory| {
+                        db::defer_smart_playlist_refresh(directory, import_run_id).is_ok()
+                    })
+                    .unwrap_or(false);
+            if deferred {
+                progress(
+                    "maintenance",
+                    "Smart playlists will refresh in the background.",
+                );
+            } else if let Err(error) = db::refresh_all_smart_playlists_for_connection(conn) {
                 eprintln!("Could not refresh smart playlists after import: {error:#}");
             }
             if let Err(error) = cleanup_completed_stage(conn, session_id) {
@@ -3530,6 +3559,60 @@ fn apply_staged_import(
     source_apply_guard: Option<&crate::folder_sync::SourceApplyGuard>,
     allow_removal_only: bool,
 ) -> Result<(u64, u64, i64)> {
+    apply_staged_import_with_progress(
+        conn,
+        session,
+        import_run_id,
+        started,
+        reported_source_path,
+        source_apply_guard,
+        allow_removal_only,
+        &mut |_, _| {},
+    )
+}
+
+// Whether the prepared delta only adds whole new albums to an otherwise unchanged
+// catalog, so the commit can insert just those rows. Every condition is rechecked
+// against the live tables inside the write transaction; any doubt falls back to the
+// full snapshot replacement, which is always correct.
+fn staged_delta_adds_only_new_albums(
+    tx: &Connection,
+    session: &ImportSessionRecord,
+    new_album_ids_json: &str,
+) -> Result<bool> {
+    let count = |sql: &str, with_ids: bool| -> Result<i64> {
+        Ok(if with_ids {
+            tx.query_row(sql, params![session.id, new_album_ids_json], |row| {
+                row.get(0)
+            })?
+        } else {
+            tx.query_row(sql, params![session.id], |row| row.get(0))?
+        })
+    };
+    Ok(count(ADDED_TRACKS_SQL, false)? == session.added_tracks
+        && count(CHANGED_TRACKS_SQL, false)? == 0
+        && count(REMOVED_TRACKS_SQL, false)? == 0
+        && count(
+            "SELECT COUNT(*) FROM import_stage_tracks
+             WHERE session_id = ?1 AND album_id IN (SELECT value FROM json_each(?2))",
+            true,
+        )? == session.added_tracks
+        && count(
+            "SELECT COUNT(*) FROM albums WHERE id IN (SELECT value FROM json_each(?2))",
+            true,
+        )? == 0)
+}
+
+fn apply_staged_import_with_progress(
+    conn: &mut Connection,
+    session: &ImportSessionRecord,
+    import_run_id: i64,
+    started: Instant,
+    reported_source_path: &str,
+    source_apply_guard: Option<&crate::folder_sync::SourceApplyGuard>,
+    allow_removal_only: bool,
+    progress: &mut dyn FnMut(&str, &str),
+) -> Result<(u64, u64, i64)> {
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .context("Could not start atomic staged import")?;
@@ -3539,16 +3622,30 @@ fn apply_staged_import(
     let previous_album_match_index = build_previous_album_match_index(&previous_albums);
     let mut rating_events = Vec::new();
     let mut library_updates = Vec::new();
+    // An Aurora add is "addition-only" when every existing album matches its previous
+    // row exactly and the rest are whole new albums.
+    let mut addition_candidate = allow_removal_only
+        && session.added_albums > 0
+        && session.added_tracks > 0
+        && session.changed_tracks == 0
+        && session.changed_albums == 0
+        && session.removed_tracks == 0
+        && session.removed_albums == 0;
+    let mut new_album_ids = Vec::new();
     for album in &final_albums {
         match take_matching_previous_album(&mut previous_albums, &previous_album_match_index, album)
         {
             Some(previous) => {
+                if previous.album_id != album.album_id || album_changed(&previous, album) {
+                    addition_candidate = false;
+                }
                 library_updates.extend(library_updates_for_changed_album(&previous, album));
                 if let Some(event) = rating_event_for_changed_album(&previous, album) {
                     rating_events.push(event);
                 }
             }
             None => {
+                new_album_ids.push(album.album_id.clone());
                 library_updates.push(library_update_for_added_album(album));
                 if let Some(event) = rating_event_for_added_album(album) {
                     rating_events.push(event);
@@ -3562,6 +3659,15 @@ fn apply_staged_import(
             rating_events.push(event);
         }
     }
+
+    // A verified addition delta keeps every existing row, id and search entry and inserts
+    // only the new albums. Anything the checks cannot prove falls back to the full
+    // snapshot replacement below.
+    let new_album_ids_json = serde_json::to_string(&new_album_ids)?;
+    let addition_only = addition_candidate
+        && previous_albums.is_empty()
+        && new_album_ids.len() as i64 == session.added_albums
+        && staged_delta_adds_only_new_albums(&tx, session, &new_album_ids_json)?;
 
     // A verified removal delta can preserve the identities, ratings and search rows of
     // every retained track. Ordinary imports still replace the complete snapshot.
@@ -3619,15 +3725,33 @@ fn apply_staged_import(
         tx.execute("DELETE FROM tracks WHERE album_id = ?1", params![album_id])?;
         tx.execute("DELETE FROM albums WHERE id = ?1", params![album_id])?;
     } else {
-        tx.execute_batch(
-            "
-            DELETE FROM raw_tracks;
-            DELETE FROM tracks;
-            DELETE FROM albums;
-            ",
-        )
-        .context("Could not clear the previous import tables")?;
-        tx.execute(
+        // `Some` limits every statement below to the new albums; `None` replaces the
+        // whole snapshot.
+        let scope = addition_only.then_some(new_album_ids_json.as_str());
+        if scope.is_none() {
+            progress(
+                "catalogRows",
+                "Replacing the whole library snapshot. This is slow on a large catalog.",
+            );
+            tx.execute_batch(
+                "
+                DELETE FROM raw_tracks;
+                DELETE FROM tracks;
+                DELETE FROM albums;
+                ",
+            )
+            .context("Could not clear the previous import tables")?;
+        } else {
+            progress(
+                "catalogRows",
+                &format!(
+                    "Adding {} tracks from {} new albums. The rest of the library is not rewritten.",
+                    session.added_tracks,
+                    new_album_ids.len()
+                ),
+            );
+        }
+        let raw_inserted = tx.execute(
             "
             INSERT INTO raw_tracks (
                 import_run_id, row_number, display_artist, album_rating, disc_number,
@@ -3645,12 +3769,13 @@ fn apply_staged_import(
                    NULLIF(album_artist_display, ''), NULLIF(time_raw, ''), row_hash
             FROM import_stage_tracks
             WHERE session_id = ?2
+              AND (?3 IS NULL OR album_id IN (SELECT value FROM json_each(?3)))
             ORDER BY row_number
             ",
-            params![import_run_id, session.id],
+            params![import_run_id, session.id, scope],
         )
         .context("Could not copy staged raw tracks")?;
-        tx.execute(
+        let tracks_inserted = tx.execute(
             "
             INSERT INTO tracks (
                 import_run_id, album_id, album_unique_id, display_artist,
@@ -3669,9 +3794,10 @@ fn apply_staged_import(
                    NULLIF(file_path, ''), NULLIF(filename, ''), row_hash
             FROM import_stage_tracks
             WHERE session_id = ?2
+              AND (?3 IS NULL OR album_id IN (SELECT value FROM json_each(?3)))
             ORDER BY row_number
             ",
-            params![import_run_id, session.id],
+            params![import_run_id, session.id, scope],
         )
         .context("Could not copy staged normalized tracks")?;
         tx.execute(
@@ -3683,6 +3809,7 @@ fn apply_staged_import(
                 WHERE staged.session_id = ?1 AND staged.album_id = tracks.album_id
             )
             WHERE NULLIF(TRIM(COALESCE(album_artist_display, '')), '') IS NULL
+              AND (?2 IS NULL OR tracks.album_id IN (SELECT value FROM json_each(?2)))
               AND EXISTS (
                   SELECT 1
                   FROM import_stage_albums staged
@@ -3691,10 +3818,10 @@ fn apply_staged_import(
                     AND staged.album_artist_display_inferred = 1
               )
             ",
-            params![session.id],
+            params![session.id, scope],
         )
         .context("Could not apply inferred album artists to staged tracks")?;
-        tx.execute(
+        let albums_inserted = tx.execute(
             "
             INSERT INTO albums (
                 id, import_run_id, album_unique_id, album, album_artist_display,
@@ -3710,17 +3837,38 @@ fn apply_staged_import(
                    calculated_album_rating, effective_album_rating, album_score
             FROM import_stage_albums
             WHERE session_id = ?2
+              AND (?3 IS NULL OR album_id IN (SELECT value FROM json_each(?3)))
             ",
-            params![import_run_id, session.id],
+            params![import_run_id, session.id, scope],
         )
         .context("Could not copy staged albums")?;
+        if scope.is_some()
+            && (raw_inserted as i64 != session.added_tracks
+                || tracks_inserted as i64 != session.added_tracks
+                || albums_inserted != new_album_ids.len())
+        {
+            bail!("The prepared album addition no longer matches the catalog");
+        }
     }
 
+    progress("committing", "Recording the import history.");
     insert_rating_events(&tx, import_run_id, &rating_events)?;
     insert_library_updates(&tx, import_run_id, reported_source_path, &library_updates)?;
     insert_rating_snapshot(&tx, import_run_id, &final_albums)?;
-    if !removal_only {
+    if addition_only {
+        progress("searchIndex", "Adding the new albums to search.");
+        db::index_added_albums(&tx, &new_album_ids_json)?;
+        progress("charts", "Checking whether the new albums appear on any chart.");
+        chart_impact = db::addition_chart_impact(&tx, &new_album_ids_json)?;
+    } else if !removal_only {
+        progress(
+            "searchIndex",
+            "Rebuilding the complete search index. This is slow on a large catalog.",
+        );
         db::rebuild_search_indexes(&tx)?;
+    }
+    if chart_impact.0 || chart_impact.1 {
+        progress("charts", "Relinking chart matches to the library.");
     }
     if chart_impact.0 {
         db::reconcile_album_chart_matches(&tx).context(
@@ -3765,6 +3913,7 @@ fn apply_staged_import(
     // this in the catalog transaction so a crash or a later reconciliation error
     // cannot skip cleanup, and a cleanup failure preserves the resumable preview.
     cleanup_completed_stage(&tx, session.id)?;
+    progress("committing", "Committing the catalog change.");
     tx.commit()
         .context("Could not commit the atomic staged import")?;
     Ok((

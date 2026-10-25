@@ -1,5 +1,9 @@
 # Music Library
 
+## Faster Aurora imports (0.202.0)
+
+Adding albums from Aurora no longer rewrites the whole catalog. When an import only adds new albums, Music Library inserts just those albums, tracks and search entries, keeps every existing id, and rechecks chart links only if a new album or track could appear on a chart. Replacements, edits and removals still use the complete, verified snapshot replacement. Smart playlists refresh in the background after the import instead of holding Aurora's dialog open, and the bridge reports named catalog steps for Aurora to display.
+
 ## Playable sonic atlas (0.201.0)
 
 Music Library computes and persists versioned sound neighborhoods, representative tracks, stable brightness/level maps, and owned/rated/loved/available-history counts. Open Tools → Audio analysis → Open sonic atlas; search a track, explore regions, open albums and save reviewed region playlists.

@@ -46,6 +46,139 @@ pub(crate) fn album_removal_chart_state(
     Ok((albums, tracks, current_sources == 3))
 }
 
+// An addition-only import keeps every existing album and track row, so the stored
+// chart links stay valid unless a *new* album or track could match a chart entry (a
+// match can also displace an existing owner of the same identity). Returns
+// `(albums, tracks)`: whether the full reconciler is still needed for each side.
+// The checks reuse the reconcilers' own key and matching code, so "no impact" here
+// means the full reconciler would leave every existing link unchanged.
+pub(crate) fn addition_chart_impact(
+    conn: &Connection,
+    new_album_ids_json: &str,
+) -> Result<(bool, bool)> {
+    Ok((
+        added_albums_affect_album_charts(conn, new_album_ids_json)?,
+        added_tracks_affect_track_charts(conn, new_album_ids_json)?,
+    ))
+}
+
+fn added_albums_affect_album_charts(conn: &Connection, new_album_ids_json: &str) -> Result<bool> {
+    ensure_chart_album_match_state_schema(conn)?;
+    // Never treat an already-stale album chart cache as current.
+    let current_sources: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM chart_album_match_state
+         WHERE source IN ('billboard', 'official-uk', 'vg-lista')
+         AND reconciled_import_run_id = (SELECT MAX(id) FROM import_runs WHERE status = 'completed')",
+        [],
+        |row| row.get(0),
+    )?;
+    if current_sources != 3 {
+        return Ok(true);
+    }
+    conn.execute_batch(
+        "
+        DROP TABLE IF EXISTS temp_discovery_album_match_keys;
+        CREATE TEMP TABLE temp_discovery_album_match_keys (
+            artist_key TEXT NOT NULL,
+            album_key TEXT NOT NULL,
+            album_id TEXT NOT NULL,
+            PRIMARY KEY (artist_key, album_key)
+        ) WITHOUT ROWID;
+        ",
+    )
+    .context("Could not prepare the added-album chart check")?;
+    let albums = {
+        let mut statement = conn.prepare(
+            "SELECT id, album_artist_display, album FROM albums
+             WHERE id IN (SELECT value FROM json_each(?1)) ORDER BY id",
+        )?;
+        let rows = statement
+            .query_map([new_album_ids_json], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
+    {
+        let mut insert_key = conn.prepare(
+            "INSERT OR IGNORE INTO temp_discovery_album_match_keys
+             (artist_key, album_key, album_id) VALUES (?1, ?2, ?3)",
+        )?;
+        for (album_id, artist, album) in albums {
+            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
+            let album_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
+            if artist_key.is_empty() || album_key.is_empty() {
+                continue;
+            }
+            for artist_variant in billboard_key_variants(&artist_key) {
+                for album_variant in billboard_key_variants(&album_key) {
+                    insert_key.execute(params![artist_variant, album_variant, album_id])?;
+                }
+            }
+        }
+    }
+    let mut affected = false;
+    for (table, title_key_column) in [
+        ("billboard_chart_entries", "album_key"),
+        ("official_uk_album_chart_entries", "title_key"),
+        ("vg_lista_album_chart_entries", "title_key"),
+    ] {
+        // Mirrors the four key pairings in `reconcile_album_chart_entry_ids`.
+        affected |= conn.query_row(
+            &format!(
+                "SELECT EXISTS(
+                    SELECT 1 FROM {table} entry
+                    JOIN temp_discovery_album_match_keys keys
+                      ON (keys.artist_key = entry.artist_key
+                          AND keys.album_key = entry.{title_key_column})
+                      OR (entry.artist_key LIKE 'the %'
+                          AND keys.artist_key = SUBSTR(entry.artist_key, 5)
+                          AND keys.album_key = entry.{title_key_column})
+                      OR (entry.{title_key_column} LIKE 'the %'
+                          AND keys.artist_key = entry.artist_key
+                          AND keys.album_key = SUBSTR(entry.{title_key_column}, 5))
+                      OR (entry.artist_key LIKE 'the %'
+                          AND entry.{title_key_column} LIKE 'the %'
+                          AND keys.artist_key = SUBSTR(entry.artist_key, 5)
+                          AND keys.album_key = SUBSTR(entry.{title_key_column}, 5))
+                )"
+            ),
+            [],
+            |row| row.get::<_, bool>(0),
+        )?;
+    }
+    conn.execute_batch("DROP TABLE IF EXISTS temp_discovery_album_match_keys;")?;
+    Ok(affected)
+}
+
+fn added_tracks_affect_track_charts(conn: &Connection, new_album_ids_json: &str) -> Result<bool> {
+    let tracks = load_track_chart_reconciliation_rows_for_albums(conn, new_album_ids_json)?;
+    if tracks.is_empty() {
+        return Ok(false);
+    }
+    let billboard = load_billboard_single_reconciliation_entries(conn)?;
+    if !matching_chart_entries_by_track(&tracks, &billboard).is_empty() {
+        return Ok(true);
+    }
+    for (table, date_column, week_key_column) in [
+        ("vg_lista_single_chart_entries", "week_date", Some("week_key")),
+        ("official_uk_single_chart_entries", "chart_date", Some("week_key")),
+        ("ti_i_skuddet_chart_entries", "chart_date", None),
+        ("norsktoppen_chart_entries", "chart_date", None),
+    ] {
+        let entries =
+            load_weekly_track_chart_reconciliation_entries(conn, table, date_column, week_key_column)?;
+        if !matching_chart_entries_by_track(&tracks, &entries).is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
     ensure_chart_album_match_state_schema(conn)?;
     conn.execute_batch(
@@ -187,17 +320,33 @@ pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
 pub(super) fn load_track_chart_reconciliation_rows(
     conn: &Connection,
 ) -> Result<Vec<TrackChartReconciliationRow>> {
+    load_track_chart_reconciliation_rows_in(conn, None)
+}
+
+// Only the tracks of the given albums (a JSON array of album ids).
+fn load_track_chart_reconciliation_rows_for_albums(
+    conn: &Connection,
+    album_ids_json: &str,
+) -> Result<Vec<TrackChartReconciliationRow>> {
+    load_track_chart_reconciliation_rows_in(conn, Some(album_ids_json))
+}
+
+fn load_track_chart_reconciliation_rows_in(
+    conn: &Connection,
+    album_ids_json: Option<&str>,
+) -> Result<Vec<TrackChartReconciliationRow>> {
     let mut statement = conn.prepare(
         "
         SELECT t.id, t.album, t.display_artist, t.title, t.album_artist_display,
                t.year, t.normalized_rating, c.album_id IS NOT NULL
         FROM tracks t
         LEFT JOIN album_covers c ON c.album_id = t.album_id
+        WHERE ?1 IS NULL OR t.album_id IN (SELECT value FROM json_each(?1))
         ORDER BY t.id
         ",
     )?;
     let tracks = statement
-        .query_map([], |row| {
+        .query_map([album_ids_json], |row| {
             Ok(TrackChartReconciliationRow {
                 title: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 track_id: row.get(0)?,

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.202.0] - 2026-10-25
+
+### Changed
+- **Much faster Aurora Add to Library**: an Aurora import that only adds whole new albums now inserts just those albums, tracks and search entries instead of deleting and re-inserting the entire catalog (about 1.1 million tracks), rebuilding the complete search index and relinking every chart. Existing track and album rows keep their ids. Chart links are rechecked only when a new album or track could match a chart entry; otherwise the existing links are provably unchanged. Any delta the checks cannot prove (replacements, edits, removals, doubtful matches) still uses the full snapshot replacement.
+- Smart playlists are no longer refreshed while Aurora waits. An Aurora import records a durable marker (`aurora-bridge/pending-smart-playlist-refresh.json`) and the desktop app refreshes them in the background within seconds of being open; if the app is closed the refresh waits for the next launch.
+- The bridge now reports named catalog steps (`backingUp`, `catalogRows`, `searchIndex`, `charts`, `committing`, `maintenance`) so Aurora can show what the catalog stage is doing.
+
+### Added
+- Tests for the incremental addition (existing track ids, search rows, chart state and import history are preserved, with a second batch added to a populated catalog) and for the deferred smart-playlist refresh marker.
+
 ## [0.201.0] - 2026-10-23
 
 ### Added

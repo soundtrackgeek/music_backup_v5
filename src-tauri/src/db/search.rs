@@ -78,6 +78,53 @@ pub fn rebuild_search_indexes(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Adds search rows for albums that were just inserted (a JSON array of album ids),
+/// leaving every other album's rows untouched. Callers guarantee these albums had no
+/// search rows before, so nothing is deleted first.
+pub(crate) fn index_added_albums(conn: &Connection, album_ids_json: &str) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO album_search_fts (
+            album_id, album, album_artist_display, canonical_genre, publisher
+        )
+        SELECT
+            id,
+            COALESCE(album, ''),
+            COALESCE(album_artist_display, ''),
+            COALESCE(canonical_genre, ''),
+            COALESCE(publisher, '')
+        FROM albums
+        WHERE id IN (SELECT value FROM json_each(?1))
+        ",
+        [album_ids_json],
+    )
+    .context("Could not index the added albums")?;
+    conn.execute(
+        "
+        INSERT INTO track_search_fts (
+            track_id, album_id, title, display_artist, album, album_artist_display,
+            canonical_genre, publisher, file_path, filename
+        )
+        SELECT
+            id,
+            album_id,
+            COALESCE(title, ''),
+            COALESCE(display_artist, ''),
+            COALESCE(album, ''),
+            COALESCE(album_artist_display, ''),
+            COALESCE(canonical_genre, ''),
+            COALESCE(publisher, ''),
+            COALESCE(file_path, ''),
+            COALESCE(filename, '')
+        FROM tracks
+        WHERE album_id IN (SELECT value FROM json_each(?1))
+        ",
+        [album_ids_json],
+    )
+    .context("Could not index the added tracks")?;
+    Ok(())
+}
+
 #[cfg(not(test))]
 pub fn search_library_for_app(app: &AppHandle, request: BrowseRequest) -> Result<BrowseResponse> {
     let (conn, _) = open_search(app)?;

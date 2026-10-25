@@ -618,6 +618,74 @@ pub(crate) fn refresh_all_smart_playlists_for_connection(conn: &Connection) -> R
     Ok(refreshed)
 }
 
+const PENDING_SMART_REFRESH_FILE: &str = "pending-smart-playlist-refresh.json";
+
+fn pending_smart_refresh_path(app_data_dir: &Path) -> PathBuf {
+    app_data_dir
+        .join("aurora-bridge")
+        .join(PENDING_SMART_REFRESH_FILE)
+}
+
+/// Smart playlists search the whole catalog, so refreshing all of them after an
+/// Aurora import used to hold the import open for minutes. The bridge records this
+/// marker instead and the desktop app refreshes them in the background; the marker
+/// is durable, so a refresh waits for the app if it is not running.
+pub(crate) fn defer_smart_playlist_refresh(app_data_dir: &Path, import_run_id: i64) -> Result<()> {
+    let path = pending_smart_refresh_path(app_data_dir);
+    let directory = path
+        .parent()
+        .ok_or_else(|| anyhow!("The smart playlist refresh marker has no directory"))?;
+    fs::create_dir_all(directory)?;
+    let temporary = path.with_extension("json.tmp");
+    fs::write(
+        &temporary,
+        serde_json::to_vec(&serde_json::json!({
+            "importRunId": import_run_id,
+            "queuedAt": Utc::now().to_rfc3339(),
+        }))?,
+    )?;
+    fs::rename(&temporary, &path)?;
+    Ok(())
+}
+
+pub(crate) fn smart_playlist_refresh_pending(app_data_dir: &Path) -> bool {
+    pending_smart_refresh_path(app_data_dir).is_file()
+}
+
+/// Runs a refresh recorded by `defer_smart_playlist_refresh`. Returns `None` when
+/// nothing was pending. The marker is removed only if no newer import rewrote it
+/// while the refresh ran, so that import's playlists are refreshed again.
+pub(crate) fn run_deferred_smart_playlist_refresh(
+    app_data_dir: &Path,
+    conn: &Connection,
+) -> Result<Option<usize>> {
+    let path = pending_smart_refresh_path(app_data_dir);
+    let marker = match fs::read(&path) {
+        Ok(marker) => marker,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let refreshed = refresh_all_smart_playlists_for_connection(conn)?;
+    if fs::read(&path).ok().as_deref() == Some(marker.as_slice()) {
+        fs::remove_file(&path)?;
+    }
+    Ok(Some(refreshed))
+}
+
+#[cfg(not(test))]
+pub fn run_deferred_smart_playlist_refresh_for_app(app: &AppHandle) -> Result<Option<usize>> {
+    let database = database_path(app)?;
+    let app_data_dir = database
+        .parent()
+        .ok_or_else(|| anyhow!("The catalog path has no directory"))?
+        .to_path_buf();
+    if !smart_playlist_refresh_pending(&app_data_dir) {
+        return Ok(None);
+    }
+    let (conn, _) = retry_smart_playlist_write(|| open(app))?;
+    run_deferred_smart_playlist_refresh(&app_data_dir, &conn)
+}
+
 fn validate_smart_settings(settings: &crate::ai::SmartPlaylistSettings) -> Result<()> {
     if !(1..=10_000).contains(&settings.track_limit)
         || !matches!(settings.refresh_policy.as_str(), "library" | "manual")
@@ -1254,6 +1322,44 @@ pub fn export_playlist_for_app(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deferred_smart_refresh_runs_once_and_keeps_a_marker_rewritten_meanwhile() {
+        let directory = tempfile::tempdir().unwrap();
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE playlist_automations (
+                saved_playlist_id INTEGER PRIMARY KEY, smart INTEGER NOT NULL
+             );",
+        )
+        .unwrap();
+        assert_eq!(
+            run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
+            None
+        );
+        defer_smart_playlist_refresh(directory.path(), 7).unwrap();
+        assert!(smart_playlist_refresh_pending(directory.path()));
+        assert_eq!(
+            run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
+            Some(0)
+        );
+        assert!(!smart_playlist_refresh_pending(directory.path()));
+        assert_eq!(
+            run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
+            None
+        );
+
+        // A newer import rewrites the marker while a refresh is running.
+        defer_smart_playlist_refresh(directory.path(), 8).unwrap();
+        let marker = fs::read(pending_smart_refresh_path(directory.path())).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        defer_smart_playlist_refresh(directory.path(), 9).unwrap();
+        assert_ne!(
+            marker,
+            fs::read(pending_smart_refresh_path(directory.path())).unwrap()
+        );
+        assert!(smart_playlist_refresh_pending(directory.path()));
+    }
 
     fn write_fixture() -> (
         tempfile::TempDir,

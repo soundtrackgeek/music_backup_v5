@@ -176,7 +176,33 @@ mod desktop {
         let update_app = app.clone();
         let catalog_app = app.clone();
         let backup_app = app.clone();
+        let smart_playlist_app = app.clone();
         let tasks = vec![
+            tauri::async_runtime::spawn(async move {
+                // An Aurora import leaves a durable marker instead of refreshing every
+                // smart playlist while Aurora waits. Refresh them here, off that path.
+                let mut timer = tokio::time::interval(Duration::from_secs(5));
+                timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    timer.tick().await;
+                    let app = smart_playlist_app.clone();
+                    match tauri::async_runtime::spawn_blocking(move || {
+                        db::run_deferred_smart_playlist_refresh_for_app(&app)
+                    })
+                    .await
+                    {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(error)) => {
+                            eprintln!("Deferred smart playlist refresh failed: {error:#}");
+                            tokio::time::sleep(Duration::from_secs(60)).await;
+                        }
+                        Err(error) => {
+                            eprintln!("Deferred smart playlist refresh task failed: {error}");
+                            tokio::time::sleep(Duration::from_secs(60)).await;
+                        }
+                    }
+                }
+            }),
             tauri::async_runtime::spawn(async move {
                 let mut timer = tokio::time::interval(Duration::from_secs(60));
                 timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
