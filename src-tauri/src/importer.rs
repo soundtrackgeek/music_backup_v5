@@ -3867,10 +3867,8 @@ fn apply_staged_import_with_progress(
         );
         db::rebuild_search_indexes(&tx)?;
     }
-    if chart_impact.0 || chart_impact.1 {
-        progress("charts", "Relinking chart matches to the library.");
-    }
     if chart_impact.0 {
+        progress("charts", "Relinking album chart matches to the library.");
         db::reconcile_album_chart_matches(&tx).context(
             "Could not relink imported album charts after applying the library snapshot",
         )?;
@@ -3878,6 +3876,7 @@ fn apply_staged_import_with_progress(
         db::record_album_chart_match_state(&tx)?;
     }
     if chart_impact.1 {
+        progress("charts", "Relinking singles chart matches to the library.");
         db::reconcile_track_chart_matches(&tx).context(
             "Could not relink imported singles charts after applying the library snapshot",
         )?;

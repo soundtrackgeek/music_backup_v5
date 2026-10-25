@@ -160,8 +160,9 @@ fn added_tracks_affect_track_charts(conn: &Connection, new_album_ids_json: &str)
     if tracks.is_empty() {
         return Ok(false);
     }
+    let song_index = build_track_song_index(&tracks);
     let billboard = load_billboard_single_reconciliation_entries(conn)?;
-    if !matching_chart_entries_by_track(&tracks, &billboard).is_empty() {
+    if !matching_chart_entries_with_index(&song_index, &tracks, &billboard).is_empty() {
         return Ok(true);
     }
     for (table, date_column, week_key_column) in [
@@ -172,7 +173,7 @@ fn added_tracks_affect_track_charts(conn: &Connection, new_album_ids_json: &str)
     ] {
         let entries =
             load_weekly_track_chart_reconciliation_entries(conn, table, date_column, week_key_column)?;
-        if !matching_chart_entries_by_track(&tracks, &entries).is_empty() {
+        if !matching_chart_entries_with_index(&song_index, &tracks, &entries).is_empty() {
             return Ok(true);
         }
     }
@@ -267,9 +268,11 @@ pub(crate) fn record_album_chart_match_state(conn: &Connection) -> Result<()> {
 
 pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
     let tracks = load_track_chart_reconciliation_rows(conn)?;
+    let song_index = build_track_song_index(&tracks);
 
     let billboard_entries = load_billboard_single_reconciliation_entries(conn)?;
-    let billboard_matches = reconcile_billboard_single_entries(&tracks, &billboard_entries);
+    let billboard_matches =
+        reconcile_billboard_single_entries_with_index(&song_index, &tracks, &billboard_entries);
     apply_track_chart_reconciliation(
         conn,
         "billboard_single_chart_entries",
@@ -310,7 +313,8 @@ pub(crate) fn reconcile_track_chart_matches(conn: &Connection) -> Result<()> {
             date_column,
             week_key_column,
         )?;
-        let matches = reconcile_weekly_track_chart_entries(&tracks, &entries);
+        let matches =
+            reconcile_weekly_track_chart_entries_with_index(&song_index, &tracks, &entries);
         apply_track_chart_reconciliation(conn, table, column_prefix, &entries, &matches)?;
     }
 
@@ -501,10 +505,11 @@ pub(super) fn chart_parenthetical_key(title: &str) -> Option<String> {
         .filter(|base| !base.is_empty())
 }
 
-pub(super) fn matching_chart_entries_by_track(
+// The index depends only on the library's tracks, never on a chart source, so a
+// reconciliation across several sources builds it once and shares it.
+pub(super) fn build_track_song_index(
     tracks: &[TrackChartReconciliationRow],
-    entries: &[StoredTrackChartEntry],
-) -> HashMap<i64, Vec<usize>> {
+) -> crate::chart_song_match::SongIndex {
     let mut index = crate::chart_song_match::SongIndex::default();
     for (id, track) in tracks.iter().enumerate() {
         index.insert(
@@ -516,6 +521,21 @@ pub(super) fn matching_chart_entries_by_track(
             chart_parenthetical_key(&track.title).as_deref(),
         );
     }
+    index
+}
+
+pub(super) fn matching_chart_entries_by_track(
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> HashMap<i64, Vec<usize>> {
+    matching_chart_entries_with_index(&build_track_song_index(tracks), tracks, entries)
+}
+
+pub(super) fn matching_chart_entries_with_index(
+    index: &crate::chart_song_match::SongIndex,
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> HashMap<i64, Vec<usize>> {
     let mut result = HashMap::<i64, Vec<usize>>::new();
     for (entry_id, entry) in entries.iter().enumerate() {
         let artists = entry
@@ -543,7 +563,15 @@ pub(super) fn reconcile_billboard_single_entries(
     tracks: &[TrackChartReconciliationRow],
     entries: &[StoredTrackChartEntry],
 ) -> Vec<ReconciledTrackChartMatch> {
-    let indexes_by_track = matching_chart_entries_by_track(tracks, entries);
+    reconcile_billboard_single_entries_with_index(&build_track_song_index(tracks), tracks, entries)
+}
+
+pub(super) fn reconcile_billboard_single_entries_with_index(
+    index: &crate::chart_song_match::SongIndex,
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> Vec<ReconciledTrackChartMatch> {
+    let indexes_by_track = matching_chart_entries_with_index(index, tracks, entries);
     let mut candidates_by_identity: HashMap<String, Vec<BillboardSingleTrackCandidate>> =
         HashMap::new();
 
@@ -635,7 +663,15 @@ pub(super) fn reconcile_weekly_track_chart_entries(
     tracks: &[TrackChartReconciliationRow],
     entries: &[StoredTrackChartEntry],
 ) -> Vec<ReconciledTrackChartMatch> {
-    let indexes_by_track = matching_chart_entries_by_track(tracks, entries);
+    reconcile_weekly_track_chart_entries_with_index(&build_track_song_index(tracks), tracks, entries)
+}
+
+pub(super) fn reconcile_weekly_track_chart_entries_with_index(
+    index: &crate::chart_song_match::SongIndex,
+    tracks: &[TrackChartReconciliationRow],
+    entries: &[StoredTrackChartEntry],
+) -> Vec<ReconciledTrackChartMatch> {
+    let indexes_by_track = matching_chart_entries_with_index(index, tracks, entries);
     let mut candidates_by_identity: HashMap<String, Vec<WeeklyChartTrackCandidate>> =
         HashMap::new();
 

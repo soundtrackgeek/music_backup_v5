@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.202.2] - 2026-10-25
+
+### Changed
+- **Faster singles chart relinking**: reconciling singles charts built the same song-matching index over every library track once for each of the five chart sources. It is built once and shared, which removes four of the five builds (about a million tracks each) without changing any match. The Aurora import progress now reports album and singles chart relinking as separate steps so slow steps can be told apart.
+
 ## [0.202.1] - 2026-10-25
 
 ### Changed
