@@ -554,7 +554,9 @@ fn run_at(
         let tx = w.transaction()?;
         crate::sonic_failures::prepare_retry(&tx, &batch)?;
         tx.commit()?;
-    } else if !prepared {
+    } else if request.scope != "failed" && (!prepared || request.scope != "reuse") {
+        // A saved queue is a snapshot, so every run tops it up with tracks added since;
+        // INSERT OR IGNORE keeps the state of items it already holds.
         let c = catalog(dir)?;
         let filter = match request.scope.as_str() {
             "all" | "reuse" => "1=1",
@@ -1412,7 +1414,7 @@ mod tests {
         }
         // A cluster of file failures must not prevent other tracks from finishing.
         for i in 1..=3 {
-            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![format!("missing-{:02}-cached", i * 2), dir.path().to_string_lossy(), format!("{i}.mp3")]).unwrap();
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('broken-decoder',?1,?2,?3)", params![track_key(&dir.path().to_string_lossy(), &format!("{i}.mp3")), dir.path().to_string_lossy(), format!("{i}.mp3")]).unwrap();
         }
         let reports = std::cell::RefCell::new(Vec::new());
         let result = run_at(
@@ -1492,8 +1494,9 @@ mod tests {
             .unwrap();
         let error = run_at(
             dir.path(),
+            // Reuse skips the queue top-up, which would otherwise read the broken catalog first.
             AnalyzeRequest {
-                scope: "all".into(),
+                scope: "reuse".into(),
                 album_id: None,
                 batch_id: Some("storage-failure".into()),
             },
@@ -1533,7 +1536,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let catalog = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
         catalog
-            .execute_batch("CREATE TABLE tracks(file_path TEXT,filename TEXT);")
+            .execute_batch("CREATE TABLE tracks(id INTEGER PRIMARY KEY,file_path TEXT,filename TEXT);")
             .unwrap();
         let w = work(dir.path()).unwrap();
         w.execute_batch("INSERT INTO sonic_batches VALUES('decode-errors',1);")
@@ -1561,9 +1564,9 @@ mod tests {
             };
             fs::write(dir.path().join(&name), data).unwrap();
             catalog
-                .execute("INSERT INTO tracks VALUES(?1,?2)", params![folder, name])
+                .execute("INSERT INTO tracks(file_path,filename) VALUES(?1,?2)", params![folder, name])
                 .unwrap();
-            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('decode-errors',?1,?2,?3)", params![name, folder, name]).unwrap();
+            w.execute("INSERT INTO sonic_items(batch_id,track_key,directory,filename) VALUES('decode-errors',?1,?2,?3)", params![track_key(&folder, &name), folder, name]).unwrap();
         }
         let result = run_at(
             dir.path(),
@@ -2126,6 +2129,42 @@ mod tests {
         assert_eq!(result["total"], 3);
         assert_eq!(result["failedCount"], 0);
         assert_eq!(status_at(dir.path()).unwrap().pending, 0);
+    }
+
+    #[test]
+    fn resuming_a_prepared_queue_adds_tracks_added_to_the_library_since() {
+        let dir = fixture();
+        let request = AnalyzeRequest {
+            scope: "all".into(),
+            album_id: None,
+            batch_id: Some("snapshot".into()),
+        };
+        let run = |stop: &dyn Fn() -> bool| {
+            run_at(
+                dir.path(),
+                request.clone(),
+                &stop,
+                &|_, _, _, _| {},
+                &|| Some(301),
+                &|| 12,
+            )
+        };
+        run(&|| false).unwrap();
+        let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        c.execute("INSERT INTO tracks VALUES(4,'Song','Singer','Various Artists','Album','album','Pop',?1,'4.mp3',80,180,NULL)",[dir.path().to_string_lossy()]).unwrap();
+        let w = work(dir.path()).unwrap();
+        // Stop once the top-up has committed the new track, before it is analyzed.
+        assert!(run(&|| w
+            .query_row(
+                "SELECT count(*) FROM sonic_items WHERE batch_id='snapshot'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap()
+            == 4)
+        .is_err());
+        let counts: (i64, i64) = w.query_row("SELECT count(*),sum(state='pending') FROM sonic_items WHERE batch_id='snapshot'",[],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
+        assert_eq!(counts, (4, 1));
     }
 
     #[test]

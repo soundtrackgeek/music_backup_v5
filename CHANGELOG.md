@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.203.2] - 2026-10-27
+
+### Fixed
+- **Analyze library now picks up music added since the last analysis**: a saved analysis keeps a snapshot of the library from when it was first prepared. Starting Analyze library (or Continue analysis) after a failed or stopped run resumed that snapshot and only retried its failed files, so tracks added later were never queued. Every run of an all-library, favorites or album analysis now adds the tracks missing from its saved queue, leaving finished and failed items as they were.
+
+### Added
+- A test that resuming a prepared queue adds tracks that joined the library afterwards.
+
 ## [0.203.1] - 2026-10-25
 
 ### Fixed
