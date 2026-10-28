@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.203.3] - 2026-10-28
+
+### Fixed
+- **Albums credited with "+" now get their Billboard and Official UK chart ranks**: MusicBrainz credits "Mike + The Mechanics" while the chart archives print "MIKE & THE MECHANICS" or "MIKE AND THE MECHANICS". The matching key folds "&" to "and" but drops "+", so the library key (`mike the mechanics`) never met the chart key (`mike and the mechanics`) and none of the band's albums were linked to any chart. Album chart matching, and the check that decides whether newly added albums touch the album charts, now also try the spelling with "+" read as "&". The stored key contract is unchanged, so no keys need rebuilding; the next chart reconciliation links the albums.
+
+### Added
+- A test that a "Mike + The Mechanics" album matches Billboard and Official UK rows printed with "AND", including the leading "THE" in "THE LIVING YEARS".
+
 ## [0.203.2] - 2026-10-27
 
 ### Fixed

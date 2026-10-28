@@ -62,6 +62,30 @@ pub(crate) fn addition_chart_impact(
     ))
 }
 
+/// Match keys for a library artist or album name. MusicBrainz credits "Mike +
+/// The Mechanics" where charts print "MIKE & THE MECHANICS", and `loose_key`
+/// folds `&` to "and" but drops `+`, so the "and" spelling is added too. The
+/// stored `loose_key` contract itself stays untouched.
+fn library_album_key_variants(value: &str) -> Vec<String> {
+    let mut variants = Vec::new();
+    let mut spellings = vec![value.to_string()];
+    if value.contains('+') {
+        spellings.push(value.replace('+', "&"));
+    }
+    for spelling in spellings {
+        let key = crate::identity::loose_key(&spelling);
+        if key.is_empty() {
+            continue;
+        }
+        for variant in billboard_key_variants(&key) {
+            if !variants.contains(&variant) {
+                variants.push(variant);
+            }
+        }
+    }
+    variants
+}
+
 fn added_albums_affect_album_charts(conn: &Connection, new_album_ids_json: &str) -> Result<bool> {
     ensure_chart_album_match_state_schema(conn)?;
     // Never treat an already-stale album chart cache as current.
@@ -109,13 +133,10 @@ fn added_albums_affect_album_charts(conn: &Connection, new_album_ids_json: &str)
              (artist_key, album_key, album_id) VALUES (?1, ?2, ?3)",
         )?;
         for (album_id, artist, album) in albums {
-            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
-            let album_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
-            if artist_key.is_empty() || album_key.is_empty() {
-                continue;
-            }
-            for artist_variant in billboard_key_variants(&artist_key) {
-                for album_variant in billboard_key_variants(&album_key) {
+            let artist_keys = library_album_key_variants(artist.as_deref().unwrap_or_default());
+            let album_keys = library_album_key_variants(album.as_deref().unwrap_or_default());
+            for artist_variant in &artist_keys {
+                for album_variant in &album_keys {
                     insert_key.execute(params![artist_variant, album_variant, album_id])?;
                 }
             }
@@ -212,13 +233,10 @@ pub(crate) fn reconcile_album_chart_matches(conn: &Connection) -> Result<()> {
              (artist_key, album_key, album_id) VALUES (?1, ?2, ?3)",
         )?;
         for (album_id, artist, album) in albums {
-            let artist_key = crate::identity::loose_key(artist.as_deref().unwrap_or_default());
-            let album_key = crate::identity::loose_key(album.as_deref().unwrap_or_default());
-            if artist_key.is_empty() || album_key.is_empty() {
-                continue;
-            }
-            for artist_variant in billboard_key_variants(&artist_key) {
-                for album_variant in billboard_key_variants(&album_key) {
+            let artist_keys = library_album_key_variants(artist.as_deref().unwrap_or_default());
+            let album_keys = library_album_key_variants(album.as_deref().unwrap_or_default());
+            for artist_variant in &artist_keys {
+                for album_variant in &album_keys {
                     insert_key.execute(params![artist_variant, album_variant, album_id])?;
                 }
             }
@@ -1129,6 +1147,59 @@ mod tests {
             )
             .expect("read rebuilt match");
         assert_eq!(matched.as_deref(), Some("mb:test"));
+    }
+
+    #[test]
+    fn plus_credited_library_albums_match_ampersand_charts() {
+        let conn = seeded_connection();
+        conn.execute(
+            "INSERT INTO albums (
+                id, import_run_id, album_unique_id, album, album_artist_display,
+                canonical_genre, genre_normalized, publisher, year, release_year,
+                total_tracks, rated_tracks, rating_completeness, total_seconds,
+                loved_tracks, tmoe_seconds, ae_ratio, effective_album_rating, album_score
+             ) VALUES ('mb:living', 1, 'living', 'Living Years',
+                'Mike + The Mechanics', 'Pop Rock', 'pop rock', 'Atlantic', 1988, 1988,
+                10, 10, 1.0, 2800, 0, 0, 0.0, 80, 100.0)",
+            [],
+        )
+        .expect("insert plus-credited album");
+        conn.execute_batch(
+            "INSERT INTO billboard_chart_entries (
+                source_file, year, rank, artist, album, artist_key, album_key,
+                first_appearance, first_appearance_year, first_appearance_month,
+                first_appearance_week, first_appearance_week_key,
+                matched_album_id, imported_at
+             ) VALUES (
+                '1988.csv', 1988, 434, 'MIKE AND THE MECHANICS', 'Living Years',
+                'mike and the mechanics', 'living years', 'Nov 1988', 1988, 11, 46,
+                '1988-46', NULL, 'now'
+             );
+             INSERT INTO official_uk_album_chart_entries (
+                source_file, year, week, chart_date, rank, artist, title,
+                artist_key, title_key, week_key, matched_album_id, imported_at
+             ) VALUES (
+                '1988.csv', 1988, 46, '1988-11-20', 82, 'MIKE AND THE MECHANICS',
+                'THE LIVING YEARS', 'mike and the mechanics', 'the living years',
+                '1988-46', NULL, 'now'
+             );",
+        )
+        .expect("insert chart rows");
+
+        reconcile_album_chart_matches(&conn).expect("reconcile album charts");
+
+        let ranks = conn
+            .query_row(
+                "SELECT billboard_rank, official_uk_rank FROM albums WHERE id = 'mb:living'",
+                [],
+                |row| Ok((row.get::<_, Option<i32>>(0)?, row.get::<_, Option<i32>>(1)?)),
+            )
+            .expect("read ranks");
+        assert_eq!(ranks, (Some(434), Some(82)));
+        assert_eq!(
+            library_album_key_variants("Mike + The Mechanics"),
+            vec!["mike the mechanics", "mike and the mechanics"]
+        );
     }
 
     #[test]
