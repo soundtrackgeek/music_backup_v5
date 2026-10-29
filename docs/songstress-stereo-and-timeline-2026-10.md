@@ -4,7 +4,7 @@
 
 **Prepared: 2026-10-29.** This note reviews [RezRitz/songstress](https://github.com/RezRitz/songstress) (MIT, Python, "ear" v0.2) against the two October sonic reports: [What a fully analyzed music library can become](sonic-analysis-opportunities-2026-10.md) (ideas 01–20) and [What the first sonic report missed](sonic-analysis-gaps-and-opportunities-2026-10.md) (21–40). The new additions are numbered **41–45**.
 
-Everything here is a proposal. Nothing has been built, no measurements were taken on this library, and Songstress was read, not run. Numbers about Songstress come from its README, `listen.py` and `examples/`.
+Everything here is a proposal. Nothing has been built and Songstress was read, not run. Numbers about Songstress come from its README, `listen.py` and `examples/`. The only measurement on this library is track duration, read from the catalog to size the timeline store (see [Method](#method-and-evidence)).
 
 ## The short version
 
@@ -12,7 +12,7 @@ Songstress is worth borrowing ideas from, not worth adding as a dependency.
 
 - **New to all three apps:** stereo measurement (width and left/right correlation) and a compact per-second feature timeline with section boundaries. Music Library's analysis is whole-track only, and it folds stereo to mono before Bliss sees the audio.
 - **Not an improvement:** its tempo and key estimates. The tempo method has the same octave errors that made the gaps report set BPM aside, and its key reads come with modest confidence.
-- **Not usable as is:** it reads WAV only, runs as a Python script, and keeps 83 values per second. Music Library is a Rust/Tauri app with about 1.1 million mostly-MP3 tracks.
+- **Not usable as is:** it reads WAV only, runs as a Python script, and keeps 83 values per second. Music Library is a Rust/Tauri app with about 1.1 million mostly-MP3 tracks. Songstress's format would need about 72 GB for this library; the recommended format in 43 needs about 12.6 GB.
 
 If I built one thing from this note, it would be **41 Stereo health check**. It works on whole tracks, needs no new storage format, and gives recording twins (28) a way to tell mono and stereo versions apart.
 
@@ -33,7 +33,7 @@ Its design principles match the October reports closely. It reports measurements
 | --- | --- | --- | --- |
 | Whole-track timbre, level, harmony | Bliss 0.13, 23 values, exact k-d tree | Similar statistics, not a similarity space | Keep Bliss |
 | Stereo | None. `Tools/sonic-analyzer/src/decode.rs` averages channels before analysis | Width, correlation, three band widths, per second and per section | **New** (41, 42) |
-| Time-resolved data | None stored. Aurora's 640-peak waveform cache is a partial level envelope | Per-second matrix, about 61 KB per track | **New, too big as is** (43) |
+| Time-resolved data | None stored. Aurora's 640-peak waveform cache is a partial level envelope | Per-second matrix, about 64 KB for an average track here | **New, too big as is** (43) |
 | Sections inside a track | None | Novelty curve over the timeline, boundaries at least 10 s apart | **New** (44) |
 | Tempo | Bliss tempo, weighted 0.25 and not displayed (set aside in the gaps report) | Spectral-flux autocorrelation, 40–200 BPM | Not better. Its own example lists candidates from 69.8 to 143.6 BPM |
 | Key | Harmony values are interval and triad proportions, explicitly not keys | Krumhansl–Schmuckler, whole track and per section | Weak. The example's whole-track correlation is 0.575, sections range from 0.30 to 0.69, and the README admits some reads land a half-step low on detuned material |
@@ -85,17 +85,29 @@ Its design principles match the October reports closely. It reports measurements
 
 **The experience.** None directly. This is the shared data that 19 *More like this moment*, 20 *Transitions that hear the ending*, 35 *Album shape*, 36 *Theme tracker* and 44 all need, and which both reports list as missing.
 
-**The storage problem.** Songstress keeps 83 float32 values per second, about 332 bytes. At its own average of 186 seconds that is about 61 KB per track. Across 1.1 million tracks that is roughly **67 GB**, too large for a library-wide store or a portable backup.
+**The storage problem.** The catalog holds 1,119,010 tracks with about 60,400 hours of audio: 217 million seconds, a 194-second average and a 189-second median. Songstress keeps 83 float32 values per second, about 332 bytes. For this library that is roughly **72 GB**, too large for C and for portable backups.
 
-**A smaller format.** Keep only what the planned features use, at lower precision:
+**Format options.** Sizes are for the whole library at one row per second unless stated:
 
-| Choice | Bytes per second | Per 186 s track | 1.1 M tracks |
+| Format | Values per row | Bytes per second | Per 194 s track | Library total |
+| --- | --- | --- | --- | --- |
+| Songstress as is | 83 × float32 | 332 | ~64 KB | ~72 GB |
+| **Recommended:** 12 chroma + centroid + level + width + correlation + 13 timbre coefficients | 29 × float16 | 58 | ~11 KB | **~12.6 GB** |
+| Trimmed, no timbre | 16 × float16 | 32 | ~6 KB | ~7 GB |
+| Trimmed, one row per 2 s | 16 × float16 | 16 | ~3 KB | ~3.5 GB |
+
+**What each cut gives up.**
+
+| Cut | What it describes | What is lost | Matters? |
 | --- | --- | --- | --- |
-| Songstress as is (83 × float32, 1 s) | 332 | ~61 KB | ~67 GB |
-| 12 chroma + centroid + level + width + correlation (16 × float16, 1 s) | 32 | ~6 KB | ~6.5 GB |
-| Same 16 values at one row per 2 s | 16 | ~3 KB | ~3.3 GB |
+| 64 mel bands (77% of Songstress's columns) | The shape of the spectrum each second: which instruments, airy or dense | Telling apart moments with the same pitch content, level and brightness but different instrumentation | **Yes**, for 19 and 44. The recommended format keeps 13 coefficients (MFCC-style: a DCT of the log-mel bands), which preserve the overall spectral shape and drop fine detail |
+| float32 → float16 | About 3 significant digits instead of 7 | Nothing audible; every value is already a one-second average | No |
+| Three per-second band widths | Width in the low, mid and high bands over time | Where in the spectrum a passage widens | Little. The high band is unreliable on MP3, and whole-track band widths can live in the stereo summary (41) |
+| One row per 2 s (optional) | Time resolution | Sharper section edges and endings | Small; sections are at least 10 s apart |
 
-A further option is to compute timelines only for favorites, rated albums or an offline pack. That is the same staged scope the first report recommends for extra analysis. Scores are often long, so measure the library's real duration distribution before choosing.
+**What no format here contains.** Even Songstress's full matrix is one-second averages: no beats, onsets, notes or melody. The theme tracker (36) needs beat-synchronized chroma at several rows per second, which none of these provide. Choose the format for the features you will build, not for completeness. Nothing is lost permanently: the MP3s stay in place, so a later analysis pass can add values. The cost is analysis time, not missing data.
+
+A further option is to compute timelines only for favorites, rated albums or an offline pack. That is the same staged scope the first report recommends for extra analysis.
 
 **Limits.** Chroma bins are pitch-class energy, not notes or keys. Per-second averages hide transients, which is fine for sections and moments but not for beat alignment.
 
@@ -126,6 +138,26 @@ These were considered from the Songstress code and not carried forward.
 - **Running Songstress itself.** WAV only, Python, and 83 dimensions per second. Port the specific methods into the Rust analyzer instead. Its MIT licence allows that with attribution.
 - **Its loudness figures.** Aurora's EBU R128-calibrated leveling already covers this better.
 
+## Where the data lives
+
+At the recommended ~12.6 GB the whole store fits on the system drive, which had 154 GB free when this was written. The stereo summary (41, 42) is a few numbers per track, about 50 MB, and belongs in the existing analysis database.
+
+If timelines ever need to move to an external drive, the storage design matters more than the drive. The external drives here are USB hard disks, and some are SMR models (for example the Seagate Archive `ST8000AS0002`), which handle scattered small writes very badly.
+
+| Access | Data read | On a USB hard disk |
+| --- | --- | --- |
+| One track's timeline (waveform sections, preview start, endings) | ~11 KB | 10–20 ms, plus 5–10 s if the drive has spun down |
+| Top 50 candidates for reranking | ~550 KB | Under a second |
+| Every timeline (a naive library-wide search) | ~12.6 GB | Minutes. Too slow anywhere, so never do it interactively |
+
+**Hot/cold split.**
+
+- **Hot, on the system drive:** per-section summaries (for example 10 sections × 29 float16 values, about 600 bytes per track, roughly 0.7 GB) and any index built over them. Every search and list runs only against these.
+- **Cold, anywhere:** full timelines in one append-only packed file with an offset table, never a SQLite database. Appends are sequential writes, which SMR drives handle well. Read only for the track on screen or a short candidate list.
+- **Offline drive:** features that need the full timeline show as unavailable; nothing else changes. This follows the first report's rule that missing extra features degrade one option and never hide tracks.
+
+The analysis job already decodes the MP3s from the external drives, so writing timelines during the same pass adds almost no drive work.
+
 ## Where it fits across the apps
 
 - **Music Library** owns the measurements: the stereo summary (41, 42) and, later, timelines (43). Both are new versioned capabilities beside the Bliss profile, so existing results, the exact index and backups keep working.
@@ -141,4 +173,6 @@ Read on 2026-10-29: the Songstress README, `listen.py` and `examples/weight-summ
 | Music Library | `250127ce` |
 | Aurora | `3fbec91` |
 
-No analysis data was queried, no audio was decoded, and Songstress was not run. Storage figures are arithmetic from Songstress's documented row size and average duration, not measurements of this library.
+Track durations were read from the catalog (`tracks.time_seconds`, read-only, 2026-10-29): 1,119,010 tracks, 1,119,006 with a duration, 60,372 hours in total, 194 s average, 189 s median. Storage figures are those seconds multiplied by each format's row size. Drive types and free space come from Windows' disk listing on the same date.
+
+No analysis data was queried, no audio was decoded, and Songstress was not run.
