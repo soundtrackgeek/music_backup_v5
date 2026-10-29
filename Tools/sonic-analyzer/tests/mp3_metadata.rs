@@ -4,9 +4,10 @@ use std::{fs, path::Path, process::Command};
 
 const AUDIO: &[u8] = include_bytes!("fixtures/noise.mp3");
 
-fn extract(path: &Path) -> Analysis {
+fn run(path: &Path, flag: Option<&str>) -> serde_json::Value {
     let output = Command::new(env!("CARGO_BIN_EXE_music-sonic-analyzer"))
         .arg(path)
+        .args(flag)
         .output()
         .unwrap();
     assert!(
@@ -14,9 +15,48 @@ fn extract(path: &Path) -> Analysis {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let analysis: Analysis = serde_json::from_slice(&output.stdout).unwrap();
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn extract(path: &Path) -> Analysis {
+    let mut value = run(path, None);
+    let timeline = value.as_object_mut().unwrap().remove("timeline").unwrap();
+    assert_eq!(timeline["version"], "timeline-v1");
+    let analysis: Analysis = serde_json::from_value(value).unwrap();
     assert!(analysis.valid());
     analysis
+}
+
+#[test]
+fn timeline_modes_keep_bliss_features_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("noise.mp3");
+    fs::write(&path, AUDIO).unwrap();
+    let full = run(&path, None);
+    let without = run(&path, Some("--no-timeline"));
+    assert!(without.get("timeline").is_none());
+    assert_eq!(full["features"], without["features"]);
+
+    let only = run(&path, Some("--timeline-only"));
+    assert!(only.get("features").is_none());
+    assert_eq!(only["timeline"], full["timeline"]);
+    let t = &only["timeline"];
+    assert!(t.get("error").is_none(), "{t}");
+    assert_eq!(t["columns"], 29);
+    let rows = t["rows"].as_u64().unwrap() as usize;
+    assert!(rows >= 1);
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(t["data"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(bytes.len(), rows * 29 * 2);
+
+    let bad = Command::new(env!("CARGO_BIN_EXE_music-sonic-analyzer"))
+        .arg(&path)
+        .arg("--unknown")
+        .output()
+        .unwrap();
+    assert_eq!(bad.status.code(), Some(1));
 }
 
 fn synchsafe(size: usize) -> [u8; 4] {

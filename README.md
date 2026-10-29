@@ -66,6 +66,13 @@ Library. Save the kept shortlist as a regular playlist; play tracks directly in
 Aurora's **Ratings → Hidden favorites**. Reload either shelf to see the other app's
 changes. No new audio scan is needed. See [Hidden favorites](docs/hidden-favorites.md).
 
+Music Library **0.208.0** saves a per-second timeline for each analyzed track:
+pitch-class energy, brightness, level, stereo width and correlation, and timbre,
+about 12.6 GB for a 1.1-million-track library in `music-timelines.sqlite3`.
+Already analyzed tracks get theirs on the next **Analyze library** run (about
+0.35 s per track); saved sound features do not change. Nothing uses timelines
+yet. See [Per-second timelines](docs/sonic-analysis.md#per-second-timelines).
+
 Music Library **0.192.1** fixes Audio analysis stopping with **Access is denied**
 when a randomly named output file collides with an existing Windows Temp folder.
 Analyzer output now uses bounded pipes instead of temporary files. After updating,

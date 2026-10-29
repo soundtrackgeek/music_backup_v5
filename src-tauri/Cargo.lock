@@ -2549,7 +2549,7 @@ dependencies = [
 
 [[package]]
 name = "music-library"
-version = "0.207.1"
+version = "0.208.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2563,6 +2563,7 @@ dependencies = [
  "dotenvy",
  "fast_image_resize",
  "flate2",
+ "half",
  "hex",
  "id3",
  "image",

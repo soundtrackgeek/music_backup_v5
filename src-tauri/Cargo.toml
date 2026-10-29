@@ -1,6 +1,6 @@
 [package]
 name = "music-library"
-version = "0.207.1"
+version = "0.208.0"
 description = "Local-first MusicBee TSV library app"
 authors = ["jtill"]
 edition = "2021"
@@ -62,6 +62,7 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
+half = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61.3", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation"] }

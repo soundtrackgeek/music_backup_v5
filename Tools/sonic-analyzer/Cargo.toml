@@ -12,6 +12,10 @@ serde_json = "1"
 symphonia = { version = "=0.6.1", default-features = false, features = ["all-meta", "mpa"] }
 rubato = "=3.0.0"
 audioadapter-buffers = "=3.0.0"
+# Per-second timeline (timeline-v1): FFT, half-float storage, compact JSON transport.
+rustfft = "6.4"
+half = "2"
+base64 = "0.22"
 
 [dev-dependencies]
 music-sonic-core = { path = "../../crates/sonic-core" }

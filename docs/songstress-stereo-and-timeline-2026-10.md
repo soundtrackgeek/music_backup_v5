@@ -2,6 +2,8 @@
 
 ## Five more additions for Music Library, Aurora and Tonehavn
 
+**Implementation update, 2026-10-29:** Music Library 0.208.0 saves the recommended 29-value timeline (43) for every analyzed track, on the system drive. The per-second stereo width and correlation it stores are the data for 41 and 42. No feature reads the timelines yet. See [Per-second timelines](sonic-analysis.md#per-second-timelines).
+
 **Prepared: 2026-10-29.** This note reviews [RezRitz/songstress](https://github.com/RezRitz/songstress) (MIT, Python, "ear" v0.2) against the two October sonic reports: [What a fully analyzed music library can become](sonic-analysis-opportunities-2026-10.md) (ideas 01–20) and [What the first sonic report missed](sonic-analysis-gaps-and-opportunities-2026-10.md) (21–40). The new additions are numbered **41–45**.
 
 Everything here is a proposal. Nothing has been built and Songstress was read, not run. Numbers about Songstress come from its README, `listen.py` and `examples/`. The only measurement on this library is track duration, read from the catalog to size the timeline store (see [Method](#method-and-evidence)).

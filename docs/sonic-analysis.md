@@ -19,6 +19,38 @@ of coverage, so a slow coverage read does not hide continuation. Unchanged track
 reuse completed results. Edited scheduling settings are saved before continuing.
 Activity Center offers the same controls and stays synchronized with this panel.
 
+## Per-second timelines
+
+Since 0.208.0, analysis also saves a **per-second timeline** for each track: one
+row of 29 measurements per second of audio. Tracks that were analyzed before
+0.208.0 get theirs the next time you run **Analyze library**, **Analyze
+favorites** or **Analyze this album**; their existing sound features are kept
+unchanged. **Tools → Audio analysis** shows how many analyzed tracks have a
+timeline and how much space they use.
+
+Each row holds pitch-class energy (12 values), brightness, level, stereo width,
+left/right correlation and 13 timbre coefficients, stored as half-precision
+numbers. The analyzer decodes the file a second time with both channels kept,
+so the Bliss sound features, the similarity index and every saved result stay
+exactly as before. See [`timeline.rs`](../Tools/sonic-analyzer/src/timeline.rs)
+for the exact columns.
+
+Timelines are kept in `music-timelines.sqlite3` beside the analysis database,
+about 58 bytes per second of audio: roughly 11 KB for an average track and
+about 12.6 GB for a 1.1-million-track library. Identical files share one
+timeline. Timelines are not part of analysis backups; they can always be
+rebuilt from the MP3s. Audio longer than three hours keeps its first three hours.
+
+Adding a timeline to an already analyzed track takes about 0.35 seconds for a
+four-minute song, and analyzing a new track takes about 1.8 times as long as
+before. If a timeline cannot be decoded, the error is saved with the timeline,
+the track's analysis is kept, and the track is not listed as failed. A
+**Verify reused results** scan never decodes audio, so it does not add timelines.
+
+Nothing uses the timelines yet. They are the data for future features such as
+sections inside a track and a stereo health check; see
+[What Songstress could add](songstress-stereo-and-timeline-2026-10.md).
+
 ## Idle time and scheduling
 
 Windows defaults to starting new files only after five minutes without keyboard
@@ -46,7 +78,8 @@ resume, cancel, and retry in Activity Center. Completed files survive pauses,
 restarts, cancellation, and failed batches; retry retains completed checkpoints.
 
 Since 0.192.1, analyzer results and diagnostics travel through pipes, with both
-streams read concurrently and limited to 64 KiB each. Analysis no longer creates
+streams read concurrently. Since 0.208.0 results may use up to 1 MiB, for
+per-second timelines; diagnostics stay limited to 64 KiB. Analysis no longer creates
 or reopens temporary output files for each track. This fixes Windows **Access is
 denied** failures when a random `.tmp...` filename collides with an existing Temp
 directory, including names differing only by letter case. After updating, choose

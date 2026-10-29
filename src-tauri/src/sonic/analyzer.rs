@@ -13,15 +13,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-const OUTPUT_LIMIT: usize = 64 * 1024;
+/// A three-hour timeline is about 835 KB of base64 on stdout.
+const STDOUT_LIMIT: usize = 1024 * 1024;
+const STDERR_LIMIT: usize = 64 * 1024;
 
 struct Capture {
     reader: JoinHandle<io::Result<Vec<u8>>>,
     exceeded: Arc<AtomicBool>,
+    label: &'static str,
 }
 
 impl Capture {
-    fn start(mut pipe: impl Read + Send + 'static) -> io::Result<Self> {
+    fn start(
+        mut pipe: impl Read + Send + 'static,
+        limit: usize,
+        label: &'static str,
+    ) -> io::Result<Self> {
         let exceeded = Arc::new(AtomicBool::new(false));
         let signal = exceeded.clone();
         let reader = thread::Builder::new()
@@ -37,7 +44,7 @@ impl Capture {
                     if count == 0 {
                         return Ok(bytes);
                     }
-                    let keep = count.min(OUTPUT_LIMIT - bytes.len());
+                    let keep = count.min(limit - bytes.len());
                     bytes.extend_from_slice(&buffer[..keep]);
                     if keep < count {
                         signal.store(true, Ordering::Relaxed);
@@ -46,7 +53,11 @@ impl Capture {
                     // block it on a full pipe or retain unbounded diagnostics.
                 }
             })?;
-        Ok(Self { reader, exceeded })
+        Ok(Self {
+            reader,
+            exceeded,
+            label,
+        })
     }
 
     fn finish(self) -> Result<Vec<u8>> {
@@ -56,9 +67,21 @@ impl Capture {
             .map_err(|_| anyhow::anyhow!("Analyzer output reader panicked"))?
             .context("Could not read analyzer output")?;
         if self.exceeded.load(Ordering::Relaxed) {
-            bail!("Analyzer output exceeded its 64 KiB per-stream limit");
+            bail!(
+                "Analyzer {} exceeded its {} limit",
+                self.label,
+                limit_text(self.label)
+            );
         }
         Ok(bytes)
+    }
+}
+
+fn limit_text(label: &str) -> &'static str {
+    if label == "output" {
+        "1 MiB"
+    } else {
+        "64 KiB"
     }
 }
 
@@ -86,9 +109,17 @@ pub(super) fn run(
         cmd.creation_flags(0x0800_0000 | 0x0000_4000);
     }
     let mut child = RunningChild(cmd.spawn().context("Could not start the audio analyzer")?);
-    let stdout = Capture::start(child.0.stdout.take().context("Analyzer stdout missing")?)
+    let stdout = Capture::start(
+        child.0.stdout.take().context("Analyzer stdout missing")?,
+        STDOUT_LIMIT,
+        "output",
+    )
         .context("Could not start analyzer stdout reader")?;
-    let stderr = Capture::start(child.0.stderr.take().context("Analyzer stderr missing")?)
+    let stderr = Capture::start(
+        child.0.stderr.take().context("Analyzer stderr missing")?,
+        STDERR_LIMIT,
+        "diagnostics",
+    )
         .context("Could not start analyzer stderr reader")?;
     let started = Instant::now();
     let status = loop {
@@ -100,9 +131,14 @@ pub(super) fn run(
                 "Analysis exceeded the three-minute per-track limit",
             ));
         }
-        if stdout.exceeded.load(Ordering::Relaxed) || stderr.exceeded.load(Ordering::Relaxed) {
+        if let Some(stream) = [&stdout, &stderr]
+            .into_iter()
+            .find(|s| s.exceeded.load(Ordering::Relaxed))
+        {
             break Err(anyhow::anyhow!(
-                "Analyzer output exceeded its 64 KiB per-stream limit"
+                "Analyzer {} exceeded its {} limit",
+                stream.label,
+                limit_text(stream.label)
             ));
         }
         match child.0.try_wait() {
@@ -199,7 +235,12 @@ mod tests {
     fn excessive_stdout_or_stderr_stops_the_process_as_a_fatal_error() {
         for mode in ["stdout-overflow", "stderr-overflow"] {
             let error = run(&mut helper(mode), &|| false, Duration::from_secs(10)).unwrap_err();
-            assert!(error.to_string().contains("64 KiB"), "{error:#}");
+            let limit = if mode == "stdout-overflow" {
+                "1 MiB"
+            } else {
+                "64 KiB"
+            };
+            assert!(error.to_string().contains(limit), "{error:#}");
             assert!(!error.is::<super::super::TrackAnalysisError>());
         }
     }

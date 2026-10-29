@@ -46,6 +46,10 @@ pub struct SonicStatus {
     pub pending: i64,
     pub failed: i64,
     pub total: i64,
+    /// Catalog tracks whose audio has a stored per-second timeline.
+    pub timelines: i64,
+    /// Size of the timeline database on disk.
+    pub timeline_bytes: i64,
     pub profile: String,
     pub schedule: SonicSchedule,
     pub idle_supported: bool,
@@ -309,20 +313,70 @@ fn analyzer_path() -> Result<PathBuf> {
     bail!("The audio analyzer is missing. Install the current Music Library release (developers: npm run sonic:prepare).")
 }
 
+/// What one analyzer run should produce.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Extract {
+    Both,
+    BlissOnly,
+    TimelineOnly,
+}
+
+struct Extracted {
+    analysis: Option<Analysis>,
+    timeline: Option<crate::sonic_timeline::Payload>,
+}
+
+#[cfg(test)]
 fn extract(path: &Path, stop: &impl Fn() -> bool) -> Result<Analysis> {
+    extract_mode(path, stop, Extract::BlissOnly)?
+        .analysis
+        .context("Analyzer returned no features")
+}
+
+fn extract_mode(path: &Path, stop: &impl Fn() -> bool, mode: Extract) -> Result<Extracted> {
     let mut cmd = Command::new(analyzer_path()?);
     cmd.arg(path);
+    match mode {
+        Extract::Both => {}
+        Extract::BlissOnly => {
+            cmd.arg("--no-timeline");
+        }
+        Extract::TimelineOnly => {
+            cmd.arg("--timeline-only");
+        }
+    }
     let output = analyzer::run(&mut cmd, stop, Duration::from_secs(180))?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr);
         return Err(analyzer_failure(output.status.code(), &message));
     }
-    let analysis: Analysis = serde_json::from_slice(&output.stdout)
+    let mut value: serde_json::Value = serde_json::from_slice(&output.stdout)
         .context("Analyzer returned an invalid JSON response")?;
-    if !analysis.valid() {
-        bail!("Analyzer returned an incompatible or invalid feature profile");
+    let object = value
+        .as_object_mut()
+        .context("Analyzer returned an invalid JSON response")?;
+    let timeline: Option<crate::sonic_timeline::Payload> = object
+        .remove("timeline")
+        .map(serde_json::from_value)
+        .transpose()
+        .context("Analyzer returned an invalid timeline")?;
+    if (mode == Extract::BlissOnly) != timeline.is_none() {
+        bail!("Analyzer returned an unexpected timeline response");
     }
-    Ok(analysis)
+    let analysis = if mode == Extract::TimelineOnly {
+        if !object.is_empty() {
+            bail!("Analyzer returned an unexpected timeline response");
+        }
+        None
+    } else {
+        let analysis: Analysis = serde_json::from_value(value)
+            .context("Analyzer returned an invalid JSON response")?;
+        if !analysis.valid() {
+            bail!("Analyzer returned an incompatible or invalid feature profile");
+        }
+        Some(analysis)
+    };
+    Ok(Extracted { analysis, timeline })
 }
 
 fn analyze_one(
@@ -394,17 +448,22 @@ fn analyze_one_mode(
     let path = audio_path(directory, filename).map_err(track_error)?;
     let before = signature(&path).map_err(track_error)?;
     let store = results(dir)?;
-    let saved: Option<(u64, String)> = store
+    let saved: Option<(u64, String, String)> = store
         .query_row(
-            "SELECT s.size,s.modified FROM sonic_tracks s JOIN sonic_audio a
+            "SELECT s.size,s.modified,s.audio_hash FROM sonic_tracks s JOIN sonic_audio a
                 ON a.audio_hash=s.audio_hash AND a.profile=s.profile
                 WHERE s.track_key=?1 AND s.profile=?2",
             params![track_key(directory, filename), PROFILE],
-            |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)),
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
-    if saved.as_ref() == Some(&before) {
-        return Ok(AnalysisWork::Cached);
+    if let Some((size, modified, saved_hash)) = &saved {
+        // A reuse scan never decodes, so it never adds timelines either.
+        if (*size, modified) == (before.0, &before.1)
+            && (reuse_only || crate::sonic_timeline::has(dir, saved_hash)?)
+        {
+            return Ok(AnalysisWork::Cached);
+        }
     }
     let hash = audio_hash_with_stop(&path, stop).map_err(track_error)?;
     let existing: Option<String> = store
@@ -414,12 +473,20 @@ fn analyze_one_mode(
             |r| r.get(0),
         )
         .optional()?;
-    if existing.is_none() {
-        // A reuse scan never decodes unmatched files or publishes foreign paths.
-        if reuse_only {
-            return Ok(AnalysisWork::Unmatched);
-        }
-        let analysis = extract(&path, stop)?;
+    // A reuse scan never decodes unmatched files or publishes foreign paths.
+    if existing.is_none() && reuse_only {
+        return Ok(AnalysisWork::Unmatched);
+    }
+    let needs_timeline = !reuse_only && !crate::sonic_timeline::has(dir, &hash)?;
+    let mode = match (existing.is_none(), needs_timeline) {
+        (true, true) => Some(Extract::Both),
+        (true, false) => Some(Extract::BlissOnly),
+        (false, true) => Some(Extract::TimelineOnly),
+        (false, false) => None,
+    };
+    let mut analysis = None;
+    if let Some(mode) = mode {
+        let extracted = extract_mode(&path, stop, mode)?;
         if before != signature(&path).map_err(track_error)?
             || hash != audio_hash_with_stop(&path, stop).map_err(track_error)?
         {
@@ -427,6 +494,12 @@ fn analyze_one_mode(
                 "The audio changed during analysis; retry the track",
             ));
         }
+        if let Some(timeline) = extracted.timeline {
+            crate::sonic_timeline::save(dir, &hash, timeline)?;
+        }
+        analysis = extracted.analysis;
+    }
+    if let Some(analysis) = analysis {
         let weights = serde_json::to_string(&analysis.weights)?;
         let prior: Option<String> = store
             .query_row(
@@ -461,7 +534,8 @@ fn analyze_one_mode(
         return Err(track_error("The track was removed during analysis"));
     }
     store.execute("INSERT INTO sonic_tracks VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(track_key) DO UPDATE SET directory=excluded.directory,filename=excluded.filename,audio_hash=excluded.audio_hash,profile=excluded.profile,size=excluded.size,modified=excluded.modified,analyzed_at=excluded.analyzed_at",params![track_key(directory,filename),directory,filename,hash,PROFILE,before.0 as i64,before.1,chrono::Utc::now().to_rfc3339()])?;
-    Ok(if existing.is_none() {
+    // Adding only a timeline is still a decode, so it counts as extraction for the ETA.
+    Ok(if mode.is_some() {
         AnalysisWork::Extracted
     } else {
         AnalysisWork::Reused
@@ -758,11 +832,24 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         [],
         |r| r.get(0),
     )?;
-    let analyzed = if attach(&c, dir)? {
-        c.query_row("SELECT count(*) FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename WHERE s.profile=?1",[PROFILE],|r|r.get(0))?
+    let (analyzed, timelines) = if attach(&c, dir)? {
+        let analyzed = c.query_row("SELECT count(*) FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename WHERE s.profile=?1",[PROFILE],|r|r.get(0))?;
+        let timelines = if crate::sonic_timeline::attach(&c, dir)? {
+            c.query_row("SELECT count(*) FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename JOIN timeline.timelines x ON x.audio_hash=s.audio_hash AND x.version=?2 AND x.error IS NULL WHERE s.profile=?1",params![PROFILE, crate::sonic_timeline::VERSION],|r|r.get(0))?
+        } else {
+            0
+        };
+        (analyzed, timelines)
     } else {
-        0
+        (0, 0)
     };
+    let timeline_bytes = ["", "-wal"]
+        .iter()
+        .filter_map(|suffix| {
+            fs::metadata(dir.join(format!("{}{suffix}", crate::sonic_timeline::FILE))).ok()
+        })
+        .map(|m| i64::try_from(m.len()).unwrap_or(i64::MAX))
+        .sum();
     let w = work(dir)?;
     let batch = active_sonic_batch(dir)?;
     let pending=w.query_row("SELECT count(*) FROM sonic_items WHERE batch_id=COALESCE(?1,(SELECT id FROM sonic_batches ORDER BY rowid DESC LIMIT 1)) AND state='pending'",[&batch],|r|r.get(0))?;
@@ -772,6 +859,8 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         total,
         pending,
         failed,
+        timelines,
+        timeline_bytes,
         profile: PROFILE.into(),
         schedule: schedule(&w)?,
         idle_supported: cfg!(windows),
@@ -1355,6 +1444,91 @@ mod tests {
         );
     }
 
+    fn timeline_track(file: &str, data: &[u8]) -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        c.execute_batch(
+            "CREATE TABLE tracks(id INTEGER PRIMARY KEY,file_path TEXT,filename TEXT);",
+        )
+        .unwrap();
+        let folder = dir.path().to_string_lossy().to_string();
+        fs::write(dir.path().join(file), data).unwrap();
+        c.execute(
+            "INSERT INTO tracks(file_path,filename) VALUES(?1,?2)",
+            params![folder, file],
+        )
+        .unwrap();
+        (dir, folder)
+    }
+
+    #[test]
+    fn analysis_adds_timelines_to_saved_tracks_without_changing_their_features() {
+        let (dir, folder) = timeline_track(
+            "noise.mp3",
+            include_bytes!("../../Tools/sonic-analyzer/tests/fixtures/noise.mp3"),
+        );
+        let analyze = |reuse_only| {
+            analyze_one_mode(dir.path(), &folder, "noise.mp3", &|| false, reuse_only).unwrap()
+        };
+        let features = || -> String {
+            results(dir.path())
+                .unwrap()
+                .query_row("SELECT features FROM sonic_audio", [], |r| r.get(0))
+                .unwrap()
+        };
+        let hash = audio_hash_with_stop(&dir.path().join("noise.mp3"), &|| false).unwrap();
+
+        // A new track gets both results from one analyzer run.
+        assert_eq!(analyze(false), AnalysisWork::Extracted);
+        let (rows, values) = crate::sonic_timeline::read(dir.path(), &hash)
+            .unwrap()
+            .unwrap();
+        assert!(rows >= 1);
+        assert_eq!(values.len(), rows * crate::sonic_timeline::COLUMNS);
+        let status = status_at(dir.path()).unwrap();
+        assert_eq!((status.analyzed, status.timelines), (1, 1));
+        assert!(status.timeline_bytes > 0);
+        assert_eq!(analyze(false), AnalysisWork::Cached);
+        let saved = features();
+
+        // A track analyzed before timelines existed gets one and keeps its features.
+        crate::sonic_timeline::open(dir.path())
+            .unwrap()
+            .execute("DELETE FROM timelines", [])
+            .unwrap();
+        assert_eq!(status_at(dir.path()).unwrap().timelines, 0);
+        // A reuse scan never decodes, so it leaves the timeline missing.
+        assert_eq!(analyze(true), AnalysisWork::Cached);
+        assert_eq!(status_at(dir.path()).unwrap().timelines, 0);
+        assert_eq!(analyze(false), AnalysisWork::Extracted);
+        assert_eq!(features(), saved);
+        assert_eq!(status_at(dir.path()).unwrap().timelines, 1);
+        assert_eq!(analyze(false), AnalysisWork::Cached);
+    }
+
+    #[test]
+    fn an_undecodable_timeline_is_recorded_without_failing_a_saved_track() {
+        let (dir, folder) = timeline_track("odd.mp3", b"Not an audio stream");
+        // Saved Bliss features for this exact audio, as if analyzed by an older release.
+        let hash = audio_hash_with_stop(&dir.path().join("odd.mp3"), &|| false).unwrap();
+        let s = results(dir.path()).unwrap();
+        s.execute("INSERT INTO sonic_profiles VALUES(?1,'[]')", [PROFILE])
+            .unwrap();
+        s.execute(
+            "INSERT INTO sonic_audio VALUES(?1,?2,'[]')",
+            params![hash, PROFILE],
+        )
+        .unwrap();
+        let analyze = || analyze_one_mode(dir.path(), &folder, "odd.mp3", &|| false, false);
+        assert_eq!(analyze().unwrap(), AnalysisWork::Extracted);
+        assert!(crate::sonic_timeline::has(dir.path(), &hash).unwrap());
+        assert!(crate::sonic_timeline::read(dir.path(), &hash)
+            .unwrap()
+            .is_none());
+        assert_eq!(status_at(dir.path()).unwrap().timelines, 0);
+        assert_eq!(analyze().unwrap(), AnalysisWork::Cached);
+    }
+
     #[test]
     fn estimate_uses_new_successes_and_excludes_cache_failures_and_waits() {
         let mut estimate = AnalysisEstimate::default();
@@ -1756,6 +1930,7 @@ mod tests {
             fs::write(&path, [255; 256]).unwrap();
             c.execute("INSERT INTO tracks VALUES(?1,'Song','Singer','Various Artists','Album','album','Pop',?2,?3,80,180,NULL)",params![i,dir.path().to_string_lossy(),filename]).unwrap();
             let hash = format!("hash{i}");
+            crate::sonic_timeline::mark_done(dir.path(), &hash);
             let mut features = vec![0.; DIMENSIONS];
             features[0] = i as f32;
             s.execute(

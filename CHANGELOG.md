@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.208.0] - 2026-10-29
+
+### Added
+- **Per-second timelines**: audio analysis now saves one row of 29 measurements per second of each track (pitch-class energy, brightness, level, stereo width, left/right correlation and 13 timbre coefficients) in a separate `music-timelines.sqlite3`, about 12.6 GB for a 1.1-million-track library. Already analyzed tracks get a timeline on the next analysis run, without changing their saved sound features. **Tools → Audio analysis** shows timeline coverage and size. No feature reads timelines yet.
+
+### Changed
+- The analyzer reads stereo for timelines in a second decode, so Bliss features stay identical. Analyzer results may now be up to 1 MiB; diagnostics stay limited to 64 KiB. A timeline that cannot be decoded is recorded with the timeline and never fails the track.
+
 ## [0.207.1] - 2026-10-29
 
 ### Added

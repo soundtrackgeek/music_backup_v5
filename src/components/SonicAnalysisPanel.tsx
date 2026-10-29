@@ -6,6 +6,11 @@ import { SonicBackupPanel } from "./SonicBackupPanel";
 import { SonicFailuresPanel } from "./SonicFailuresPanel";
 import { SonicCoveragePanel } from "./SonicCoveragePanel";
 import { SonicAtlas } from "./SonicAtlas";
+export function storageSize(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `${Math.round(bytes / 1024 ** 2).toLocaleString()} MB`;
+}
+
 export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string; onOpenAlbum?: (id: string) => void }) {
   const [atlasOpen, setAtlasOpen] = useState(false);
   const [status, setStatus] = useState<SonicStatus | null>(null);
@@ -114,6 +119,7 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     {onOpenAlbum && <><button type="button" onClick={() => setAtlasOpen(true)}>Open sonic atlas</button>{atlasOpen && <SonicAtlas onClose={() => setAtlasOpen(false)} onOpenAlbum={t => onOpenAlbum(t.albumId)} />}</>}
     <div><h2>Audio analysis</h2><p>Discover connections by sound. Analysis runs locally and resumes from saved track checkpoints.</p></div>
     <p>{status ? `${status.analyzed.toLocaleString()} of ${status.total.toLocaleString()} tracks analyzed · ${status.pending.toLocaleString()} pending · ${status.failed.toLocaleString()} failed` : "Reading analysis coverage…"}</p>
+    {status && <p>{`Per-second timelines: ${status.timelines.toLocaleString()} of ${status.analyzed.toLocaleString()} analyzed tracks · ${storageSize(status.timelineBytes)} on this computer`}</p>}
     {saved && <div className="sonic-current-work" aria-label="Saved audio analysis">
       <strong>{saved.kind === "sonicReuse" ? "Saved verification" : "Saved analysis"} · {saved.state}</strong>
       <span>{saved.completed.toLocaleString()} of {saved.total.toLocaleString()} queue entries checked</span>

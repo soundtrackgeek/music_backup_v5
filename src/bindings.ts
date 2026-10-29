@@ -4751,6 +4751,10 @@ export type SonicStatus = {
 	pending: number,
 	failed: number,
 	total: number,
+	/**  Catalog tracks whose audio has a stored per-second timeline. */
+	timelines: number,
+	/**  Size of the timeline database on disk. */
+	timelineBytes: number,
 	profile: string,
 	schedule: SonicSchedule,
 	idleSupported: boolean,

@@ -43,7 +43,7 @@ it("updates the saved job from Activity events and pauses it without creating an
 });
 
 it("keeps coverage readers out of queue compaction and refreshes when analysis advances", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   let publish!: (jobs: activity.ActivityJob[]) => void;
@@ -75,7 +75,7 @@ it("keeps unfinished analysis available after a newer reuse verification complet
 });
 
 it("saves edited settings before continuing and leaves the saved job alone if saving fails", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(activity.listActivityJobs).mockResolvedValue([savedJob]);
@@ -92,7 +92,7 @@ it("saves edited settings before continuing and leaves the saved job alone if sa
   expect(backend.configureSonicSchedule).toHaveBeenLastCalledWith({ ...status.schedule, idleOnly: false });
 });
 it("saves idle and overnight settings separately from queueing an album", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(backend.configureSonicSchedule).mockImplementation(async schedule => ({ ...status, schedule }));
@@ -115,7 +115,7 @@ it.each([
   ["reuse", "Verify reused analysis"],
   ["failed", "Retry failed tracks"],
 ] as const)("saves the visible schedule before starting %s analysis", async (scope, button) => {
-  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: 22, endHour: 8 } };
+  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: 22, endHour: 8 } };
   const unrestricted = { idleOnly: false, idleMinutes: 5, startHour: null, endHour: null };
   vi.mocked(backend.getSonicStatus).mockResolvedValueOnce(status).mockResolvedValue({ ...status, schedule: unrestricted });
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
@@ -139,7 +139,7 @@ it.each([
 });
 
 it("keeps analysis unqueued when the visible schedule cannot be saved", async () => {
-  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(backend.configureSonicSchedule).mockRejectedValue(new Error("Could not save analysis schedule"));
@@ -149,4 +149,18 @@ it("keeps analysis unqueued when the visible schedule cannot be saved", async ()
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not save analysis schedule");
   expect(backend.startSonicAnalysis).not.toHaveBeenCalled();
   expect(screen.getByLabelText("Only when the computer is idle")).not.toBeChecked();
+});
+
+it("shows how many analyzed tracks have a per-second timeline and its size", async () => {
+  const status = { analyzed: 1200, total: 1500, pending: 0, failed: 0, timelines: 800, timelineBytes: 9_100_000, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  render(<SonicAnalysisPanel />);
+  expect(await screen.findByText("Per-second timelines: 800 of 1,200 analyzed tracks · 9 MB on this computer")).toBeInTheDocument();
+});
+
+it("formats timeline storage in megabytes and gigabytes", async () => {
+  const { storageSize } = await import("./SonicAnalysisPanel");
+  expect(storageSize(0)).toBe("0 MB");
+  expect(storageSize(13_528_000_000)).toBe("12.6 GB");
 });
