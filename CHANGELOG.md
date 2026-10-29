@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.208.1] - 2026-10-29
+
+### Fixed
+- **Already analyzed tracks now get per-second timelines**: a saved analysis queue, including a finished one with failed tracks, skipped every entry it had already checked, so **Continue analysis** and **Analyze library** never added timelines to the 1.1 million tracks analyzed before 0.208.0. A saved queue now reopens its checked entries once per timeline format; entries that already have a timeline finish without decoding, and saved sound features do not change. The queue's progress restarts from zero when this happens.
+
 ## [0.208.0] - 2026-10-29
 
 ### Added

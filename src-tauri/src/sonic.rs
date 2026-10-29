@@ -201,7 +201,8 @@ pub(crate) fn work(dir: &Path) -> Result<Connection> {
       CREATE TABLE IF NOT EXISTS sonic_batches(id TEXT PRIMARY KEY,prepared INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS sonic_items(batch_id TEXT NOT NULL,track_key TEXT NOT NULL,directory TEXT NOT NULL,filename TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',error TEXT,PRIMARY KEY(batch_id,track_key));
       CREATE INDEX IF NOT EXISTS sonic_items_next ON sonic_items(batch_id,state,track_key);
-      CREATE TABLE IF NOT EXISTS sonic_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL);")?;
+      CREATE TABLE IF NOT EXISTS sonic_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sonic_batch_timelines(batch_id TEXT PRIMARY KEY,version TEXT NOT NULL);")?;
     crate::sonic_failures::install(&c)?;
     Ok(c)
 }
@@ -659,6 +660,30 @@ fn run_at(
         }
         tx.execute("UPDATE sonic_batches SET prepared=1 WHERE id=?1", [&batch])?;
         tx.commit()?;
+    }
+    // A queue checked before this timeline version existed reopens its checked
+    // entries once. Entries with saved analysis and a timeline finish without
+    // decoding; the rest get only the missing timeline.
+    if request.scope != "reuse" {
+        let version: Option<String> = w
+            .query_row(
+                "SELECT version FROM sonic_batch_timelines WHERE batch_id=?1",
+                [&batch],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if version.as_deref() != Some(crate::sonic_timeline::VERSION) {
+            let tx = w.transaction()?;
+            tx.execute(
+                "UPDATE sonic_items SET state='pending',error=NULL WHERE batch_id=?1 AND state='done'",
+                [&batch],
+            )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO sonic_batch_timelines VALUES(?1,?2)",
+                params![batch, crate::sonic_timeline::VERSION],
+            )?;
+            tx.commit()?;
+        }
     }
     // Retry failed items without redoing completed work. Interrupted items stay pending.
     w.execute(
@@ -1504,6 +1529,74 @@ mod tests {
         assert_eq!(features(), saved);
         assert_eq!(status_at(dir.path()).unwrap().timelines, 1);
         assert_eq!(analyze(false), AnalysisWork::Cached);
+    }
+
+    #[test]
+    fn a_checked_queue_reopens_once_to_add_timelines() {
+        let (dir, _folder) = timeline_track(
+            "noise.mp3",
+            include_bytes!("../../Tools/sonic-analyzer/tests/fixtures/noise.mp3"),
+        );
+        let hash = audio_hash_with_stop(&dir.path().join("noise.mp3"), &|| false).unwrap();
+        let w = work(dir.path()).unwrap();
+        w.execute(
+            "INSERT INTO sonic_settings VALUES(1,?1)",
+            [serde_json::to_string(&SonicSchedule {
+                idle_only: false,
+                ..SonicSchedule::default()
+            })
+            .unwrap()],
+        )
+        .unwrap();
+        let run = || {
+            run_at(
+                dir.path(),
+                AnalyzeRequest {
+                    scope: "all".into(),
+                    album_id: None,
+                    batch_id: Some("library".into()),
+                },
+                &|| false,
+                &|_, _, _, _| {},
+                &|| None,
+                &|| 12,
+            )
+            .unwrap()
+        };
+        run();
+        let state = || -> String {
+            w.query_row("SELECT state FROM sonic_items", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(state(), "done");
+        assert!(crate::sonic_timeline::has(dir.path(), &hash).unwrap());
+
+        // As if the queue was checked by 0.207 or earlier: no timeline, no reopen record.
+        crate::sonic_timeline::open(dir.path())
+            .unwrap()
+            .execute("DELETE FROM timelines", [])
+            .unwrap();
+        w.execute("DELETE FROM sonic_batch_timelines", []).unwrap();
+        let features: String = results(dir.path())
+            .unwrap()
+            .query_row("SELECT features FROM sonic_audio", [], |r| r.get(0))
+            .unwrap();
+        run();
+        assert_eq!(state(), "done");
+        assert!(crate::sonic_timeline::has(dir.path(), &hash).unwrap());
+        let after: String = results(dir.path())
+            .unwrap()
+            .query_row("SELECT features FROM sonic_audio", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(after, features);
+
+        // Once reopened for this version, a later resume leaves checked entries alone.
+        crate::sonic_timeline::open(dir.path())
+            .unwrap()
+            .execute("DELETE FROM timelines", [])
+            .unwrap();
+        run();
+        assert!(!crate::sonic_timeline::has(dir.path(), &hash).unwrap());
     }
 
     #[test]

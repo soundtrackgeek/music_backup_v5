@@ -23,9 +23,14 @@ Activity Center offers the same controls and stays synchronized with this panel.
 
 Since 0.208.0, analysis also saves a **per-second timeline** for each track: one
 row of 29 measurements per second of audio. Tracks that were analyzed before
-0.208.0 get theirs the next time you run **Analyze library**, **Analyze
-favorites** or **Analyze this album**; their existing sound features are kept
-unchanged. **Tools → Audio analysis** shows how many analyzed tracks have a
+0.208.0 get theirs the next time analysis runs over them: **Continue analysis**
+on a saved queue, **Analyze library**, **Analyze favorites** or **Analyze this
+album**. Their existing sound features are kept unchanged.
+
+Since 0.208.1, a saved queue that was checked before timelines existed reopens
+its checked entries once, so its progress starts again from zero. Entries that
+already have a timeline finish in milliseconds; the rest get only the missing
+timeline. This happens once per timeline format, not on every resume. **Tools → Audio analysis** shows how many analyzed tracks have a
 timeline and how much space they use.
 
 Each row holds pitch-class energy (12 values), brightness, level, stereo width,
