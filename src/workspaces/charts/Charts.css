@@ -499,3 +499,36 @@
 :root[data-theme="dark"] .artist-chart-sort:focus-visible {
   color: #7fd8c6;
 }
+.artist-chart-published {
+  min-width: 0;
+  margin: 12px 0 0;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+}
+
+.artist-chart-published-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.artist-chart-published-actions small {
+  color: #697671;
+}
+
+.artist-chart-published-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.artist-chart-published-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}

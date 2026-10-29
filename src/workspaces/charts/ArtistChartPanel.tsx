@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, FileSearch, Search, Users } from "lucide-react";
 import {
   albumChartSourceOptions,
@@ -16,6 +16,7 @@ import {
   NumberField,
   SelectField,
 } from "../../components/catalog/SearchCriteria";
+import { getPublishedChartCatalog } from "../../backend/publishedCharts";
 import { ChartAdvancedControls } from "../../components/SearchProgressiveDisclosure";
 import { TransitionRegion } from "../../components/TransitionRegion";
 import type {
@@ -85,6 +86,21 @@ export function ArtistChartPanel({
 }: Props) {
   const filters = request.filters;
   const metric = request.metric;
+  const [publishedCharts, setPublishedCharts] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublishedChartCatalog()
+      .then((catalog) => {
+        if (!cancelled) {
+          setPublishedCharts(catalog.series.map((series) => series.chart));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <>
@@ -213,6 +229,51 @@ export function ArtistChartPanel({
               ))}
             </fieldset>
           </div>
+
+          {publishedCharts.length > 0 ? (
+            <fieldset className="missing-flags artist-chart-published">
+              <legend>Lesser charts (Published Charts)</legend>
+              <div className="artist-chart-published-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({ publishedChartSources: [...publishedCharts] })
+                  }
+                >
+                  Include all lesser charts
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ publishedChartSources: [] })}
+                >
+                  Clear
+                </button>
+                <small>
+                  Tracks that reached these Billboard charts, such as Mainstream
+                  Rock Tracks, also count as charted tracks.
+                </small>
+              </div>
+              <div className="artist-chart-published-list">
+                {publishedCharts.map((chart) => (
+                  <label key={chart}>
+                    <input
+                      type="checkbox"
+                      checked={request.publishedChartSources.includes(chart)}
+                      onChange={() =>
+                        onChange({
+                          publishedChartSources: toggleSource(
+                            request.publishedChartSources,
+                            chart,
+                          ),
+                        })
+                      }
+                    />
+                    <span>{chart}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
 
           <div className="filter-grid chart-advanced-filter-grid">
             <NumberField

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   countArtistChartFilters,
@@ -6,6 +6,20 @@ import {
 } from "../../app/artistChart";
 import type { ArtistChartResponse } from "../../types";
 import { ArtistChartPanel } from "./ArtistChartPanel";
+
+vi.mock("../../backend/publishedCharts", () => ({
+  getPublishedChartCatalog: () =>
+    Promise.resolve({
+      importedYears: 2,
+      inventoryYears: 2,
+      needsImport: false,
+      totalRows: 10,
+      series: [
+        { chart: "Mainstream Rock Tracks", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
+        { chart: "Modern Rock Tracks", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
+      ],
+    }),
+}));
 
 const response: ArtistChartResponse = {
   metric: "albums",
@@ -109,6 +123,29 @@ describe("ArtistChartPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Albums" }));
     expect(props.onChange).toHaveBeenCalledWith({ direction: "asc" });
+  });
+
+  it("includes every lesser published chart in one click and clears them again", async () => {
+    const props = renderPanel();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Include all lesser charts" }),
+    );
+    expect(props.onChange).toHaveBeenCalledWith({
+      publishedChartSources: ["Mainstream Rock Tracks", "Modern Rock Tracks"],
+    });
+
+    fireEvent.click(screen.getByLabelText("Modern Rock Tracks"));
+    expect(props.onChange).toHaveBeenCalledWith({
+      publishedChartSources: ["Modern Rock Tracks"],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await waitFor(() =>
+      expect(props.onChange).toHaveBeenLastCalledWith({
+        publishedChartSources: [],
+      }),
+    );
   });
 
   it("explains an empty chart", () => {

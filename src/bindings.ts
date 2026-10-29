@@ -883,6 +883,11 @@ export type ArtistChartRequest = {
 	 *  tiISkuddet, norsktoppen.
 	 */
 	singleChartSources?: string[],
+	/**
+	 *  Published Charts series (for example "Mainstream Rock Tracks") whose matched
+	 *  library tracks also count as charted. Empty by default.
+	 */
+	publishedChartSources?: string[],
 	minAlbums?: number | null,
 	/**
 	 *  Percent of an album's tracks that must be rated for the album to count as

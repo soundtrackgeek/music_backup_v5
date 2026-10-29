@@ -72,6 +72,7 @@ type ProgressApp<'a> = &'a ();
 
 mod ai_snapshots;
 mod artist_chart;
+mod artist_chart_published;
 mod artists_genres;
 mod backups;
 mod chart_imports;

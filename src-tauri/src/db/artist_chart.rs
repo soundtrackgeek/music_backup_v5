@@ -48,6 +48,10 @@ pub struct ArtistChartRequest {
     /// tiISkuddet, norsktoppen.
     #[serde(default = "default_single_chart_sources")]
     pub single_chart_sources: Vec<String>,
+    /// Published Charts series (for example "Mainstream Rock Tracks") whose matched
+    /// library tracks also count as charted. Empty by default.
+    #[serde(default)]
+    pub published_chart_sources: Vec<String>,
     #[serde(default)]
     pub min_albums: Option<i64>,
     /// Percent of an album's tracks that must be rated for the album to count as
@@ -76,6 +80,7 @@ impl Default for ArtistChartRequest {
             excluded_year_to: None,
             album_chart_sources: default_album_chart_sources(),
             single_chart_sources: default_single_chart_sources(),
+            published_chart_sources: Vec::new(),
             min_albums: None,
             rated_threshold_percent: None,
             min_complete_albums: None,
@@ -206,6 +211,12 @@ pub(crate) fn artist_chart(
             ("vgLista", "a.vg_lista_rank"),
         ],
     );
+    let published_ids = if request.published_chart_sources.is_empty() {
+        None
+    } else {
+        let hits = super::artist_chart_published::published_chart_hits(conn)?;
+        super::artist_chart_published::track_ids_json(&hits, &request.published_chart_sources)
+    };
     let track_charted = charted_sql(
         &request.single_chart_sources,
         &[
@@ -216,6 +227,14 @@ pub(crate) fn artist_chart(
             ("norsktoppen", "t.norsktoppen_rank"),
         ],
     );
+    // Published Charts hits are bound as one JSON id list. It is a SELECT-list
+    // placeholder of track_stats, so it sits between the album and track WHERE values.
+    let track_charted = if published_ids.is_some() {
+        format!("({track_charted} OR t.id IN (SELECT value FROM json_each(?)))")
+    } else {
+        track_charted
+    };
+    let track_select_values: Vec<Value> = published_ids.map(Value::Text).into_iter().collect();
     let album_from = browse_from_clause(false);
     // Same joins as the track browse query, but artist origin and info follow the
     // track's Artist so the artist-info filters judge the credited artist.
@@ -297,9 +316,11 @@ pub(crate) fn artist_chart(
     };
 
     let mut count_values = album_values.clone();
+    count_values.extend(track_select_values.iter().cloned());
     count_values.extend(track_values.iter().cloned());
     count_values.extend(outer_values.iter().cloned());
     let mut row_values = album_values;
+    row_values.extend(track_select_values);
     row_values.extend(track_values);
     row_values.extend(outer_values);
     row_values.push(Value::Integer(i64::from(limit)));
@@ -552,6 +573,37 @@ mod tests {
         let none = artist_chart(&conn, impossible, 500).unwrap();
         assert!(none.rows.is_empty());
         assert_eq!(none.total, 0);
+    }
+
+    #[test]
+    fn published_chart_sources_add_matched_tracks_to_charted_tracks() {
+        let conn = artist_chart_connection();
+        conn.execute(
+            "INSERT INTO published_chart_books (id, book, chart, first_week, last_week, weekly_charts, row_count, first_page, last_page) VALUES (90, '1990_us_singles', 'Mainstream Rock Tracks', '1990-01-06', '1990-01-13', 2, 2, '', '')",
+            [],
+        )
+        .unwrap();
+        for (row, week, artist, title) in [
+            (1, "1990-01-06", "Alpha", "A3"),
+            (2, "1990-01-13", "Alpha", "A3"),
+            (3, "1990-01-06", "Nobody Else", "A1"),
+        ] {
+            conn.execute("INSERT INTO published_chart_entries (book_id, source_row, week_ending, position, artist, title, last_week, weeks_on_chart, entry_status, movement, number_one_marker, label, format, catalogue_number, release_type, duration, peak_position, entry_date, peak_date, bpi_award, source_page) VALUES (90, ?1, ?2, 5, ?3, ?4, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')", params![row, week, artist, title]).unwrap();
+        }
+
+        let plain = artist_chart(&conn, request("chartedTracks"), 500).unwrap();
+        // A1 is already charted through Norsktoppen.
+        assert_eq!(row(&plain, "Alpha").charted_tracks, 1);
+
+        let mut with_rock = request("chartedTracks");
+        with_rock.published_chart_sources = vec!["Mainstream Rock Tracks".to_string()];
+        let counted = artist_chart(&conn, with_rock, 500).unwrap();
+        assert_eq!(row(&counted, "Alpha").charted_tracks, 2);
+
+        let mut other_chart = request("chartedTracks");
+        other_chart.published_chart_sources = vec!["Modern Rock Tracks".to_string()];
+        let none = artist_chart(&conn, other_chart, 500).unwrap();
+        assert_eq!(row(&none, "Alpha").charted_tracks, 1);
     }
 
     #[test]

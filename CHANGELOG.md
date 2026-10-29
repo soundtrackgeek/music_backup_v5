@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.205.0] - 2026-10-29
+
+### Added
+- **Lesser charts count toward charted tracks on the Artists chart**: under Advanced chart controls, a new **Lesser charts (Published Charts)** list shows every Billboard series in the Published Charts collection, such as Mainstream Rock Tracks, Modern Rock Tracks, Adult Contemporary and Bubbling Under. Tick any of them, or press **Include all lesser charts**, and tracks that reached those charts count as charted tracks alongside the Billboard, UK, VG Lista, Ti i Skuddet and Norsktoppen sources. None are ticked by default, so existing counts do not change.
+- Library tracks are matched to the published chart rows with the same song matcher Artists → Chart Busters uses, once, and the result is kept in memory until the library or the published charts change, so later toggles are quick. The first ranking that uses lesser charts takes longer while that match runs.
+
 ## [0.204.2] - 2026-10-29
 
 ### Fixed
