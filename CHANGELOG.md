@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.207.1] - 2026-10-29
+
+### Added
+- **Export progress and errors in the Chart Library**: pressing an export button now shows "Exporting XLSX…" and disables the buttons until it finishes, and a failed export shows its error message instead of failing silently. This applies to the Albums, Tracks and Artists exports.
+
 ## [0.207.0] - 2026-10-29
 
 ### Fixed

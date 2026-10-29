@@ -4,6 +4,8 @@
 
 **Prepared: 2026-10-21.** This is a companion to [What a fully analyzed music library can become](sonic-analysis-opportunities-2026-10.md), referred to below as *the first report*. It does two things the first report did not: it **measures the live analysis** on this library (read-only, see [Method](#method-and-evidence)), and it focuses on what the first report **leaves out**. The 20 new additions are numbered **21–40** so they can sit beside the first report's 01–20 without ambiguity.
 
+A follow-up note, [What Songstress could add](songstress-stereo-and-timeline-2026-10.md), proposes additions 41–45: stereo measurement and a per-second timeline.
+
 Everything here is a proposal. Nothing in this document has been built, and no listening tests were run. The measurements describe this library on this date. They are not general claims about Bliss or about music.
 
 ## The short version

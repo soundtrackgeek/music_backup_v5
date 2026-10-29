@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   BarChart3,
   Save,
@@ -16,6 +17,21 @@ import {
 import type { AppModel } from "../../app/useAppController";
 export function ChartsDetails({ model }: { model: Pick<AppModel, "chartName" | "setChartName" | "saveCurrentChart" | "savedCharts" | "setChartConfig" | "setChartTableSort" | "setActiveSection" | "removeSavedChart" | "runChartExport" | "chartExportResult"> }) {
   const { chartName, setChartName, saveCurrentChart, savedCharts, setChartConfig, setChartTableSort, setActiveSection, removeSavedChart, runChartExport, chartExportResult } = model;
+  const [exportingFormat, setExportingFormat] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function startExport(format: string) {
+    setExportingFormat(format);
+    setExportError(null);
+    try {
+      await runChartExport(format);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExportingFormat(null);
+    }
+  }
+
   return (
           <aside
             className="detail-panel chart-detail"
@@ -91,14 +107,19 @@ export function ChartsDetails({ model }: { model: Pick<AppModel, "chartName" | "
                   <button
                     type="button"
                     key={format}
-                    onClick={() => void runChartExport(format)}
+                    disabled={exportingFormat !== null}
+                    onClick={() => void startExport(format)}
                   >
                     <Download size={16} />
                     <span>{format.toUpperCase()}</span>
                   </button>
                 ))}
               </div>
-              {chartExportResult ? (
+              {exportingFormat ? (
+                <p role="status">Exporting {exportingFormat.toUpperCase()}…</p>
+              ) : null}
+              {exportError ? <p role="alert" className="error-message">Export failed: {exportError}</p> : null}
+              {chartExportResult && !exportingFormat && !exportError ? (
                 <ExportResultStatus result={chartExportResult} itemLabel="row" />
               ) : null}
             </section>
