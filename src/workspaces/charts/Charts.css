@@ -424,3 +424,51 @@
     grid-template-columns: 38px minmax(0, 1fr);
   }
 }
+
+.artist-chart-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-control);
+}
+
+.artist-chart-sources fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+}
+
+.artist-chart-scroll {
+  overflow-x: auto;
+}
+
+.artist-chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.artist-chart-table th,
+.artist-chart-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e1e8e5;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.artist-chart-table th:nth-child(-n + 2),
+.artist-chart-table td:nth-child(-n + 2) {
+  text-align: left;
+}
+
+.artist-chart-table th {
+  color: #697671;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.artist-chart-table th.active,
+.artist-chart-table td.active {
+  color: #182320;
+  font-weight: 700;
+}

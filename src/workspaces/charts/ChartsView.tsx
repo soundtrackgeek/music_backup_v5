@@ -8,6 +8,7 @@ import {
   Album,
   BarChart3,
   ListMusic,
+  Users,
   Save,
   Search
 } from "lucide-react";
@@ -59,17 +60,61 @@ import {
 import {
   ChartResults
 } from "./ChartResults";
+import {
+  ArtistChartPanel
+} from "./ArtistChartPanel";
 import type { AppModel } from "../../app/useAppController";
-export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" | "setChartTableSort" | "loadData" | "chartConfig" | "status" | "chartTotal" | "chartRows" | "savedCharts" | "chartLunaLaunch" | "setChartError" | "chartRequest" | "updateChartConfig" | "setChartBrowseView" | "updateChartFilters" | "genreSuggestionOptions" | "requestGenreSuggestionRefresh" | "advancedChartControlCount" | "applyChartTemplate" | "chartSourceFilterCount" | "originCountryOptions" | "settings" | "currentChartCompletenessRange" | "currentChartGridCoverSize" | "toggleChartColumn" | "isChartLoading" | "chartError" | "chartResponse" | "chartTableSort" | "sortChartBy" | "openTimelineAlbum" | "openArtistFromMusicMap" | "openGenreFromBrowse"> }) {
-  const { setChartConfig, setChartTableSort, loadData, chartConfig, status, chartTotal, chartRows, savedCharts, chartLunaLaunch, setChartError, chartRequest, updateChartConfig, setChartBrowseView, updateChartFilters, genreSuggestionOptions, requestGenreSuggestionRefresh, advancedChartControlCount, applyChartTemplate, chartSourceFilterCount, originCountryOptions, settings, currentChartCompletenessRange, currentChartGridCoverSize, toggleChartColumn, isChartLoading, chartError, chartResponse, chartTableSort, sortChartBy, openTimelineAlbum, openArtistFromMusicMap, openGenreFromBrowse } = model;
+export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" | "setChartTableSort" | "loadData" | "chartConfig" | "status" | "chartTotal" | "chartRows" | "savedCharts" | "chartLunaLaunch" | "setChartError" | "chartRequest" | "updateChartConfig" | "setChartBrowseView" | "updateChartFilters" | "genreSuggestionOptions" | "requestGenreSuggestionRefresh" | "advancedChartControlCount" | "applyChartTemplate" | "chartSourceFilterCount" | "originCountryOptions" | "settings" | "currentChartCompletenessRange" | "currentChartGridCoverSize" | "toggleChartColumn" | "isChartLoading" | "chartError" | "chartResponse" | "chartTableSort" | "sortChartBy" | "openTimelineAlbum" | "openArtistFromMusicMap" | "openGenreFromBrowse" | "artistChartActive" | "setArtistChartActive" | "artistChartRequest" | "artistChartResponse" | "artistChartError" | "isArtistChartLoading" | "updateArtistChartRequest" | "updateArtistChartFilters" | "resetArtistChart"> }) {
+  const { setChartConfig, setChartTableSort, loadData, chartConfig, status, chartTotal, chartRows, savedCharts, chartLunaLaunch, setChartError, chartRequest, updateChartConfig, setChartBrowseView, updateChartFilters, genreSuggestionOptions, requestGenreSuggestionRefresh, advancedChartControlCount, applyChartTemplate, chartSourceFilterCount, originCountryOptions, settings, currentChartCompletenessRange, currentChartGridCoverSize, toggleChartColumn, isChartLoading, chartError, chartResponse, chartTableSort, sortChartBy, openTimelineAlbum, openArtistFromMusicMap, openGenreFromBrowse, artistChartActive, setArtistChartActive, artistChartRequest, artistChartResponse, artistChartError, isArtistChartLoading, updateArtistChartRequest, updateArtistChartFilters, resetArtistChart } = model;
+
+  const contentControl = (
+    <div
+      className="segmented-control chart-content-control"
+      aria-label="Chart content"
+    >
+      <button
+        className={
+          !artistChartActive && chartConfig.request.view === "albums"
+            ? "active"
+            : ""
+        }
+        type="button"
+        onClick={() => setChartBrowseView("albums")}
+      >
+        <Album size={16} />
+        <span>Albums</span>
+      </button>
+      <button
+        className={
+          !artistChartActive && chartConfig.request.view === "tracks"
+            ? "active"
+            : ""
+        }
+        type="button"
+        onClick={() => setChartBrowseView("tracks")}
+      >
+        <ListMusic size={16} />
+        <span>Tracks</span>
+      </button>
+      <button
+        className={artistChartActive ? "active" : ""}
+        type="button"
+        onClick={() => setArtistChartActive(true)}
+      >
+        <Users size={16} />
+        <span>Artists</span>
+      </button>
+    </div>
+  );
+
   return (
           <section className="workspace charts-workspace">
             <header className="topbar">
               <div>
                 <h1>Charts</h1>
                 <p>
-                  Rank albums or tracks from scores, ratings, Billboard and VG
-                  Lista performance, and chart-entry dates.
+                  Rank albums, tracks or artists from scores, ratings, Billboard
+                  and VG Lista performance, and chart-entry dates.
                 </p>
               </div>
               <div className="topbar-actions">
@@ -78,6 +123,10 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
                   type="button"
                   aria-label="Reset chart"
                   onClick={() => {
+                    if (artistChartActive) {
+                      resetArtistChart();
+                      return;
+                    }
                     setChartConfig(createChartConfig());
                     setChartTableSort(null);
                   }}
@@ -97,9 +146,15 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
 
             <section className="metric-grid" aria-label="Chart summary">
               <Metric
-                label={chartConfig.request.view === "tracks" ? "Tracks" : "Albums"}
+                label={
+                  artistChartActive
+                    ? "Albums"
+                    : chartConfig.request.view === "tracks"
+                      ? "Tracks"
+                      : "Albums"
+                }
                 value={formatNumber(
-                  chartConfig.request.view === "tracks"
+                  !artistChartActive && chartConfig.request.view === "tracks"
                     ? status?.trackCount
                     : status?.albumCount,
                 )}
@@ -108,13 +163,19 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
               />
               <Metric
                 label="Ranked"
-                value={formatNumber(chartTotal)}
+                value={formatNumber(
+                  artistChartActive ? artistChartResponse?.total : chartTotal,
+                )}
                 tone="amber"
                 icon={BarChart3}
               />
               <Metric
                 label="Showing"
-                value={formatNumber(chartRows)}
+                value={formatNumber(
+                  artistChartActive
+                    ? artistChartResponse?.rows.length ?? 0
+                    : chartRows,
+                )}
                 icon={ListMusic}
               />
               <Metric
@@ -124,6 +185,23 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
               />
             </section>
 
+            {artistChartActive ? (
+              <ArtistChartPanel
+                request={artistChartRequest}
+                response={artistChartResponse}
+                error={artistChartError}
+                isLoading={isArtistChartLoading}
+                genreOptions={genreSuggestionOptions}
+                onRequestGenreOptions={requestGenreSuggestionRefresh}
+                countryOptions={originCountryOptions}
+                countryFlagDisplay={settings.countryFlagDisplay}
+                contentControl={contentControl}
+                onChange={updateArtistChartRequest}
+                onChangeFilters={updateArtistChartFilters}
+                onOpenArtist={openArtistFromMusicMap}
+              />
+            ) : (
+              <>
             <ChartLunaCommandArea
               launch={chartLunaLaunch}
               chartCommand={
@@ -182,31 +260,7 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
                   />
                 </div>
 
-                <div
-                  className="segmented-control chart-content-control"
-                  aria-label="Chart content"
-                >
-                  <button
-                    className={
-                      chartConfig.request.view === "albums" ? "active" : ""
-                    }
-                    type="button"
-                    onClick={() => setChartBrowseView("albums")}
-                  >
-                    <Album size={16} />
-                    <span>Albums</span>
-                  </button>
-                  <button
-                    className={
-                      chartConfig.request.view === "tracks" ? "active" : ""
-                    }
-                    type="button"
-                    onClick={() => setChartBrowseView("tracks")}
-                  >
-                    <ListMusic size={16} />
-                    <span>Tracks</span>
-                  </button>
-                </div>
+                {contentControl}
 
                 <div
                   className="segmented-control chart-display-control"
@@ -974,6 +1028,8 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
                 onOpenGenre={openGenreFromBrowse}
               />
             </section></TransitionRegion>
+              </>
+            )}
           </section>
         );
 }

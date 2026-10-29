@@ -113,6 +113,7 @@ export const commands = {
 	controlActivityJob: (id: number, action: string) => __TAURI_INVOKE<Job[]>("control_activity_job", { id, action }),
 	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse>("search_library", { request }),
 	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse_Serialize>("list_artists", { request }),
+	getArtistChart: (request: ArtistChartRequest) => __TAURI_INVOKE<ArtistChartResponse>("get_artist_chart", { request }),
 	getArtistSplitContext: (artistId: string) => __TAURI_INVOKE<ArtistSplitContext>("get_artist_split_context", { artistId }),
 	splitArtist: (request: SplitArtistRequest) => __TAURI_INVOKE<SplitArtistResult>("split_artist", { request }),
 	getArtistTrackHighlights: (artistId: string) => __TAURI_INVOKE<ArtistTrackHighlights>("get_artist_track_highlights", { artistId }),
@@ -864,6 +865,50 @@ export type ArtistBiography = {
 	cached: boolean,
 	stale: boolean,
 	message: string,
+};
+
+export type ArtistChartRequest = {
+	metric?: string,
+	direction?: BrowseSortDirection,
+	searchText?: string,
+	/**  Genre, year, country and artist-info filters shared with the album and track charts. */
+	filters?: BrowseFilters,
+	/**  Years to leave out. Either bound may be empty for an open-ended exclusion. */
+	excludedYearFrom?: number | null,
+	excludedYearTo?: number | null,
+	/**  Chart sources that make an album "charted": billboard, officialUk, vgLista. */
+	albumChartSources?: string[],
+	/**
+	 *  Chart sources that make a track "charted": billboard, officialUk, vgLista,
+	 *  tiISkuddet, norsktoppen.
+	 */
+	singleChartSources?: string[],
+	minAlbums?: number | null,
+	includeVariousArtists?: boolean,
+	limit?: number,
+	offset?: number,
+};
+
+export type ArtistChartResponse = {
+	metric: string,
+	rows: ArtistChartRow[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type ArtistChartRow = {
+	rank: number,
+	artistKey: string,
+	artistName: string,
+	albumCount: number,
+	trackCount: number,
+	fiveStarTracks: number,
+	lovedTracks: number,
+	chartedAlbums: number,
+	chartedTracks: number,
+	completeAlbums: number,
+	averageAlbumScore: number | null,
 };
 
 export type ArtistChartTrack = {

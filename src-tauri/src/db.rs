@@ -71,6 +71,7 @@ type ProgressApp<'a> = &'a AppHandle;
 type ProgressApp<'a> = &'a ();
 
 mod ai_snapshots;
+mod artist_chart;
 mod artists_genres;
 mod backups;
 mod chart_imports;
@@ -121,6 +122,7 @@ pub(crate) use settings::{save_settings_for_app, settings_for_app};
 // Feature modules keep their original `db::` paths through these re-exports, so
 // command call sites and `crate::db::...` imports are unchanged.
 pub use ai_snapshots::*;
+pub use artist_chart::*;
 use artists_genres::*;
 pub use chart_imports::*;
 pub(crate) use chart_reconcile::*;

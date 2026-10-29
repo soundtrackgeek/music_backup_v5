@@ -216,6 +216,8 @@ import type {
   SmartPlaylistRefreshResult,
   SaveAiSnapshotRequest,
   ArtistListRequest,
+  ArtistChartRequest,
+  ArtistChartResponse,
   ArtistListResponse,
   ArtistTrackHighlights,
   ArtistTrackChartHistory,
@@ -6728,6 +6730,14 @@ export async function listArtists(request: ArtistListRequest): Promise<ArtistLis
   }
 
   return commands.listArtists(request);
+}
+
+export async function getArtistChart(request: ArtistChartRequest): Promise<ArtistChartResponse> {
+  if (!isTauriRuntime()) {
+    return { metric: request.metric, rows: [], total: 0, limit: request.limit, offset: request.offset };
+  }
+
+  return commands.getArtistChart(request);
 }
 
 export async function getArtistTrackHighlights(artistId: string): Promise<ArtistTrackHighlights> {

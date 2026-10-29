@@ -36,6 +36,8 @@ import type {
   AlbumDebutTimelineYear,
   AlbumReview,
   ArtistBiography,
+  ArtistChartResponse,
+  ArtistChartRow,
   ArtistChartTrack,
   ArtistListResponse,
   ArtistLovedTrack,
@@ -293,6 +295,7 @@ import type {
   AiMusicResearchContext as AiMusicResearchContext_Generated,
   AiMusicResearchRequest as AiMusicResearchRequest_Generated,
   AiPlaylistBuildRequest as AiPlaylistBuildRequest_Generated,
+  ArtistChartRequest as ArtistChartRequest_Generated,
   ArtistListRequest as ArtistListRequest_Generated,
   ArtistTimelineRequest as ArtistTimelineRequest_Generated,
   BrowseFilters as BrowseFilters_Generated,
@@ -361,6 +364,8 @@ export type {
   AlbumDebutTimelineYear,
   AlbumReview,
   ArtistBiography,
+  ArtistChartResponse,
+  ArtistChartRow,
   ArtistChartTrack,
   ArtistListResponse,
   ArtistLovedTrack,
@@ -620,6 +625,7 @@ export type AiLibraryAnalysisRequest = Complete<AiLibraryAnalysisRequest_Generat
 export type AiMusicResearchContext = Complete<AiMusicResearchContext_Generated>;
 export type AiMusicResearchRequest = Complete<AiMusicResearchRequest_Generated>;
 export type AiPlaylistBuildRequest = Complete<AiPlaylistBuildRequest_Generated>;
+export type ArtistChartRequest = Complete<ArtistChartRequest_Generated>;
 export type ArtistListRequest = Complete<ArtistListRequest_Generated>;
 export type ArtistTimelineRequest = Complete<ArtistTimelineRequest_Generated>;
 export type BrowseFilters = Complete<BrowseFilters_Generated>;

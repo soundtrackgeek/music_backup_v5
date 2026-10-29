@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.204.0] - 2026-10-29
+
+### Added
+- **Artist charts**: the Charts page now has an **Artists** option beside Albums and Tracks. It ranks artists by most albums, most tracks, most 5 star tracks, most loved tracks, most charted albums, most charted tracks, most albums with a 100% rating completeness, or highest average album score, in either direction. Albums are credited to their Album Artist; tracks (track counts, 5 star, loved and charted tracks) are credited to the track's own Artist, so singles on compilations count for the performer. The table shows every measure for each artist, with the ranked column highlighted, and an artist's name opens the Artists page.
+- The artist chart filters on genres and excluded genres, a year range and an excluded year range, origin countries and excluded origin countries, artist type, gender, and born, died, founded and dissolved year ranges. Artist name search, a minimum album count (useful for average album score) and an optional Various Artists row are also available.
+- **Chart sources are selectable for charted counts**: charted albums count Billboard, UK and VG Lista by default, and charted tracks count Billboard, UK, VG Lista, Ti i Skuddet and Norsktoppen by default. Tick or untick any source under Advanced chart controls.
+- A `get_artist_chart` command that groups albums and tracks per artist, reusing the album and track chart filters, with backend tests for every ranking, the chart-source selection, the include and exclude filters and paging, and tests for the Artists panel.
+
 ## [0.203.3] - 2026-10-28
 
 ### Fixed

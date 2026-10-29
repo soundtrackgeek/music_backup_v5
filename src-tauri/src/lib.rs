@@ -2069,6 +2069,19 @@ async fn list_artists(
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+async fn get_artist_chart(
+    app: AppHandle,
+    request: db::ArtistChartRequest,
+) -> Result<db::ArtistChartResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || db::artist_chart_for_app(&app, request))
+        .await
+        .map_err(|error| format!("Artist chart task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 async fn get_artist_track_highlights(
     app: AppHandle,
     artist_id: String,

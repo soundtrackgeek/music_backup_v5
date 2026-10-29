@@ -12,6 +12,7 @@ import {
   chartCompletenessRange
 } from "../../app/requests";
 import {
+  getArtistChart,
   searchLibrary,
   saveChart,
   deleteSavedChart,
@@ -21,7 +22,8 @@ import {
   type ChartConfig,
   type BrowseFilters,
   type BrowseSort,
-  type BrowseView
+  type BrowseView,
+  type ArtistChartRequest
 } from "../../types";
 import {
   type ChartTemplate
@@ -33,18 +35,19 @@ import {
   countAdvancedChartControls,
   countChartSourceFilters
 } from "../../app/chartProgressive";
+import { createArtistChartRequest } from "../../app/artistChart";
 import type { WorkspaceStores } from "../../app/WorkspaceStoresProvider";
 
-type Inputs = Pick<WorkspaceStores, "chartConfig" | "activeSection" | "setIsChartLoading" | "setChartError" | "setChartResponse" | "catalogRefreshKey" | "setChartConfig" | "setChartExportResult" | "setChartTableSort" | "chartName" | "setSavedCharts" | "setChartName" | "chartResponse">;
+type Inputs = Pick<WorkspaceStores, "chartConfig" | "activeSection" | "setIsChartLoading" | "setChartError" | "setChartResponse" | "catalogRefreshKey" | "setChartConfig" | "setChartExportResult" | "setChartTableSort" | "chartName" | "setSavedCharts" | "setChartName" | "chartResponse" | "artistChartActive" | "setArtistChartActive" | "artistChartRequest" | "setArtistChartRequest" | "setArtistChartResponse" | "setArtistChartError" | "setIsArtistChartLoading">;
 
-export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoading, setChartError, setChartResponse, catalogRefreshKey, setChartConfig, setChartExportResult, setChartTableSort, chartName, setSavedCharts, setChartName, chartResponse }: Inputs) {
+export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoading, setChartError, setChartResponse, catalogRefreshKey, setChartConfig, setChartExportResult, setChartTableSort, chartName, setSavedCharts, setChartName, chartResponse, artistChartActive, setArtistChartActive, artistChartRequest, setArtistChartRequest, setArtistChartResponse, setArtistChartError, setIsArtistChartLoading }: Inputs) {
   const chartRequest = useMemo(
     () => chartRequestFromConfig(chartConfig),
     [chartConfig],
   );
 
   useEffect(() => {
-    if (activeSection !== "Charts") {
+    if (activeSection !== "Charts" || artistChartActive) {
       return;
     }
 
@@ -79,7 +82,61 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, catalogRefreshKey, chartRequest]);
+  }, [activeSection, catalogRefreshKey, chartRequest, artistChartActive]);
+
+  useEffect(() => {
+    if (activeSection !== "Charts" || !artistChartActive) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsArtistChartLoading(true);
+      setArtistChartError(null);
+      void getArtistChart(artistChartRequest)
+        .then((nextResponse) => {
+          if (!cancelled) {
+            setArtistChartResponse(nextResponse);
+          }
+        })
+        .catch((chartError) => {
+          if (!cancelled) {
+            setArtistChartError(
+              chartError instanceof Error
+                ? chartError.message
+                : String(chartError),
+            );
+            setArtistChartResponse(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsArtistChartLoading(false);
+          }
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeSection, catalogRefreshKey, artistChartRequest, artistChartActive]);
+
+  function updateArtistChartRequest(values: Partial<ArtistChartRequest>) {
+    setArtistChartRequest((previous) => ({ ...previous, ...values, offset: 0 }));
+  }
+
+  function updateArtistChartFilters(values: Partial<BrowseFilters>) {
+    setArtistChartRequest((previous) => ({
+      ...previous,
+      filters: { ...previous.filters, ...values },
+      offset: 0,
+    }));
+  }
+
+  function resetArtistChart() {
+    setArtistChartRequest(createArtistChartRequest());
+  }
 
   function updateChartConfig(values: Partial<ChartConfig>) {
     setChartConfig((previous) => {
@@ -176,6 +233,7 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
   }
 
   function setChartBrowseView(view: BrowseView) {
+    setArtistChartActive(false);
     setChartConfig((previous) => ({
       ...createChartConfig(view),
       viewMode: previous.viewMode,
@@ -200,5 +258,5 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
     countAdvancedChartControls(chartConfig);
 
   const chartSourceFilterCount = countChartSourceFilters(chartConfig);
-  return { chartRequest, updateChartConfig, updateChartFilters, sortChartBy, toggleChartColumn, applyChartTemplate, saveCurrentChart, removeSavedChart, runChartExport, setChartBrowseView, chartTotal, chartRows, currentChartGridCoverSize, currentChartCompletenessRange, advancedChartControlCount, chartSourceFilterCount };
+  return { updateArtistChartRequest, updateArtistChartFilters, resetArtistChart, chartRequest, updateChartConfig, updateChartFilters, sortChartBy, toggleChartColumn, applyChartTemplate, saveCurrentChart, removeSavedChart, runChartExport, setChartBrowseView, chartTotal, chartRows, currentChartGridCoverSize, currentChartCompletenessRange, advancedChartControlCount, chartSourceFilterCount };
 }
