@@ -50,6 +50,13 @@ pub struct ArtistChartRequest {
     pub single_chart_sources: Vec<String>,
     #[serde(default)]
     pub min_albums: Option<i64>,
+    /// Percent of an album's tracks that must be rated for the album to count as
+    /// "rated" in the rated-albums measure (default 100).
+    #[serde(default)]
+    pub rated_threshold_percent: Option<f64>,
+    /// Hide artists with fewer rated albums than this.
+    #[serde(default)]
+    pub min_complete_albums: Option<i64>,
     #[serde(default)]
     pub include_various_artists: bool,
     #[serde(default = "default_artist_chart_limit")]
@@ -70,6 +77,8 @@ impl Default for ArtistChartRequest {
             album_chart_sources: default_album_chart_sources(),
             single_chart_sources: default_single_chart_sources(),
             min_albums: None,
+            rated_threshold_percent: None,
+            min_complete_albums: None,
             include_various_artists: false,
             limit: default_artist_chart_limit(),
             offset: 0,
@@ -177,6 +186,15 @@ pub(crate) fn artist_chart(
         request.excluded_year_to,
     );
 
+    // Inlined (not bound) so the SELECT-list placeholder order stays unchanged; the
+    // value is a clamped f64, never user text. The epsilon absorbs float rounding.
+    let rated_threshold = request
+        .rated_threshold_percent
+        .filter(|value| value.is_finite())
+        .unwrap_or(100.0)
+        .clamp(1.0, 100.0)
+        / 100.0
+        - 1e-9;
     let album_key = catalog_artist_key_sql("a.album_artist_display");
     let track_artist = "COALESCE(NULLIF(TRIM(t.display_artist), ''), t.album_artist_display)";
     let track_key = artist_key_sql(track_artist);
@@ -212,7 +230,7 @@ pub(crate) fn artist_chart(
                 {album_key} AS artist_key,
                 COALESCE(MIN(NULLIF(TRIM(a.album_artist_display), '')), 'Unknown Artist') AS artist_name,
                 COUNT(*) AS album_count,
-                SUM(CASE WHEN a.rating_completeness >= 1.0 THEN 1 ELSE 0 END) AS complete_albums,
+                SUM(CASE WHEN a.rating_completeness >= {rated_threshold:.9} THEN 1 ELSE 0 END) AS complete_albums,
                 SUM(CASE WHEN {album_charted} THEN 1 ELSE 0 END) AS charted_albums,
                 AVG(a.album_score) AS average_album_score
             {album_from} {album_where}
@@ -262,6 +280,10 @@ pub(crate) fn artist_chart(
         outer_conditions.push("album_count >= ?".to_string());
         outer_values.push(Value::Integer(min_albums));
     }
+    if let Some(min_complete) = request.min_complete_albums.filter(|value| *value > 0) {
+        outer_conditions.push("complete_albums >= ?".to_string());
+        outer_values.push(Value::Integer(min_complete));
+    }
     if !request.include_various_artists {
         outer_conditions.push(
             "LOWER(TRIM(artist_name)) NOT IN ('various artists', 'various', 'va', 'v.a.')"
@@ -277,14 +299,6 @@ pub(crate) fn artist_chart(
     let mut count_values = album_values.clone();
     count_values.extend(track_values.iter().cloned());
     count_values.extend(outer_values.iter().cloned());
-    let total: i64 = conn
-        .query_row(
-            &format!("{cte} SELECT COUNT(*) FROM combined {outer_where}"),
-            params_from_iter(count_values.iter()),
-            |row| row.get(0),
-        )
-        .context("Could not count artist chart results")?;
-
     let mut row_values = album_values;
     row_values.extend(track_values);
     row_values.extend(outer_values);
@@ -295,7 +309,7 @@ pub(crate) fn artist_chart(
         SELECT
             artist_key, artist_name, album_count, track_count, five_star_tracks,
             loved_tracks, charted_albums, charted_tracks, complete_albums,
-            average_album_score
+            average_album_score, COUNT(*) OVER () AS total_rows
         FROM combined {outer_where}
         ORDER BY ({order_column} IS NULL), {order_column} {direction},
             album_count DESC, track_count DESC, artist_name COLLATE NOCASE ASC
@@ -303,9 +317,13 @@ pub(crate) fn artist_chart(
     );
     let mut stmt = conn.prepare(&sql)?;
     let mut position = i64::from(offset);
+    // The window COUNT rides along with the page, so the aggregation runs once
+    // instead of once for the page and again for the total.
+    let mut total: Option<i64> = None;
     let rows = stmt
         .query_map(params_from_iter(row_values.iter()), |row| {
             position += 1;
+            total = Some(row.get(10)?);
             Ok(ArtistChartRow {
                 rank: position,
                 artist_key: row.get(0)?,
@@ -322,6 +340,19 @@ pub(crate) fn artist_chart(
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load artist chart results")?;
+
+    // A page past the end has no rows to carry the total, so count separately.
+    let total = match total {
+        Some(total) => total,
+        None if offset == 0 => 0,
+        None => conn
+            .query_row(
+                &format!("{cte} SELECT COUNT(*) FROM combined {outer_where}"),
+                params_from_iter(count_values.iter()),
+                |row| row.get(0),
+            )
+            .context("Could not count artist chart results")?,
+    };
 
     Ok(ArtistChartResponse {
         metric,
@@ -505,6 +536,41 @@ mod tests {
         let filtered = artist_chart(&conn, minimum, 500).unwrap();
         assert_eq!(names(&filtered), vec!["Alpha"]);
         assert_eq!(filtered.total, 1);
+    }
+
+    #[test]
+    fn minimum_complete_albums_hides_artists_below_the_threshold() {
+        let conn = artist_chart_connection();
+        let mut any = request("completeAlbums");
+        any.min_complete_albums = Some(1);
+        let kept = artist_chart(&conn, any, 500).unwrap();
+        assert!(kept.rows.iter().all(|row| row.complete_albums >= 1));
+        assert_eq!(kept.total as usize, kept.rows.len());
+
+        let mut impossible = request("completeAlbums");
+        impossible.min_complete_albums = Some(1000);
+        let none = artist_chart(&conn, impossible, 500).unwrap();
+        assert!(none.rows.is_empty());
+        assert_eq!(none.total, 0);
+    }
+
+    #[test]
+    fn rated_threshold_changes_what_counts_as_a_rated_album() {
+        let conn = artist_chart_connection();
+        let strict = artist_chart(&conn, request("completeAlbums"), 500).unwrap();
+        assert_eq!(row(&strict, "Alpha").complete_albums, 1);
+
+        // Alpha's other album is 50% rated, so a 50% threshold counts both albums.
+        let mut loose = request("completeAlbums");
+        loose.rated_threshold_percent = Some(50.0);
+        let loose = artist_chart(&conn, loose, 500).unwrap();
+        assert_eq!(row(&loose, "Alpha").complete_albums, 2);
+
+        let mut minimum = request("completeAlbums");
+        minimum.rated_threshold_percent = Some(50.0);
+        minimum.min_complete_albums = Some(2);
+        let filtered = artist_chart(&conn, minimum, 500).unwrap();
+        assert_eq!(names(&filtered), vec!["Alpha"]);
     }
 
     #[test]

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { FileSearch, Search, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, FileSearch, Search, Users } from "lucide-react";
 import {
   albumChartSourceOptions,
   artistChartMetricLabel,
   artistChartMetricOptions,
   countArtistChartFilters,
+  ratedAlbumsLabel,
   singleChartSourceOptions,
 } from "../../app/artistChart";
 import { artistGenderOptions, artistTypeOptions } from "../../app/config";
@@ -227,6 +228,21 @@ export function ArtistChartPanel({
               min={1}
               onChange={(minAlbums) => onChange({ minAlbums })}
             />
+            <NumberField
+              label="Rated album threshold (%)"
+              value={request.ratedThresholdPercent}
+              min={1}
+              max={100}
+              onChange={(ratedThresholdPercent) =>
+                onChange({ ratedThresholdPercent })
+              }
+            />
+            <NumberField
+              label="Minimum rated albums"
+              value={request.minCompleteAlbums}
+              min={1}
+              onChange={(minCompleteAlbums) => onChange({ minCompleteAlbums })}
+            />
             <CountryListCriterion
               label="Origin countries"
               values={filters.originCountryCodes}
@@ -387,8 +403,42 @@ export function ArtistChartPanel({
                         scope="col"
                         key={column.metric}
                         className={column.metric === metric ? "active" : ""}
+                        aria-sort={
+                          column.metric !== metric
+                            ? "none"
+                            : request.direction === "asc"
+                              ? "ascending"
+                              : "descending"
+                        }
                       >
-                        {column.label}
+                        <button
+                          type="button"
+                          className="artist-chart-sort"
+                          title={`Sort by ${column.label}`}
+                          onClick={() =>
+                            onChange(
+                              column.metric === metric
+                                ? {
+                                    direction:
+                                      request.direction === "asc"
+                                        ? "desc"
+                                        : "asc",
+                                  }
+                                : { metric: column.metric, direction: "desc" },
+                            )
+                          }
+                        >
+                          {column.metric === "completeAlbums"
+                            ? ratedAlbumsLabel(request)
+                            : column.label}
+                          {column.metric === metric ? (
+                            request.direction === "asc" ? (
+                              <ArrowUp size={12} />
+                            ) : (
+                              <ArrowDown size={12} />
+                            )
+                          ) : null}
+                        </button>
                       </th>
                     ))}
                   </tr>

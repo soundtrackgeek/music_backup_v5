@@ -98,6 +98,19 @@ describe("ArtistChartPanel", () => {
     });
   });
 
+  it("sorts by a column header and flips the direction on the active one", () => {
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Loved" }));
+    expect(props.onChange).toHaveBeenCalledWith({
+      metric: "lovedTracks",
+      direction: "desc",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Albums" }));
+    expect(props.onChange).toHaveBeenCalledWith({ direction: "asc" });
+  });
+
   it("explains an empty chart", () => {
     renderPanel({ response: { ...response, rows: [], total: 0 } });
     expect(screen.getByText("No ranked artists.")).toBeTruthy();

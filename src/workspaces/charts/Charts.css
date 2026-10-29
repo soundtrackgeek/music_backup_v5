@@ -177,7 +177,7 @@
 }
 
 .chart-builder .chart-content-control {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .chart-options {
@@ -471,4 +471,31 @@
 .artist-chart-table td.active {
   color: #182320;
   font-weight: 700;
+}
+
+:root[data-theme="dark"] .artist-chart-table th.active,
+:root[data-theme="dark"] .artist-chart-table td.active {
+  color: #e8f1ee;
+}
+
+.artist-chart-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.artist-chart-sort:hover,
+.artist-chart-sort:focus-visible {
+  color: #0b625c;
+}
+
+:root[data-theme="dark"] .artist-chart-sort:hover,
+:root[data-theme="dark"] .artist-chart-sort:focus-visible {
+  color: #7fd8c6;
 }

@@ -884,6 +884,13 @@ export type ArtistChartRequest = {
 	 */
 	singleChartSources?: string[],
 	minAlbums?: number | null,
+	/**
+	 *  Percent of an album's tracks that must be rated for the album to count as
+	 *  "rated" in the rated-albums measure (default 100).
+	 */
+	ratedThresholdPercent?: number | null,
+	/**  Hide artists with fewer rated albums than this. */
+	minCompleteAlbums?: number | null,
 	includeVariousArtists?: boolean,
 	limit?: number,
 	offset?: number,

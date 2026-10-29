@@ -1,6 +1,7 @@
 import {
+  useEffect,
   useMemo,
-  useEffect
+  useRef
 } from "react";
 import {
   chartRequestFromConfig,
@@ -84,6 +85,8 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
     };
   }, [activeSection, catalogRefreshKey, chartRequest, artistChartActive]);
 
+  const artistChartQueue = useRef<Promise<unknown>>(Promise.resolve());
+
   useEffect(() => {
     if (activeSection !== "Charts" || !artistChartActive) {
       return;
@@ -91,9 +94,16 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      setIsArtistChartLoading(true);
-      setArtistChartError(null);
-      void getArtistChart(artistChartRequest)
+      // Run one artist chart query at a time. A running query cannot be cancelled in
+      // the backend, so toggling several chart sources quickly would otherwise occupy
+      // every catalog reader at once; superseded requests are skipped before starting.
+      artistChartQueue.current = artistChartQueue.current.then(() => {
+        if (cancelled) {
+          return;
+        }
+        setIsArtistChartLoading(true);
+        setArtistChartError(null);
+        return getArtistChart(artistChartRequest)
         .then((nextResponse) => {
           if (!cancelled) {
             setArtistChartResponse(nextResponse);
@@ -114,7 +124,8 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
             setIsArtistChartLoading(false);
           }
         });
-    }, 160);
+      });
+    }, 300);
 
     return () => {
       cancelled = true;

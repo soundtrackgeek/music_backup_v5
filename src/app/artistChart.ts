@@ -26,6 +26,10 @@ export const singleChartSourceOptions = [
   { value: "norsktoppen", label: "Norsktoppen" },
 ];
 
+export function ratedAlbumsLabel(request: { ratedThresholdPercent: number | null }) {
+  return `${request.ratedThresholdPercent ?? 100}% rated`;
+}
+
 export function artistChartMetricLabel(metric: string) {
   return (
     artistChartMetricOptions.find((option) => option.value === metric)?.label ??
@@ -44,6 +48,8 @@ export function createArtistChartRequest(): ArtistChartRequest {
     albumChartSources: albumChartSourceOptions.map((option) => option.value),
     singleChartSources: singleChartSourceOptions.map((option) => option.value),
     minAlbums: null,
+    ratedThresholdPercent: null,
+    minCompleteAlbums: null,
     includeVariousArtists: false,
     limit: 100,
     offset: 0,
@@ -73,6 +79,8 @@ export function countArtistChartFilters(request: ArtistChartRequest) {
     filters.artistDied,
     filters.artistDissolved,
     request.minAlbums != null,
+    request.minCompleteAlbums != null,
+    request.ratedThresholdPercent != null,
     request.includeVariousArtists,
     !sameSources(request.albumChartSources, defaults.albumChartSources),
     !sameSources(request.singleChartSources, defaults.singleChartSources),

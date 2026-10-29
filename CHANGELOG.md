@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.204.2] - 2026-10-29
+
+### Fixed
+- **The Artists chart's ranked column is readable in the dark theme**: the highlighted column (Albums by default) used a near-black text colour on the dark background, so its numbers were invisible.
+- **Toggling chart sources no longer shows "Catalog connections are busy"**: every tick of a source started another artist ranking query that could not be cancelled, so a few quick clicks used up all catalog readers. The Artists chart now runs one query at a time and skips superseded ones, and it counts results in the same pass as the page instead of aggregating twice.
+- **The Artists button now sits inside the Albums / Tracks / Artists switch** instead of wrapping below it.
+
+### Changed
+- **Flexible rated-album threshold and minimum**: under Advanced chart controls, **Rated album threshold (%)** sets how much of an album must be rated to count (default 100, so 85 counts albums that are at least 85% rated) and **Minimum rated albums** hides artists with fewer such albums. The ranking column is labelled with the chosen percentage, for example "85% rated".
+- **Artist chart columns are sortable**: click any column header (Albums, Tracks, 5★ tracks, Loved, Charted albums, Charted tracks, 100% rated, Avg score) to rank by it, and click the active header again to flip the direction. An arrow marks the sorted column. The Ranking and Direction selects still work and stay in sync.
+
 ## [0.204.1] - 2026-10-29
 
 ### Fixed
