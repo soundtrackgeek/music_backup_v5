@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ListeningHistory } from "./ListeningHistory";
 import {
@@ -88,12 +88,17 @@ it("saves an account before syncing and reports the sync summary", async () => {
     message: "ListenBrainz: 8 new plays, 2 already known.",
   });
   render(<ListeningHistory onOpenAlbum={vi.fn()} />);
-  const name = await screen.findByLabelText("ListenBrainz user name");
-  fireEvent.change(name, { target: { value: "brainz" } });
-  const card = screen.getByRole("article", { name: "ListenBrainz listening source" });
-  const syncButton = () => card.querySelector<HTMLButtonElement>(".primary-button")!;
+  await screen.findByLabelText("ListenBrainz user name");
+  const card = () => screen.getByRole("article", { name: "ListenBrainz listening source" });
+  const syncButton = () => card().querySelector<HTMLButtonElement>(".primary-button")!;
+  const saveButton = () => within(card()).getByRole("button", { name: "Save" });
+  // A slow runner can re-render the card after the first edit, so type until Save is enabled.
+  await waitFor(() => {
+    fireEvent.change(screen.getByLabelText("ListenBrainz user name"), { target: { value: "brainz" } });
+    expect(saveButton()).toBeEnabled();
+  });
   expect(syncButton()).toBeDisabled();
-  fireEvent.click(screen.getAllByRole("button", { name: "Save" })[1]);
+  fireEvent.click(saveButton());
   await waitFor(() =>
     expect(configureListeningSource).toHaveBeenCalledWith({ source: "listenbrainz", username: "brainz", token: null, clearToken: false }),
   );

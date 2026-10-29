@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.204.1] - 2026-10-29
+
+### Fixed
+- **The 0.204.0 release build no longer fails on a timing-sensitive test**: the Listening history test that saves a ListenBrainz account clicked Save before a slow runner had settled the card, so nothing was saved and the Windows verification gate failed. The test now types the user name until Save is enabled. No app behaviour changed, and 0.204.0 never published.
+
 ## [0.204.0] - 2026-10-29
 
 ### Added
