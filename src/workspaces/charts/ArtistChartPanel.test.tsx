@@ -163,6 +163,8 @@ describe("countArtistChartFilters", () => {
     request.excludedYearFrom = 1980;
     request.albumChartSources = ["billboard"];
     request.includeVariousArtists = true;
-    expect(countArtistChartFilters(request)).toBe(4);
+    request.maxAlbums = 3;
+    request.maxCompleteAlbums = 0;
+    expect(countArtistChartFilters(request)).toBe(6);
   });
 });

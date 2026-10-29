@@ -54,6 +54,8 @@ pub struct ArtistChartRequest {
     pub published_chart_sources: Vec<String>,
     #[serde(default)]
     pub min_albums: Option<i64>,
+    #[serde(default)]
+    pub max_albums: Option<i64>,
     /// Percent of an album's tracks that must be rated for the album to count as
     /// "rated" in the rated-albums measure (default 100).
     #[serde(default)]
@@ -61,6 +63,9 @@ pub struct ArtistChartRequest {
     /// Hide artists with fewer rated albums than this.
     #[serde(default)]
     pub min_complete_albums: Option<i64>,
+    /// Hide artists with more rated albums than this.
+    #[serde(default)]
+    pub max_complete_albums: Option<i64>,
     #[serde(default)]
     pub include_various_artists: bool,
     #[serde(default = "default_artist_chart_limit")]
@@ -82,8 +87,10 @@ impl Default for ArtistChartRequest {
             single_chart_sources: default_single_chart_sources(),
             published_chart_sources: Vec::new(),
             min_albums: None,
+            max_albums: None,
             rated_threshold_percent: None,
             min_complete_albums: None,
+            max_complete_albums: None,
             include_various_artists: false,
             limit: default_artist_chart_limit(),
             offset: 0,
@@ -298,6 +305,14 @@ pub(crate) fn artist_chart(
     if let Some(min_albums) = request.min_albums.filter(|value| *value > 0) {
         outer_conditions.push("album_count >= ?".to_string());
         outer_values.push(Value::Integer(min_albums));
+    }
+    if let Some(max_albums) = request.max_albums.filter(|value| *value >= 0) {
+        outer_conditions.push("album_count <= ?".to_string());
+        outer_values.push(Value::Integer(max_albums));
+    }
+    if let Some(max_complete) = request.max_complete_albums.filter(|value| *value >= 0) {
+        outer_conditions.push("complete_albums <= ?".to_string());
+        outer_values.push(Value::Integer(max_complete));
     }
     if let Some(min_complete) = request.min_complete_albums.filter(|value| *value > 0) {
         outer_conditions.push("complete_albums >= ?".to_string());
@@ -604,6 +619,30 @@ mod tests {
         other_chart.published_chart_sources = vec!["Modern Rock Tracks".to_string()];
         let none = artist_chart(&conn, other_chart, 500).unwrap();
         assert_eq!(row(&none, "Alpha").charted_tracks, 1);
+    }
+
+    #[test]
+    fn maximum_albums_and_rated_albums_hide_artists_above_the_limit() {
+        let conn = artist_chart_connection();
+        // Alpha has two albums; the seeded Pet Shop Boys and Zulu have one each.
+        let mut few = request("albums");
+        few.max_albums = Some(1);
+        let few = artist_chart(&conn, few, 500).unwrap();
+        assert!(names(&few).contains(&"Zulu"));
+        assert!(!names(&few).contains(&"Alpha"));
+        assert!(few.rows.iter().all(|row| row.album_count <= 1));
+
+        let mut range = request("albums");
+        range.min_albums = Some(2);
+        range.max_albums = Some(2);
+        assert_eq!(names(&artist_chart(&conn, range, 500).unwrap()), vec!["Alpha"]);
+
+        let mut none = request("completeAlbums");
+        none.max_complete_albums = Some(0);
+        let none = artist_chart(&conn, none, 500).unwrap();
+        assert!(none.rows.iter().all(|row| row.complete_albums == 0));
+        assert!(!names(&none).contains(&"Alpha"));
+        assert_eq!(none.total as usize, none.rows.len());
     }
 
     #[test]

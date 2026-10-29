@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.206.0] - 2026-10-29
+
+### Added
+- **Maximum albums and maximum rated albums on the Artists chart**: under Advanced chart controls, **Maximum albums** and **Maximum rated albums** hide artists with more albums, or more albums at or above the rated threshold, than the number entered. Together with the existing minimums they select a range, for example artists with 1 to 3 albums, or artists with no fully rated album yet (maximum 0).
+
 ## [0.205.0] - 2026-10-29
 
 ### Added

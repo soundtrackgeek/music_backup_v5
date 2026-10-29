@@ -889,6 +889,7 @@ export type ArtistChartRequest = {
 	 */
 	publishedChartSources?: string[],
 	minAlbums?: number | null,
+	maxAlbums?: number | null,
 	/**
 	 *  Percent of an album's tracks that must be rated for the album to count as
 	 *  "rated" in the rated-albums measure (default 100).
@@ -896,6 +897,8 @@ export type ArtistChartRequest = {
 	ratedThresholdPercent?: number | null,
 	/**  Hide artists with fewer rated albums than this. */
 	minCompleteAlbums?: number | null,
+	/**  Hide artists with more rated albums than this. */
+	maxCompleteAlbums?: number | null,
 	includeVariousArtists?: boolean,
 	limit?: number,
 	offset?: number,

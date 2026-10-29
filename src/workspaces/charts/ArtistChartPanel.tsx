@@ -290,6 +290,12 @@ export function ArtistChartPanel({
               onChange={(minAlbums) => onChange({ minAlbums })}
             />
             <NumberField
+              label="Maximum albums"
+              value={request.maxAlbums}
+              min={0}
+              onChange={(maxAlbums) => onChange({ maxAlbums })}
+            />
+            <NumberField
               label="Rated album threshold (%)"
               value={request.ratedThresholdPercent}
               min={1}
@@ -303,6 +309,12 @@ export function ArtistChartPanel({
               value={request.minCompleteAlbums}
               min={1}
               onChange={(minCompleteAlbums) => onChange({ minCompleteAlbums })}
+            />
+            <NumberField
+              label="Maximum rated albums"
+              value={request.maxCompleteAlbums}
+              min={0}
+              onChange={(maxCompleteAlbums) => onChange({ maxCompleteAlbums })}
             />
             <CountryListCriterion
               label="Origin countries"
