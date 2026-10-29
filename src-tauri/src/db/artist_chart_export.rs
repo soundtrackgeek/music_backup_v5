@@ -1,6 +1,8 @@
 //! Export of the Artists chart. It runs the same query as the on-screen table, with
 //! the page size lifted, so the file matches the current ranking, sort and filters.
 
+#[cfg(not(test))]
+use super::exports::record_export;
 use super::exports::write_table_file;
 use super::*;
 use serde::{Deserialize, Serialize};
@@ -99,21 +101,15 @@ pub fn export_artist_chart_for_app(
 
     let request_json =
         serde_json::to_string(&request).context("Could not serialize export query")?;
-    conn.execute(
-        "
-        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        ",
-        params![
-            Utc::now().to_rfc3339(),
-            "artists",
-            &format,
-            response.rows.len() as i64,
-            path.display().to_string(),
-            request_json
-        ],
-    )
-    .context("Could not record export")?;
+    drop(conn);
+    record_export(
+        app,
+        "artists",
+        &format,
+        response.rows.len(),
+        &path,
+        &request_json,
+    )?;
 
     Ok(ExportResult {
         path: path.display().to_string(),
@@ -165,6 +161,40 @@ mod tests {
         let (_, values) =
             artist_export_table(&ArtistChartRequest::default(), &[row(1, "Alpha", None)]);
         assert_eq!(values[0][9], "100");
+    }
+
+    #[test]
+    fn export_log_needs_a_writer_connection() {
+        use super::super::exports::insert_export_record;
+
+        let dir = std::env::temp_dir().join(format!("artist-export-log-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("catalog.sqlite3");
+        let writer = Connection::open(&db_path).unwrap();
+        writer
+            .execute_batch(
+                "CREATE TABLE exports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+                    view TEXT NOT NULL, format TEXT NOT NULL, row_count INTEGER NOT NULL,
+                    path TEXT NOT NULL, request_json TEXT NOT NULL);",
+            )
+            .unwrap();
+        let reader = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+        let file = dir.join("artists.xlsx");
+
+        assert!(insert_export_record(&reader, "artists", "xlsx", 3, &file, "{}").is_err());
+        insert_export_record(&writer, "artists", "xlsx", 3, &file, "{}").unwrap();
+        let logged: i64 = writer
+            .query_row("SELECT row_count FROM exports WHERE view = 'artists'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        drop(reader);
+        drop(writer);
+        fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(logged, 3);
     }
 
     #[test]

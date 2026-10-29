@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.208.2] - 2026-10-29
+
+### Fixed
+- **Chart Library exports work again**: exporting from the Albums, Tracks or Artists chart wrote the file but then stopped with "Export failed: Could not record export", because the export log was written through a read-only database connection. The log entry now goes through a writable connection, so the export finishes and reports its file.
+
 ## [0.208.1] - 2026-10-29
 
 ### Fixed

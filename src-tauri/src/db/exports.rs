@@ -40,21 +40,15 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
 
     let request_json =
         serde_json::to_string(&request).context("Could not serialize export query")?;
-    conn.execute(
-        "
-        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        ",
-        params![
-            Utc::now().to_rfc3339(),
-            normalize_view(&request.view),
-            &format,
-            response.rows.len() as i64,
-            path.display().to_string(),
-            request_json
-        ],
-    )
-    .context("Could not record export")?;
+    drop(conn);
+    record_export(
+        app,
+        &normalize_view(&request.view),
+        &format,
+        response.rows.len(),
+        &path,
+        &request_json,
+    )?;
 
     Ok(ExportResult {
         path: path.display().to_string(),
@@ -120,6 +114,47 @@ pub fn export_music_tool_issues_for_app(
         format,
         row_count: response.rows.len(),
     })
+}
+
+/// Logs a finished export. Exports read the catalog through a read-only pooled
+/// connection, so the log row goes through a writer connection instead.
+#[cfg(not(test))]
+pub(super) fn record_export(
+    app: &AppHandle,
+    view: &str,
+    format: &str,
+    row_count: usize,
+    path: &Path,
+    request_json: &str,
+) -> Result<()> {
+    let (conn, _) = open(app)?;
+    insert_export_record(&conn, view, format, row_count, path, request_json)
+}
+
+pub(super) fn insert_export_record(
+    conn: &Connection,
+    view: &str,
+    format: &str,
+    row_count: usize,
+    path: &Path,
+    request_json: &str,
+) -> Result<()> {
+    conn.execute(
+        "
+        INSERT INTO exports (created_at, view, format, row_count, path, request_json)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ",
+        params![
+            Utc::now().to_rfc3339(),
+            view,
+            format,
+            row_count as i64,
+            path.display().to_string(),
+            request_json
+        ],
+    )
+    .context("Could not record export")?;
+    Ok(())
 }
 
 pub(crate) fn safe_file_segment(value: &str) -> String {
