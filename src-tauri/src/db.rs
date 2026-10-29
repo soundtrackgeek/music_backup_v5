@@ -72,6 +72,7 @@ type ProgressApp<'a> = &'a ();
 
 mod ai_snapshots;
 mod artist_chart;
+mod artist_chart_export;
 mod artist_chart_published;
 mod artists_genres;
 mod backups;
@@ -124,6 +125,7 @@ pub(crate) use settings::{save_settings_for_app, settings_for_app};
 // command call sites and `crate::db::...` imports are unchanged.
 pub use ai_snapshots::*;
 pub use artist_chart::*;
+pub use artist_chart_export::*;
 use artists_genres::*;
 pub use chart_imports::*;
 pub(crate) use chart_reconcile::*;

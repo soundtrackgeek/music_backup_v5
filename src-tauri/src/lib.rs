@@ -2267,6 +2267,19 @@ async fn delete_saved_chart(app: AppHandle, id: i64) -> Result<(), String> {
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
+async fn export_artist_chart(
+    app: AppHandle,
+    input: db::ArtistChartExportRequest,
+) -> Result<ExportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || db::export_artist_chart_for_app(&app, input))
+        .await
+        .map_err(|error| format!("Export task failed: {error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
 async fn export_search(app: AppHandle, input: ExportSearchRequest) -> Result<ExportResult, String> {
     tauri::async_runtime::spawn_blocking(move || db::export_search_for_app(&app, input))
         .await

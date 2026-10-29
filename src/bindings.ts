@@ -125,6 +125,7 @@ export const commands = {
 	saveChart: (input: SaveChartRequest_Deserialize) => __TAURI_INVOKE<SavedChart_Serialize>("save_chart", { input }),
 	deleteSavedChart: (id: number) => __TAURI_INVOKE<null>("delete_saved_chart", { id }),
 	exportSearch: (input: ExportSearchRequest) => __TAURI_INVOKE<ExportResult>("export_search", { input }),
+	exportArtistChart: (input: ArtistChartExportRequest) => __TAURI_INVOKE<ExportResult>("export_artist_chart", { input }),
 	exportMusicToolIssues: (input: ExportMusicToolRequest) => __TAURI_INVOKE<ExportResult>("export_music_tool_issues", { input }),
 	listMusicTools: () => __TAURI_INVOKE<MusicToolSummary[]>("list_music_tools"),
 	listMusicToolIssues: (request: MusicToolIssueRequest) => __TAURI_INVOKE<MusicToolIssueResponse>("list_music_tool_issues", { request }),
@@ -865,6 +866,11 @@ export type ArtistBiography = {
 	cached: boolean,
 	stale: boolean,
 	message: string,
+};
+
+export type ArtistChartExportRequest = {
+	request: ArtistChartRequest,
+	format: string,
 };
 
 export type ArtistChartRequest = {

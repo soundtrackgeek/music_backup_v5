@@ -7607,6 +7607,21 @@ export async function exportSearch(
   );
 }
 
+export async function exportArtistChart(
+  request: ArtistChartRequest,
+  format: string,
+): Promise<ExportResult> {
+  if (!isTauriRuntime()) {
+    return finalizeExport({
+      path: `Preview runtime artist export.${format}`,
+      format,
+      rowCount: 0,
+    } satisfies RawExportResult);
+  }
+
+  return finalizeExport(await commands.exportArtistChart({ request, format }));
+}
+
 export async function exportMusicToolIssues(
   request: MusicToolIssueRequest,
   format: string,

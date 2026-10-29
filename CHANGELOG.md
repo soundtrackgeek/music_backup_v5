@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.207.0] - 2026-10-29
+
+### Fixed
+- **Exporting from the Artists tab now exports the artist ranking**: the Chart Library export buttons always ran the Albums export, so on the Artists tab they spent a long time writing every album in the library instead of the artists on screen.
+
+### Added
+- **Artists chart export** in CSV, TSV, XLSX, JSON and TXT. It runs the current Artists ranking, sort and filters (up to 100,000 artists, not just the 100 shown) and writes Rank, Artist, Albums, Tracks, 5 Star Tracks, Loved Tracks, Charted Albums, Charted Tracks, Rated Albums, Rated Threshold % and Avg Album Score. Albums and Tracks exports are unchanged.
+
 ## [0.206.0] - 2026-10-29
 
 ### Added

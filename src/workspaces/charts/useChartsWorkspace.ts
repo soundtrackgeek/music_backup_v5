@@ -14,6 +14,7 @@ import {
 } from "../../app/requests";
 import {
   getArtistChart,
+  exportArtistChart,
   searchLibrary,
   saveChart,
   deleteSavedChart,
@@ -135,6 +136,7 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
 
   function updateArtistChartRequest(values: Partial<ArtistChartRequest>) {
     setArtistChartRequest((previous) => ({ ...previous, ...values, offset: 0 }));
+    setChartExportResult(null);
   }
 
   function updateArtistChartFilters(values: Partial<BrowseFilters>) {
@@ -143,6 +145,7 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
       filters: { ...previous.filters, ...values },
       offset: 0,
     }));
+    setChartExportResult(null);
   }
 
   function resetArtistChart() {
@@ -234,12 +237,15 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
   }
 
   async function runChartExport(format: string) {
-    const result = await exportSearch(
-      chartRequest,
-      format,
-      chartConfig.exportColumns.includes("calculated"),
-      chartConfig.exportColumns,
-    );
+    // The Artists tab has its own request and result shape, so it needs its own export.
+    const result = artistChartActive
+      ? await exportArtistChart(artistChartRequest, format)
+      : await exportSearch(
+          chartRequest,
+          format,
+          chartConfig.exportColumns.includes("calculated"),
+          chartConfig.exportColumns,
+        );
     setChartExportResult(result);
   }
 

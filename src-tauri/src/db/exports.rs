@@ -152,39 +152,7 @@ pub(super) fn write_export_file(
     export_columns: &[String],
 ) -> Result<()> {
     let (headers, values) = export_table(view, rows, include_calculated, export_columns);
-
-    if format == "xlsx" {
-        write_xlsx_file(path, &headers, &values)?;
-        return Ok(());
-    }
-
-    let mut file = fs::File::create(path)?;
-
-    match format {
-        "json" => {
-            let records = values
-                .iter()
-                .map(|row| {
-                    headers
-                        .iter()
-                        .zip(row.iter())
-                        .map(|(header, value)| {
-                            (
-                                (*header).to_string(),
-                                serde_json::Value::String(value.clone()),
-                            )
-                        })
-                        .collect::<serde_json::Map<_, _>>()
-                })
-                .collect::<Vec<_>>();
-            file.write_all(serde_json::to_string_pretty(&records)?.as_bytes())?;
-        }
-        "tsv" => write_delimited(&mut file, '\t', &headers, &values)?,
-        "txt" => write_delimited(&mut file, '\t', &headers, &values)?,
-        _ => write_delimited(&mut file, ',', &headers, &values)?,
-    }
-
-    Ok(())
+    write_table_file(path, format, &headers, &values)
 }
 
 pub(super) fn write_issue_export_file(
@@ -194,7 +162,16 @@ pub(super) fn write_issue_export_file(
     rows: &[MusicToolIssueRow],
 ) -> Result<()> {
     let (headers, values) = issue_export_table(tool_id, rows);
+    write_table_file(path, format, &headers, &values)
+}
 
+/// Writes a header row plus string cells in any export format the UI offers.
+pub(super) fn write_table_file(
+    path: &PathBuf,
+    format: &str,
+    headers: &[&'static str],
+    values: &[Vec<String>],
+) -> Result<()> {
     if format == "xlsx" {
         write_xlsx_file(path, &headers, &values)?;
         return Ok(());
