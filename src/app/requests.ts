@@ -319,6 +319,7 @@ export function createChartConfig(view: BrowseView = "albums"): ChartConfig {
     exportColumns: ["calculated"],
     viewMode: "table",
     gridCoverSize: chartGridCoverSize.default,
+    artistChart: null,
   };
 }
 
@@ -420,6 +421,8 @@ export function normalizeChartConfigForClient(config: ChartConfig) {
     ratingCompletenessThreshold: null,
     gridCoverSize: normalizeChartGridCoverSize(config.gridCoverSize),
     viewMode,
+    // Charts saved before Artists charts could be saved have no artistChart field.
+    artistChart: config.artistChart ?? null,
   } satisfies ChartConfig;
 }
 

@@ -2289,6 +2289,7 @@ fn build_compiled_query(
             export_columns: vec!["calculated".to_string()],
             view_mode: plan.chart_view,
             grid_cover_size: 144,
+            artist_chart: None,
         })
     } else {
         validate_sort_field(&view, &plan.sort_field)?;

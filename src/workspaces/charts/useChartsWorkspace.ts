@@ -25,7 +25,8 @@ import {
   type BrowseFilters,
   type BrowseSort,
   type BrowseView,
-  type ArtistChartRequest
+  type ArtistChartRequest,
+  type SavedChart
 } from "../../types";
 import {
   type ChartTemplate
@@ -37,7 +38,7 @@ import {
   countAdvancedChartControls,
   countChartSourceFilters
 } from "../../app/chartProgressive";
-import { createArtistChartRequest } from "../../app/artistChart";
+import { artistChartMetricLabel, createArtistChartRequest } from "../../app/artistChart";
 import type { WorkspaceStores } from "../../app/WorkspaceStoresProvider";
 
 type Inputs = Pick<WorkspaceStores, "chartConfig" | "activeSection" | "setIsChartLoading" | "setChartError" | "setChartResponse" | "catalogRefreshKey" | "setChartConfig" | "setChartExportResult" | "setChartTableSort" | "chartName" | "setSavedCharts" | "setChartName" | "chartResponse" | "artistChartActive" | "setArtistChartActive" | "artistChartRequest" | "setArtistChartRequest" | "setArtistChartResponse" | "setArtistChartError" | "setIsArtistChartLoading">;
@@ -216,19 +217,45 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
   }
 
   async function saveCurrentChart() {
+    // The Artists tab keeps its settings in its own request, so store that request too.
+    // Loading the chart later uses it to reopen the Artists tab instead of Albums.
     const nextConfig = {
       ...normalizeChartConfigForClient(chartConfig),
       sortField: chartConfig.sortField ?? chartConfig.rankingMetric,
       gridCoverSize: normalizeChartGridCoverSize(chartConfig.gridCoverSize),
       request: chartRequest,
+      artistChart: artistChartActive ? { ...artistChartRequest, offset: 0 } : null,
     };
-    const fallbackName = `${rankingLabel(nextConfig.rankingMetric)} chart`;
+    const fallbackName = artistChartActive
+      ? `Artists: ${artistChartMetricLabel(artistChartRequest.metric)}`
+      : `${rankingLabel(nextConfig.rankingMetric)} chart`;
     const saved = await saveChart(chartName.trim() || fallbackName, nextConfig);
     setSavedCharts((previous) => [
       saved,
       ...previous.filter((chart) => chart.id !== saved.id),
     ]);
     setChartName("");
+  }
+
+  /** Load a saved chart and switch to the tab it was saved from (Albums, Tracks or Artists). */
+  function openSavedChart(chart: SavedChart) {
+    const config = normalizeChartConfigForClient(chart.config);
+    if (config.artistChart) {
+      const defaults = createArtistChartRequest();
+      setArtistChartRequest({
+        ...defaults,
+        ...config.artistChart,
+        filters: { ...defaults.filters, ...config.artistChart.filters },
+        offset: 0,
+      });
+      setArtistChartActive(true);
+    } else {
+      // Albums and Tracks share chartConfig; its request.view picks the tab.
+      setArtistChartActive(false);
+      setChartConfig(config);
+      setChartTableSort(null);
+    }
+    setChartExportResult(null);
   }
 
   async function removeSavedChart(id: number) {
@@ -275,5 +302,5 @@ export function useChartsWorkspace({ chartConfig, activeSection, setIsChartLoadi
     countAdvancedChartControls(chartConfig);
 
   const chartSourceFilterCount = countChartSourceFilters(chartConfig);
-  return { updateArtistChartRequest, updateArtistChartFilters, resetArtistChart, chartRequest, updateChartConfig, updateChartFilters, sortChartBy, toggleChartColumn, applyChartTemplate, saveCurrentChart, removeSavedChart, runChartExport, setChartBrowseView, chartTotal, chartRows, currentChartGridCoverSize, currentChartCompletenessRange, advancedChartControlCount, chartSourceFilterCount };
+  return { updateArtistChartRequest, updateArtistChartFilters, resetArtistChart, chartRequest, updateChartConfig, updateChartFilters, sortChartBy, toggleChartColumn, applyChartTemplate, saveCurrentChart, openSavedChart, removeSavedChart, runChartExport, setChartBrowseView, chartTotal, chartRows, currentChartGridCoverSize, currentChartCompletenessRange, advancedChartControlCount, chartSourceFilterCount };
 }

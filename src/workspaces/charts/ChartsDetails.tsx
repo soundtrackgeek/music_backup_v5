@@ -6,17 +6,27 @@ import {
   Download
 } from "lucide-react";
 import {
-  normalizeChartConfigForClient
-} from "../../app/requests";
-import {
   rankingLabel
 } from "../../app/display";
+import { artistChartMetricLabel } from "../../app/artistChart";
 import {
   ExportResultStatus
 } from "../../components/ExportResultStatus";
 import type { AppModel } from "../../app/useAppController";
-export function ChartsDetails({ model }: { model: Pick<AppModel, "chartName" | "setChartName" | "saveCurrentChart" | "savedCharts" | "setChartConfig" | "setChartTableSort" | "setActiveSection" | "removeSavedChart" | "runChartExport" | "chartExportResult"> }) {
-  const { chartName, setChartName, saveCurrentChart, savedCharts, setChartConfig, setChartTableSort, setActiveSection, removeSavedChart, runChartExport, chartExportResult } = model;
+import type { SavedChart } from "../../types";
+
+/** Which chart tab a saved chart belongs to, plus its ranking, for the library list. */
+export function savedChartSummary(chart: SavedChart) {
+  const { config } = chart;
+  if (config.artistChart) {
+    return `Artists · ${artistChartMetricLabel(config.artistChart.metric)}`;
+  }
+  const tab = config.request.view === "tracks" ? "Tracks" : "Albums";
+  return `${tab} · ${rankingLabel(config.rankingMetric)} / ${config.viewMode}`;
+}
+
+export function ChartsDetails({ model }: { model: Pick<AppModel, "chartName" | "setChartName" | "saveCurrentChart" | "savedCharts" | "openSavedChart" | "setActiveSection" | "removeSavedChart" | "runChartExport" | "chartExportResult"> }) {
+  const { chartName, setChartName, saveCurrentChart, savedCharts, openSavedChart, setActiveSection, removeSavedChart, runChartExport, chartExportResult } = model;
   const [exportingFormat, setExportingFormat] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -75,18 +85,12 @@ export function ChartsDetails({ model }: { model: Pick<AppModel, "chartName" | "
                     <button
                       type="button"
                       onClick={() => {
-                        setChartConfig(
-                          normalizeChartConfigForClient(chart.config),
-                        );
-                        setChartTableSort(null);
+                        openSavedChart(chart);
                         setActiveSection("Charts");
                       }}
                     >
                       <strong>{chart.name}</strong>
-                      <span>
-                        {rankingLabel(chart.config.rankingMetric)} /{" "}
-                        {chart.config.viewMode}
-                      </span>
+                      <span>{savedChartSummary(chart)}</span>
                     </button>
                     <button
                       className="icon-button"

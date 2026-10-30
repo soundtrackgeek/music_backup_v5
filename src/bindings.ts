@@ -1460,6 +1460,11 @@ export type ChartConfig_Deserialize = {
 	exportColumns: string[],
 	viewMode: ChartViewMode,
 	gridCoverSize?: number,
+	/**
+	 *  Set when the chart was saved from the Artists tab, which has its own request.
+	 *  Charts saved before this field existed, and album or track charts, leave it empty.
+	 */
+	artistChart?: ArtistChartRequest | null,
 };
 
 export type ChartConfig_Serialize = {
@@ -1475,6 +1480,11 @@ export type ChartConfig_Serialize = {
 	exportColumns: string[],
 	viewMode: ChartViewMode,
 	gridCoverSize: number,
+	/**
+	 *  Set when the chart was saved from the Artists tab, which has its own request.
+	 *  Charts saved before this field existed, and album or track charts, leave it empty.
+	 */
+	artistChart: ArtistChartRequest | null,
 };
 
 export type ChartViewMode = "table" | "compact" | "grid";

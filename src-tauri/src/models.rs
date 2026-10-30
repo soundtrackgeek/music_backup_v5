@@ -2510,6 +2510,10 @@ pub struct ChartConfig {
     pub view_mode: String,
     #[serde(default = "default_chart_grid_cover_size")]
     pub grid_cover_size: u32,
+    /// Set when the chart was saved from the Artists tab, which has its own request.
+    /// Charts saved before this field existed, and album or track charts, leave it empty.
+    #[serde(default)]
+    pub artist_chart: Option<crate::db::ArtistChartRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -3030,6 +3034,38 @@ fn default_country_flag_display() -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn chart_config_json() -> serde_json::Value {
+        json!({
+            "request": {},
+            "rankingMetric": "albumScore",
+            "sortDirection": "desc",
+            "resultLimit": 50,
+            "visibleColumns": [],
+            "exportColumns": [],
+            "viewMode": "table"
+        })
+    }
+
+    #[test]
+    fn chart_config_saved_before_artist_charts_loads_without_artist_request() {
+        let config: ChartConfig = serde_json::from_value(chart_config_json()).unwrap();
+        assert!(config.artist_chart.is_none());
+    }
+
+    #[test]
+    fn chart_config_keeps_the_artist_chart_request() {
+        let mut value = chart_config_json();
+        value["artistChart"] = json!({ "metric": "averageAlbumScore", "direction": "asc" });
+
+        let config: ChartConfig = serde_json::from_value(value).unwrap();
+        let artist = config.artist_chart.clone().expect("artist request");
+        assert_eq!(artist.metric, "averageAlbumScore");
+        assert_eq!(artist.direction, "asc");
+
+        let round_trip = serde_json::to_value(&config).unwrap();
+        assert_eq!(round_trip["artistChart"]["metric"], "averageAlbumScore");
+    }
 
     #[test]
     fn app_settings_use_ui_musicbrainz_field_casing() {

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.208.3] - 2026-10-30
+
+### Fixed
+- **Saved charts reopen on the right tab**: a chart saved from the Artists tab stored the Albums settings instead and always opened as an album chart. Saving from Artists now keeps the artist ranking, sort and filters, and clicking a saved chart in the Chart Library switches to the tab it was saved from (Albums, Tracks or Artists). Each saved chart now shows its tab, for example "Artists · Highest average album score". Artist charts saved before this version only have Albums settings, so save them again from the Artists tab.
+
 ## [0.208.2] - 2026-10-29
 
 ### Fixed
