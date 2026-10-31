@@ -52,9 +52,14 @@ before. If a timeline cannot be decoded, the error is saved with the timeline,
 the track's analysis is kept, and the track is not listed as failed. A
 **Verify reused results** scan never decodes audio, so it does not add timelines.
 
-Nothing uses the timelines yet. They are the data for future features such as
-sections inside a track and a stereo health check; see
-[What Songstress could add](songstress-stereo-and-timeline-2026-10.md).
+Since 0.209.0 an album page's **Sound timeline** panel draws a track's timeline:
+level, brightness, stereo width, left/right correlation and pitch classes, with a
+readout for any second. It reads through the read-only catalog connection with the
+analysis and timeline files attached (`sonic_timeline_view.rs`), checks that the file
+is unchanged since analysis, and averages tracks longer than 600 seconds into at most
+600 points. Level is averaged as power, so loud seconds are not hidden by quiet ones.
+Later features such as sections inside a track and a stereo health check use the same
+data; see [What Songstress could add](songstress-stereo-and-timeline-2026-10.md).
 
 ## Idle time and scheduling
 

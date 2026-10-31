@@ -236,6 +236,8 @@ fn builder() -> Builder<Wry> {
         sonic::sonic_matches,
         sonic::sonic_album_matches,
         sonic::sonic_album_sides,
+        sonic::sonic_album_timelines,
+        sonic::sonic_track_timeline,
         sonic::sonic_analyze,
         sonic::sonic_save_playlist,
         acknowledge_catalog_revision,

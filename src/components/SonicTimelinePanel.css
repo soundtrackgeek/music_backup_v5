@@ -1,0 +1,25 @@
+.sonic-timeline-tracks { list-style:none; padding:0; margin:12px 0; display:flex; flex-direction:column; gap:4px; max-height:16rem; overflow:auto; }
+.sonic-timeline-tracks button { display:flex; width:100%; justify-content:space-between; gap:12px; text-align:left; padding:6px 10px; }
+.sonic-timeline-tracks button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.sonic-timeline-tracks button small { flex:none; font-size:12px; opacity:0.75; }
+.sonic-timeline-tracks button[aria-pressed=true] { border-color:var(--color-accent, #69bcb4); box-shadow:inset 3px 0 0 var(--color-accent, #69bcb4); }
+.sonic-timeline-chart { min-width:0; }
+.sonic-timeline-lanes { position:relative; display:flex; flex-direction:column; gap:4px; cursor:crosshair; touch-action:none; border-radius:6px; }
+.sonic-timeline-lanes:focus-visible { outline:2px solid var(--color-accent, #69bcb4); outline-offset:3px; }
+.sonic-timeline-lane { position:relative; height:44px; border:1px solid var(--color-border); border-radius:4px; overflow:hidden; }
+.sonic-timeline-chroma { height:60px; color:#c98bdb; }
+.sonic-timeline-lane svg { display:block; width:100%; height:100%; }
+.sonic-timeline-label { position:absolute; top:2px; left:6px; font-size:11px; opacity:0.75; pointer-events:none; text-shadow:0 0 3px var(--color-panel); }
+.sonic-timeline-level { color:var(--color-accent, #69bcb4); }
+.sonic-timeline-brightness { color:#d6a64a; }
+.sonic-timeline-width { color:#8f8cf0; }
+.sonic-timeline-correlation { color:#e07a86; }
+.sonic-timeline-area { fill:currentColor; fill-opacity:0.45; stroke:none; }
+.sonic-timeline-line { fill:none; stroke:currentColor; stroke-width:1.5; }
+.sonic-timeline-zero { stroke:var(--color-border); stroke-width:1; stroke-dasharray:3 3; }
+.sonic-timeline-chroma rect { fill:currentColor; }
+.sonic-timeline-cursor { position:absolute; top:0; bottom:0; width:1px; background:var(--color-text); opacity:0.7; pointer-events:none; }
+.sonic-timeline-axis { display:flex; justify-content:space-between; font-size:11px; opacity:0.7; margin-top:4px; }
+.sonic-timeline-readout { min-height:3em; font-variant-numeric:tabular-nums; }
+.sonic-timeline-help summary { cursor:pointer; font-size:13px; font-weight:600; }
+@media (prefers-reduced-motion:no-preference) { .sonic-timeline-tracks button { transition:border-color 120ms ease; } }

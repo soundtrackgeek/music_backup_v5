@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.209.0] - 2026-10-31
+
+### Added
+- **Sound timeline on album pages**: the first feature that reads the per-second timelines. Open an album and the **Sound timeline** panel lists its tracks with their timeline state (ready, not saved yet, not analyzed, failed) and opens the first ready track. It draws level, brightness, stereo width, left/right correlation and a pitch-class strip along the track; pointing at a moment, or focusing the chart and using the arrow keys, reads out the values at that second. Mono files hide the stereo lanes, files edited after analysis ask for a new analysis, and tracks over ten minutes are averaged to at most 600 points (level averaged as power). The panel opens the catalog and analysis files read-only and never decodes audio.
+
 ## [0.208.3] - 2026-10-30
 
 ### Fixed

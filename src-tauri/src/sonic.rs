@@ -1296,6 +1296,69 @@ pub async fn sonic_album_sides(
     .map_err(|e| e.to_string())?
 }
 
+/// Open the catalog read-only with whichever analysis files exist attached.
+fn timeline_reader(dir: &Path) -> Result<(Connection, bool, bool)> {
+    let c = catalog(dir)?;
+    let has_sonic = attach(&c, dir)?;
+    let has_timeline = has_sonic && crate::sonic_timeline::attach(&c, dir)?;
+    Ok((c, has_sonic, has_timeline))
+}
+
+pub(crate) fn album_timelines_at(
+    dir: &Path,
+    album_id: &str,
+) -> Result<crate::sonic_timeline_view::AlbumTimelines> {
+    if album_id.is_empty() || album_id.len() > 4096 {
+        bail!("Choose an album to show its timelines");
+    }
+    let (c, has_sonic, has_timeline) = timeline_reader(dir)?;
+    Ok(crate::sonic_timeline_view::album(
+        &c,
+        has_sonic,
+        has_timeline,
+        album_id,
+    )?)
+}
+
+pub(crate) fn track_timeline_at(
+    dir: &Path,
+    track_id: i64,
+) -> Result<crate::sonic_timeline_view::TrackTimeline> {
+    let (c, has_sonic, has_timeline) = timeline_reader(dir)?;
+    Ok(crate::sonic_timeline_view::track(
+        &c,
+        has_sonic,
+        has_timeline,
+        track_id,
+    )?)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+pub async fn sonic_album_timelines(
+    app: AppHandle,
+    album_id: String,
+) -> Result<crate::sonic_timeline_view::AlbumTimelines, String> {
+    tauri::async_runtime::spawn_blocking(move || album_timelines_at(&directory(&app)?, &album_id))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+pub async fn sonic_track_timeline(
+    app: AppHandle,
+    track_id: i64,
+) -> Result<crate::sonic_timeline_view::TrackTimeline, String> {
+    tauri::async_runtime::spawn_blocking(move || track_timeline_at(&directory(&app)?, track_id))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
@@ -1529,6 +1592,43 @@ mod tests {
         assert_eq!(features(), saved);
         assert_eq!(status_at(dir.path()).unwrap().timelines, 1);
         assert_eq!(analyze(false), AnalysisWork::Cached);
+    }
+
+    #[test]
+    fn analyzed_timelines_can_be_read_back_through_the_read_only_view() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().to_string_lossy().to_string();
+        fs::write(
+            dir.path().join("noise.mp3"),
+            include_bytes!("../../Tools/sonic-analyzer/tests/fixtures/noise.mp3"),
+        )
+        .unwrap();
+        let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        c.execute_batch(
+            "CREATE TABLE tracks(id INTEGER PRIMARY KEY,title TEXT,album_id TEXT,disc_number INTEGER,
+                track_number INTEGER,time_seconds INTEGER,file_path TEXT,filename TEXT);",
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO tracks VALUES(7,'Noise','a',1,1,2,?1,'noise.mp3')",
+            [&folder],
+        )
+        .unwrap();
+        drop(c);
+
+        // Nothing analyzed yet: no analysis files exist and none are created.
+        assert_eq!(album_timelines_at(dir.path(), "a").unwrap().tracks[0].state, "notAnalyzed");
+        assert!(!dir.path().join(crate::sonic_timeline::FILE).exists());
+
+        analyze_one_mode(dir.path(), &folder, "noise.mp3", &|| false, false).unwrap();
+        let album = album_timelines_at(dir.path(), "a").unwrap();
+        assert_eq!((album.ready, album.tracks[0].state.as_str()), (1, "ready"));
+        let timeline = track_timeline_at(dir.path(), 7).unwrap();
+        assert_eq!(timeline.state, "ready");
+        assert!(timeline.seconds >= 1);
+        assert_eq!(timeline.points.len() as i64, timeline.seconds);
+        assert!(timeline.points[0].level.is_some_and(|db| db > -120.0));
+        assert!(album_timelines_at(dir.path(), "").is_err());
     }
 
     #[test]

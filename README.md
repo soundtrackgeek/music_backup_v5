@@ -72,8 +72,14 @@ about 12.6 GB for a 1.1-million-track library in `music-timelines.sqlite3`.
 Already analyzed tracks get theirs on the next **Continue analysis** or
 **Analyze library** run (about 0.35 s per track); saved sound features do not
 change. Since **0.208.1** a saved queue reopens its checked entries once for this,
-so its progress restarts from zero. Nothing uses timelines
-yet. See [Per-second timelines](docs/sonic-analysis.md#per-second-timelines).
+so its progress restarts from zero. See [Per-second timelines](docs/sonic-analysis.md#per-second-timelines).
+
+Music Library **0.209.0** shows them: open an album and scroll to **Sound timeline**.
+It lists the album's tracks with their timeline state and opens the first ready track.
+Lanes show level (dBFS), brightness (Hz), stereo width, left/right correlation and a
+pitch-class strip; point at a moment, or focus the chart and use the arrow keys, to read
+the values there. Mono files hide the stereo lanes. Tracks longer than ten minutes are
+averaged to at most 600 points. The view only reads saved analysis and never decodes audio.
 
 Music Library **0.192.1** fixes Audio analysis stopping with **Access is denied**
 when a randomly named output file collides with an existing Windows Temp folder.

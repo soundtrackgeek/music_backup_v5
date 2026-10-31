@@ -35,6 +35,8 @@ export const commands = {
 	sonicMatches: (trackKey: string, limit: number) => __TAURI_INVOKE<SonicMatches>("sonic_matches", { trackKey, limit }),
 	sonicAlbumMatches: (request: SonicAlbumRequest) => __TAURI_INVOKE<SonicAlbumMatches>("sonic_album_matches", { request }),
 	sonicAlbumSides: (request: AlbumSidesRequest) => __TAURI_INVOKE<AlbumSidesResponse>("sonic_album_sides", { request }),
+	sonicAlbumTimelines: (albumId: string) => __TAURI_INVOKE<AlbumTimelines>("sonic_album_timelines", { albumId }),
+	sonicTrackTimeline: (trackId: number) => __TAURI_INVOKE<TrackTimeline>("sonic_track_timeline", { trackId }),
 	sonicAnalyze: (request: AnalyzeRequest) => __TAURI_INVOKE<number>("sonic_analyze", { request }),
 	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
@@ -710,6 +712,11 @@ export type AlbumSidesResponse = {
 	selectedKey: string | null,
 	matches: SideAlbumMatch[],
 	searchLimited: boolean,
+};
+
+export type AlbumTimelines = {
+	tracks: TimelineTrack[],
+	ready: number,
 };
 
 export type AnalysisBackup = {
@@ -4889,6 +4896,34 @@ export type TiISkuddetImportSummary = {
 	durationMs: number,
 };
 
+export type TimelinePoint = {
+	/**  Start of this point, in seconds from the beginning of the track. */
+	start: number,
+	/**  dBFS of the (L+R)/2 mix, averaged as power. */
+	level: number | null,
+	/**  Spectral centroid in Hz. */
+	brightness: number | null,
+	/**  Side/Mid energy in dB. None for mono or silent stretches. */
+	width: number | null,
+	/**  Left/right correlation, -1 to 1. */
+	correlation: number | null,
+	/**  Pitch-class energy share, C to B. */
+	chroma: (number | null)[],
+};
+
+export type TimelineTrack = {
+	trackId: number,
+	title: string,
+	discNumber: number | null,
+	trackNumber: number | null,
+	seconds: number | null,
+	/**
+	 *  `ready`, `failed`, `missing` (analyzed, timeline not saved yet),
+	 *  `notAnalyzed` or `notMp3`.
+	 */
+	state: string,
+};
+
 export type TrackDebutTimelineResponse = {
 	years: TrackDebutTimelineYear[],
 	selectedYear: number | null,
@@ -4924,6 +4959,27 @@ export type TrackDebutTimelineYear = {
 	year: number,
 	trackCount: number,
 	representativeTrack: TrackDebutTimelineTrack | null,
+};
+
+export type TrackTimeline = {
+	trackId: number,
+	title: string,
+	/**
+	 *  The `TimelineTrack` states, plus `changed` when the file was edited
+	 *  after analysis, `gone` when the track is not in the catalog, and
+	 *  `unreadable` when the stored data does not match its header.
+	 */
+	state: string,
+	error: string | null,
+	/**  Seconds covered by the timeline (one row per second). */
+	seconds: number,
+	bucketSeconds: number,
+	channels: number | null,
+	sampleRate: number | null,
+	leftDb: number | null,
+	rightDb: number | null,
+	truncated: boolean,
+	points: TimelinePoint[],
 };
 
 export type TransferQueueSnapshot = {
