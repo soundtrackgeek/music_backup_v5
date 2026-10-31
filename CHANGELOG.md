@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.209.2] - 2026-10-31
+
+### Added
+- **Loved tracks on album pages**: the album track list has a new **Loved** column that shows a red heart next to each loved track, like the artist album view. The caption under each track title now always shows its genre; before, a loved track showed "Loved" there instead of its genre.
+
 ## [0.209.1] - 2026-10-31
 
 ### Changed

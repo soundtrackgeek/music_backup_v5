@@ -14,6 +14,7 @@ import {
   Album,
   ListMusic,
   Download,
+  Heart,
 } from "lucide-react";
 import {
   ResizableColumnHeader,
@@ -916,6 +917,7 @@ export function AlbumTrackTable({
         Artist: "minmax(150px, 1.25fr)",
         Time: "72px",
         Rating: "72px",
+        Loved: "64px",
         Quality: "minmax(118px, 0.9fr)",
         File: "minmax(170px, 1.2fr)",
       }}
@@ -924,6 +926,7 @@ export function AlbumTrackTable({
       renderRow={(row) => {
         const trackPopularity =
           row.trackId == null ? null : popularityByTrackId.get(row.trackId);
+        const isLoved = row.love === "L";
         return (
           <div className="result-table-row" role="row" key={row.id}>
             <span role="cell">{formatTrackPosition(row)}</span>
@@ -934,15 +937,23 @@ export function AlbumTrackTable({
                 />
                 <span>{row.title ?? "Untitled"}</span>
               </strong>
-              <small>
-                {row.love === "L" ? "Loved" : (row.canonicalGenre ?? "")}
-              </small>
+              <small>{row.canonicalGenre ?? ""}</small>
             </span>
             <span role="cell">
               {row.displayArtist ?? row.albumArtistDisplay ?? ""}
             </span>
             <span role="cell">{formatMinutes(row.trackSeconds)}</span>
             <span role="cell">{formatTrackRating(row.normalizedRating)}</span>
+            <span
+              className={`album-track-love${isLoved ? " active" : ""}`}
+              role="cell"
+              aria-label={isLoved ? "Loved" : "Not loved"}
+              title={isLoved ? "Loved" : undefined}
+            >
+              {isLoved ? (
+                <Heart size={15} fill="currentColor" aria-hidden="true" />
+              ) : null}
+            </span>
             <span role="cell">{formatAudioQuality(row)}</span>
             <span role="cell" title={row.filePath ?? ""}>
               {row.filename ?? ""}
@@ -957,6 +968,7 @@ export function AlbumTrackTable({
         <ResizableColumnHeader columnId="Artist" label="Artist" />
         <ResizableColumnHeader columnId="Time" label="Time" />
         <ResizableColumnHeader columnId="Rating" label="Rating" />
+        <ResizableColumnHeader columnId="Loved" label="Loved" />
         <ResizableColumnHeader columnId="Quality" label="Quality" />
         <ResizableColumnHeader columnId="File" label="File" />
       </div>

@@ -139,8 +139,18 @@
 .album-track-results .result-table-row {
   grid-template-columns:
     58px minmax(220px, 2fr) minmax(150px, 1.25fr)
-    72px 72px minmax(118px, 0.9fr) minmax(170px, 1.2fr);
-  min-width: 970px;
+    72px 72px 64px minmax(118px, 0.9fr) minmax(170px, 1.2fr);
+  min-width: 1034px;
+}
+
+.album-track-love {
+  display: flex;
+  align-items: center;
+  color: var(--muted, rgba(127, 127, 127, 0.4));
+}
+
+.album-track-love.active {
+  color: #e5484d;
 }
 
 .album-index-title,
