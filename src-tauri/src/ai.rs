@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::models::{BrowseRequest, BrowseSort, ChartConfig, TextFilter};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/responses";
-const OPENAI_MODEL: &str = "gpt-5.6-luna";
+const OPENAI_MODEL: &str = "gpt-6-luna";
 const KEYRING_SERVICE: &str = "com.local.musiclibrary.openai";
 const KEYRING_USER: &str = "api-key";
 const MAX_QUERY_LENGTH: usize = 2_000;
@@ -4654,7 +4654,7 @@ mod tests {
             "keywords": "",
             "title": "1992 albums",
             "summary": "Five albums from 1992.",
-            "model": "gpt-5.6-luna",
+            "model": "gpt-6-luna",
             "usage": {
                 "inputTokens": null,
                 "cachedInputTokens": null,

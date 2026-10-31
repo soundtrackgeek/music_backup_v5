@@ -345,7 +345,7 @@ AI boundary:
 - Never send the database, full result sets, unbounded raw rows, file paths, filenames, covers, saved objects, unrelated statistics payloads, or the OpenAI key as model context.
 - Validate every model-produced field, operator, numeric range, sort, limit, target, and chart metric before executing the existing local SQLite search tool.
 - Store the production key outside `AppSettings`, SQLite, localStorage, logs, exports, and backups. Windows Credential Manager is the primary source; `OPENAI_API_KEY` and repo-root `.env` are debug-only fallbacks.
-- Use the exact `gpt-5.6-luna` model, Structured Outputs, `store: false`, low reasoning effort, and bounded output. Surface token usage so cost remains visible.
+- Use the exact `gpt-6-luna` model, Structured Outputs, `store: false`, low reasoning effort, and bounded output. Surface token usage so cost remains visible.
 
 Expected MusicBrainz boundary:
 

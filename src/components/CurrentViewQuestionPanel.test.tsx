@@ -39,7 +39,7 @@ describe("CurrentViewQuestionPanel", () => {
       matchingRows: 14,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: 820,
         cachedInputTokens: 200,
@@ -98,7 +98,7 @@ describe("CurrentViewQuestionPanel", () => {
       matchingRows: 20,
       analysisCount: 1,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 500, cachedInputTokens: 0, outputTokens: 50 },
     } satisfies AiCurrentViewAnswer;
     backend.askCurrentView.mockResolvedValueOnce(answer);
@@ -169,7 +169,7 @@ describe("CurrentViewQuestionPanel", () => {
       matchingRows: 18,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 500, cachedInputTokens: 0, outputTokens: 50 },
     } satisfies AiCurrentViewAnswer);
 
@@ -209,7 +209,7 @@ describe("CurrentViewQuestionPanel", () => {
       matchingRows: 14,
       analysisCount: 1,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 400, cachedInputTokens: 0, outputTokens: 60 },
     } satisfies AiCurrentViewAnswer;
     backend.listAiSnapshots.mockResolvedValueOnce([

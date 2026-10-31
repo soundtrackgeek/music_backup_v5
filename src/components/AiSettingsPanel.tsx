@@ -177,7 +177,7 @@ export function AiSettingsPanel({ provider = "OpenAI" }: { provider?: "OpenAI" |
 
       <div className="ai-settings-notes">
         <span>
-          Model: <strong>{status?.model ?? (isJev ? "typesafe/jev-1.13" : "gpt-5.6-luna")}</strong>
+          Model: <strong>{status?.model ?? (isJev ? "typesafe/jev-1.13" : "gpt-6-luna")}</strong>
         </span>
         <span>The key is never written to SQLite, browser storage, logs, or backups.</span>
         <span>Test makes one small paid API request.</span>

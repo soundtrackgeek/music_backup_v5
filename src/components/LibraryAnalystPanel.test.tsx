@@ -42,7 +42,7 @@ describe("LibraryAnalystPanel", () => {
       nextQuestions: ["Which genres contain the largest unrated backlog?"],
       profileSections: ["overview", "ratingProgress"],
       aggregatePointsShared: 17,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: 940,
         cachedInputTokens: 210,
@@ -121,7 +121,7 @@ describe("LibraryAnalystPanel", () => {
       nextQuestions: ["Which decade has the largest rating backlog?"],
       profileSections: ["overview"],
       aggregatePointsShared: 8,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 150 },
     } satisfies AiLibraryAnalysis;
     const followUpAnalysis = {
@@ -210,7 +210,7 @@ describe("LibraryAnalystPanel", () => {
       nextQuestions: ["What changed?"],
       profileSections: ["overview"],
       aggregatePointsShared: 8,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 150 },
     } satisfies AiLibraryAnalysis;
     backend.listAiSnapshots.mockResolvedValueOnce([

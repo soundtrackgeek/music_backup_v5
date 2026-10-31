@@ -938,7 +938,7 @@ mod tests {
             keywords: String::new(),
             title: "Missing music from 1992".to_string(),
             summary: "Verified music from 1992 outside the local library.".to_string(),
-            model: "gpt-5.6-luna".to_string(),
+            model: "gpt-6-luna".to_string(),
             usage: AiUsage {
                 input_tokens: Some(100),
                 cached_input_tokens: Some(25),

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.209.1] - 2026-10-31
+
+### Changed
+- **Luna now runs on GPT-6 Luna**: every Luna feature (Ask Luna in Search and Charts, current-view and Music Map questions, Library analyst, Playlist Builder, outside-library Discovery, and Music Research) now calls OpenAI's `gpt-6-luna` model instead of `gpt-5.6-luna`. Requests keep the same settings (strict Structured Outputs, `store: false`, low reasoning effort, bounded output), and AI settings show the new model name. Snapshots saved with the old model still reopen and keep their recorded model name.
+
 ## [0.209.0] - 2026-10-31
 
 ### Added

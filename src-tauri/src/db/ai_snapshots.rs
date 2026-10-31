@@ -422,7 +422,7 @@ mod tests {
             summary: "Synthpop albums from 1987.".to_string(),
             request: BrowseRequest::default(),
             chart_config: None,
-            model: "gpt-5.6-luna".to_string(),
+            model: "gpt-6-luna".to_string(),
             usage: crate::ai::AiUsage {
                 input_tokens: Some(220),
                 cached_input_tokens: Some(20),
@@ -435,7 +435,7 @@ mod tests {
             matching_rows: 1,
             analysis_count: 1,
             named_rows_shared: 0,
-            model: "gpt-5.6-luna".to_string(),
+            model: "gpt-6-luna".to_string(),
             usage: crate::ai::AiUsage {
                 input_tokens: Some(300),
                 cached_input_tokens: Some(0),
@@ -504,7 +504,7 @@ mod tests {
                         matching_rows: 1,
                         analysis_count: 1,
                         named_rows_shared: 0,
-                        model: "gpt-5.6-luna".to_string(),
+                        model: "gpt-6-luna".to_string(),
                         usage: crate::ai::AiUsage {
                             input_tokens: Some(300),
                             cached_input_tokens: None,
@@ -544,7 +544,7 @@ mod tests {
                                 title: "Research source".to_string(),
                                 url: "https://example.com/industrial-metal".to_string(),
                             }],
-                            model: "gpt-5.6-luna".to_string(),
+                            model: "gpt-6-luna".to_string(),
                             usage: crate::ai::AiUsage {
                                 input_tokens: Some(620),
                                 cached_input_tokens: Some(80),

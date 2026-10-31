@@ -371,7 +371,7 @@ pub(super) fn test_playlist_plan() -> AiPlaylistPlan {
         target_minutes: 45,
         max_tracks_per_artist: 2,
         max_tracks_per_album: 1,
-        model: "gpt-5.6-luna".to_string(),
+        model: "gpt-6-luna".to_string(),
         usage: crate::ai::AiUsage {
             input_tokens: Some(180),
             cached_input_tokens: None,

@@ -22,7 +22,7 @@ describe("external discovery Markdown", () => {
         keywords: "",
         title: "1980s AOR Albums",
         summary: "Five AOR albums from the 1980s.",
-        model: "gpt-5.6-luna",
+        model: "gpt-6-luna",
         usage: { inputTokens: null, cachedInputTokens: null, outputTokens: null },
       },
       items: [

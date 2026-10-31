@@ -40,7 +40,7 @@ const answer = {
       url: "https://www.defleppard.com/album/euphoria/",
     },
   ],
-  model: "gpt-5.6-luna",
+  model: "gpt-6-luna",
   usage: { inputTokens: 620, cachedInputTokens: 100, outputTokens: 180 },
   usedWebSearch: true,
   localInspectionCount: 13,

@@ -44,7 +44,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "AOR albums from 1984 under 45 minutes, ranked by Album Score.",
       request,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: 500,
         cachedInputTokens: 100,
@@ -125,7 +125,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Billboard No. 1 albums, split by rating completion.",
       request,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 600, cachedInputTokens: 100, outputTokens: 100 },
     } satisfies AiCompiledQuery;
     const answer = {
@@ -135,7 +135,7 @@ describe("NaturalLanguageQueryPanel", () => {
       matchingRows: 15,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 80 },
     };
     backend.compileNaturalLanguageQuery.mockResolvedValueOnce(compiled);
@@ -205,7 +205,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Compare fully rated and not-fully-rated Billboard No. 1 albums.",
       request: firstRequest,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 600, cachedInputTokens: 100, outputTokens: 100 },
     } satisfies AiCompiledQuery;
     const firstAnswer = {
@@ -215,7 +215,7 @@ describe("NaturalLanguageQueryPanel", () => {
       matchingRows: 36,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 80 },
     };
     const followUpPrompt = "Can you list the albums I haven't rated 100% yet?";
@@ -231,7 +231,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Billboard No. 1 albums that are not fully rated.",
       request: followUpRequest,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 700, cachedInputTokens: 100, outputTokens: 110 },
     } satisfies AiCompiledQuery;
     const followUpAnswer = {
@@ -240,7 +240,7 @@ describe("NaturalLanguageQueryPanel", () => {
       matchingRows: 21,
       analysisCount: 1,
       namedRowsShared: 21,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 900, cachedInputTokens: 0, outputTokens: 130 },
     };
     backend.compileNaturalLanguageQuery
@@ -362,7 +362,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Saved 1984 AOR search.",
       request: createRequest("albums"),
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 300, cachedInputTokens: 0, outputTokens: 70 },
     } satisfies AiCompiledQuery;
     result.request.filters.genres = ["AOR"];
@@ -417,7 +417,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Billboard No. 1 albums, split by rating completion.",
       request,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 600, cachedInputTokens: 100, outputTokens: 100 },
     } satisfies AiCompiledQuery;
     const answer = {
@@ -427,7 +427,7 @@ describe("NaturalLanguageQueryPanel", () => {
       matchingRows: 15,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 800, cachedInputTokens: 0, outputTokens: 80 },
     };
     backend.listAiSnapshots.mockResolvedValueOnce([
@@ -482,7 +482,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Compare Billboard No. 1 albums by rating completion.",
       request: firstRequest,
       chartConfig: null,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 600, cachedInputTokens: 0, outputTokens: 90 },
     } satisfies AiCompiledQuery;
     const firstAnswer = {
@@ -491,7 +491,7 @@ describe("NaturalLanguageQueryPanel", () => {
       matchingRows: 36,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 700, cachedInputTokens: 0, outputTokens: 60 },
     };
     const followUpPrompt = "Can you list them?";
@@ -584,7 +584,7 @@ describe("NaturalLanguageQueryPanel", () => {
       summary: "Top 10 Japanese albums by Album Score with 100% completeness.",
       request,
       chartConfig,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: { inputTokens: 1454, cachedInputTokens: 0, outputTokens: 114 },
     } satisfies AiCompiledQuery;
     backend.listAiSnapshots.mockResolvedValueOnce([

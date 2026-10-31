@@ -2644,7 +2644,7 @@ export async function getAiKeyStatus(): Promise<AiKeyStatus> {
     return {
       configured: false,
       source: "none",
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
     } satisfies AiKeyStatus;
   }
 
@@ -3741,7 +3741,7 @@ export async function askCurrentView(input: AiCurrentViewQuestion): Promise<AiCu
       matchingRows: preview.total,
       analysisCount: 2,
       namedRowsShared: 0,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: null,
         cachedInputTokens: null,
@@ -3776,7 +3776,7 @@ export async function researchMusic(input: AiMusicResearchRequest): Promise<AiMu
           url: "https://developers.openai.com/api/docs/guides/tools-web-search",
         },
       ],
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: null,
         cachedInputTokens: null,
@@ -3827,7 +3827,7 @@ export async function analyzeLibrary(input: AiLibraryAnalysisRequest): Promise<A
       ],
       profileSections: ["overview", "ratingProgress"],
       aggregatePointsShared: 17,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: null,
         cachedInputTokens: null,
@@ -3952,7 +3952,7 @@ export async function buildPlaylist(input: AiPlaylistBuildRequest): Promise<AiPl
       targetMinutes: 45,
       maxTracksPerArtist: 2,
       maxTracksPerAlbum: 1,
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       usage: {
         inputTokens: null,
         cachedInputTokens: null,
@@ -4241,7 +4241,7 @@ export async function discoverOutsideLibrary(input: { prompt: string }): Promise
         keywords: "",
         title,
         summary: `${count} verified ${entityLabel} outside the local library.`,
-        model: "gpt-5.6-luna",
+        model: "gpt-6-luna",
         usage: { inputTokens: null, cachedInputTokens: null, outputTokens: null },
       },
       items,
