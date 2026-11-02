@@ -124,7 +124,7 @@ const HANDLERS: &[Registration] = &[
     registration!(
         "trackSingles",
         "Find album singles",
-        false,
+        true,
         true,
         true,
         |app, p| encode(crate::singles::refresh_track_singles(

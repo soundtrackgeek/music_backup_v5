@@ -530,11 +530,41 @@ async fn refresh_lastfm_artist_images(
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
-async fn refresh_track_singles(
-    app: AppHandle,
-    limit: u32,
-) -> Result<jobs::JobOutput<singles::TrackSinglesRefreshSummary>, String> {
-    jobs::execute_typed(app, "trackSingles", serde_json::json!({"limit":limit})).await
+async fn start_track_singles(app: AppHandle, limit: u32) -> Result<i64, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let running = jobs::list_for_app(&app)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .find(|job| {
+                job.kind == "trackSingles"
+                    && matches!(
+                        job.state.as_str(),
+                        "queued" | "running" | "pausing" | "paused" | "cancelling"
+                    )
+            });
+        if running.is_some() {
+            return Err(
+                "Finding singles is already in progress. Pause, continue or cancel it first."
+                    .to_string(),
+            );
+        }
+        jobs::submit(&app, "trackSingles", serde_json::json!({ "limit": limit }))
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Album singles task failed: {error}"))?
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+async fn get_track_singles_status(app: AppHandle) -> Result<singles::TrackSinglesStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (conn, _) = db::open_read(&app).map_err(|error| error.to_string())?;
+        singles::status_for_connection(&conn).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Album singles status task failed: {error}"))?
 }
 
 #[cfg(not(test))]

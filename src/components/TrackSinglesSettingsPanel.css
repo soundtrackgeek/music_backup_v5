@@ -1,0 +1,12 @@
+.track-singles-status { margin: 4px 0 0; }
+.track-singles-status--detail { color: var(--muted, #8a97a6); font-size: 0.9em; margin-top: 2px; }
+.track-singles-current {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+}
+.track-singles-current progress { width: 100%; }
+.track-singles-current p { margin: 0; }

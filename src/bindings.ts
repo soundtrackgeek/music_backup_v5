@@ -41,7 +41,8 @@ export const commands = {
 	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
 	refreshLastfmArtistImages: (limit: number) => __TAURI_INVOKE<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }),
-	refreshTrackSingles: (limit: number) => __TAURI_INVOKE<TrackSinglesRefreshSummary>("refresh_track_singles", { limit }),
+	startTrackSingles: (limit: number) => __TAURI_INVOKE<number>("start_track_singles", { limit }),
+	getTrackSinglesStatus: () => __TAURI_INVOKE<TrackSinglesStatus>("get_track_singles_status"),
 	searchWishListMusicbrainz: (input: WishListMusicBrainzSearchRequest) => __TAURI_INVOKE<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input }),
 	addWishListMusicbrainzCandidate: (input: AddWishListMusicBrainzCandidateRequest) => __TAURI_INVOKE<AddWishListMusicBrainzCandidateResponse>("add_wish_list_musicbrainz_candidate", { input }),
 	importMusicbrainzOriginCountries: (request: MusicBrainzOriginCountryImportRequest) => __TAURI_INVOKE<MusicBrainzOriginCountryImportSummary>("import_musicbrainz_origin_countries", { request }),
@@ -4962,13 +4963,16 @@ export type TrackDebutTimelineYear = {
 	representativeTrack: TrackDebutTimelineTrack | null,
 };
 
-export type TrackSinglesRefreshSummary = {
-	requested: number,
-	artistsChecked: number,
-	singlesFound: number,
-	failed: number,
-	remaining: number,
-	message: string,
+/**  Where the library stands, read from the catalog so it survives restarts. */
+export type TrackSinglesStatus = {
+	/**  Artists linked to MusicBrainz; the only ones that can be checked. */
+	linkedArtists: number,
+	/**  Linked artists checked within the last 90 days. */
+	checkedArtists: number,
+	dueArtists: number,
+	confirmedSingles: number,
+	possibleSingles: number,
+	lastCheckedAt: string | null,
 };
 
 export type TrackTimeline = {

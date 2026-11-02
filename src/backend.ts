@@ -176,7 +176,7 @@ import type {
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
   LastFmArtistImageRefreshSummary,
-  TrackSinglesRefreshSummary,
+  TrackSinglesStatus,
   LastFmAlbumPopularity,
   LastFmRelatedAlbums,
   LastFmArtistPopularity,
@@ -2792,18 +2792,26 @@ export async function refreshLastFmArtistImages(limit = 50): Promise<LastFmArtis
   return (commands.refreshLastfmArtistImages(limit)).then((summary) => { invalidateArtwork(); return summary; });
 }
 
-export async function refreshTrackSingles(limit = 25): Promise<TrackSinglesRefreshSummary> {
+/** Queues the album singles job and returns at once; follow it through the activity feed. `0` means every artist that is due. */
+export async function startTrackSingles(limit: number): Promise<number> {
+  if (!isTauriRuntime()) {
+    throw new Error("Finding album singles is available in the desktop app.");
+  }
+  return commands.startTrackSingles(limit);
+}
+
+export async function getTrackSinglesStatus(): Promise<TrackSinglesStatus> {
   if (!isTauriRuntime()) {
     return {
-      requested: 0,
-      artistsChecked: 0,
-      singlesFound: 0,
-      failed: 0,
-      remaining: 0,
-      message: "Finding album singles is available in the desktop app.",
-    } satisfies TrackSinglesRefreshSummary;
+      linkedArtists: 0,
+      checkedArtists: 0,
+      dueArtists: 0,
+      confirmedSingles: 0,
+      possibleSingles: 0,
+      lastCheckedAt: null,
+    } satisfies TrackSinglesStatus;
   }
-  return commands.refreshTrackSingles(limit);
+  return commands.getTrackSinglesStatus();
 }
 
 export async function getLastFmArtistPopularity(

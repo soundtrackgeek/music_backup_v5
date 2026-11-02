@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.210.2] - 2026-11-02
+
+### Changed
+- **Album singles shows what is happening**: the panel under **Settings → Providers → Album singles** now works like Audio analysis. It always shows how many linked artists are checked (for example "1,234 of 3,000"), how many singles are confirmed, how many artists are still to check and when the last check ran, and these numbers are still there after a restart. While a run is active it shows a progress bar, the artist being checked and a time estimate, with **Pause**, **Continue** and **Cancel**. Starting a run no longer ties up the button until it finishes, so you can leave the page. A run that stops (for example when MusicBrainz stops answering after ten artists in a row fail) keeps its reason on screen and offers **Continue**, and the last finished run's summary stays visible. Pausing takes effect after the current artist and everything finished is already saved.
+
 ## [0.210.1] - 2026-11-02
 
 ### Added

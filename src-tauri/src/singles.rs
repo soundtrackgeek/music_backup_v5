@@ -480,15 +480,58 @@ struct LocalArtist {
     mbid: String,
 }
 
-/// Linked artists never checked, or checked before `REFRESH_AFTER_DAYS`.
-fn due_artists(conn: &Connection, limit: u32) -> Result<(Vec<LocalArtist>, i64)> {
-    let due = format!(
-        "FROM musicbrainz_artist_links links
-         LEFT JOIN track_singles_checks checks ON checks.local_artist_key = links.local_artist_key
-         WHERE links.ignored = 0 AND NULLIF(TRIM(COALESCE(links.mbid, '')), '') IS NOT NULL
+const LINKED_ARTISTS_FROM: &str = "FROM musicbrainz_artist_links links
+     LEFT JOIN track_singles_checks checks ON checks.local_artist_key = links.local_artist_key
+     WHERE links.ignored = 0 AND NULLIF(TRIM(COALESCE(links.mbid, '')), '') IS NOT NULL";
+
+fn due_filter() -> String {
+    format!(
+        "{LINKED_ARTISTS_FROM}
            AND (checks.checked_at IS NULL
                 OR checks.checked_at < datetime('now', '-{REFRESH_AFTER_DAYS} days'))"
-    );
+    )
+}
+
+/// Where the library stands, read from the catalog so it survives restarts.
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackSinglesStatus {
+    /// Artists linked to MusicBrainz; the only ones that can be checked.
+    pub linked_artists: i64,
+    /// Linked artists checked within the last 90 days.
+    pub checked_artists: i64,
+    pub due_artists: i64,
+    pub confirmed_singles: i64,
+    pub possible_singles: i64,
+    pub last_checked_at: Option<String>,
+}
+
+pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesStatus> {
+    let count = |sql: String| -> Result<i64> { Ok(conn.query_row(&sql, [], |row| row.get(0))?) };
+    let linked = count(format!("SELECT COUNT(*) {LINKED_ARTISTS_FROM}"))?;
+    let due = count(format!("SELECT COUNT(*) {}", due_filter()))?;
+    let by_confidence = |confidence: &str| {
+        count(format!(
+            "SELECT COUNT(*) FROM track_singles WHERE confidence = '{confidence}'"
+        ))
+    };
+    Ok(TrackSinglesStatus {
+        linked_artists: linked,
+        checked_artists: linked - due,
+        due_artists: due,
+        confirmed_singles: by_confidence("confirmed")?,
+        possible_singles: by_confidence("possible")?,
+        last_checked_at: conn.query_row(
+            "SELECT MAX(checked_at) FROM track_singles_checks",
+            [],
+            |row| row.get(0),
+        )?,
+    })
+}
+
+/// Linked artists never checked, or checked before `REFRESH_AFTER_DAYS`.
+fn due_artists(conn: &Connection, limit: u32) -> Result<(Vec<LocalArtist>, i64)> {
+    let due = due_filter();
     let remaining: i64 = conn.query_row(&format!("SELECT COUNT(*) {due}"), [], |row| row.get(0))?;
     let mut statement = conn.prepare(&format!(
         "SELECT links.local_artist_key, links.display_artist, links.mbid {due}
@@ -603,9 +646,25 @@ fn effective_limit(limit: u32) -> u32 {
     }
 }
 
+/// Consecutive failures that mean MusicBrainz or the network is down, not one bad artist.
+const MAX_CONSECUTIVE_FAILURES: u32 = 10;
+
+fn progress_message(done: i64, total: i64, found: u32, failed: u32, current: Option<&str>) -> String {
+    let mut message = format!("{done} of {total} artists checked · {found} singles found this run");
+    if failed > 0 {
+        message.push_str(&format!(" · {failed} failed (retried next run)"));
+    }
+    if let Some(artist) = current {
+        message.push_str(&format!(" · now: {artist}"));
+    }
+    message
+}
+
 /// Background job body: refresh up to `limit` artists (`0` = all) whose singles
-/// are unknown or stale. Each artist is saved as it finishes, so cancelling or
-/// restarting loses nothing and the next run resumes with the artists left.
+/// are unknown or stale. Each artist is saved as it finishes, so pausing,
+/// cancelling or restarting loses nothing: a resumed job recomputes which
+/// artists are still due and carries on. Progress is measured against every
+/// linked artist so it reads the same across pauses and restarts.
 #[cfg(not(test))]
 pub fn refresh_track_singles(
     app: tauri::AppHandle,
@@ -614,18 +673,35 @@ pub fn refresh_track_singles(
     // Never hold a catalog connection across network waits: each database step
     // below opens a connection, finishes in milliseconds and drops it, so the
     // app's own writes and other readers are not held up during a long run.
-    let (artists, remaining_before) = {
+    let (artists, remaining_before, linked, checked_before) = {
         let (conn, _) = crate::db::open_read(&app)?;
-        due_artists(&conn, effective_limit(limit))?
+        let (artists, remaining) = due_artists(&conn, effective_limit(limit))?;
+        let status = status_for_connection(&conn)?;
+        (artists, remaining, status.linked_artists, status.checked_artists)
     };
     let requested = artists.len() as u32;
-    let (mut checked, mut found, mut failed) = (0u32, 0u32, 0u32);
+    let started = std::time::Instant::now();
+    let (mut checked, mut found, mut failed, mut consecutive) = (0u32, 0u32, 0u32, 0u32);
+    let mut paused = false;
     for artist in artists {
+        // Cancel ends the job here; a pause request just stops after the last saved artist.
         crate::jobs::checkpoint()?;
-        crate::jobs::progress(
-            i64::from(checked + failed),
-            i64::from(requested),
-            &format!("Finding singles for {}", artist.display_artist),
+        if crate::jobs::should_stop() {
+            paused = true;
+            break;
+        }
+        let done = checked_before + i64::from(checked);
+        let processed = i64::from(checked + failed);
+        let eta = (processed > 0).then(|| {
+            (started.elapsed().as_secs_f64() / processed as f64
+                * (i64::from(requested) - processed) as f64)
+                .ceil() as i64
+        });
+        crate::jobs::progress_with_eta(
+            done,
+            linked,
+            &progress_message(done, linked, found, failed, Some(&artist.display_artist)),
+            eta,
         );
         let albums = crate::db::open_read(&app).and_then(|(conn, _)| local_albums(&conn, &artist));
         let outcome = albums.and_then(|albums| {
@@ -651,21 +727,34 @@ pub fn refresh_track_singles(
                 )?;
                 drop(conn);
                 checked += 1;
+                consecutive = 0;
             }
             // Leave the artist unchecked so the next run retries it.
-            Err(_) => failed += 1,
+            Err(_) => {
+                failed += 1;
+                consecutive += 1;
+                if consecutive >= MAX_CONSECUTIVE_FAILURES {
+                    anyhow::bail!(
+                        "MusicBrainz stopped answering after {consecutive} artists in a row failed. Progress is saved; use Continue to try again."
+                    );
+                }
+            }
         }
     }
     let remaining = remaining_before - i64::from(checked);
+    let done = checked_before + i64::from(checked);
+    let mut message = progress_message(done, linked, found, failed, None);
+    if paused {
+        message.push_str(" · paused");
+    }
+    crate::jobs::progress_with_eta(done, linked, &message, None);
     Ok(TrackSinglesRefreshSummary {
         requested,
         artists_checked: checked,
         singles_found: found,
         failed,
         remaining,
-        message: format!(
-            "Checked {checked} artists and found {found} singles; {remaining} artists still to check."
-        ),
+        message,
     })
 }
 
@@ -815,6 +904,73 @@ mod tests {
             })
             .unwrap();
         assert_eq!(checks, 1);
+    }
+
+    fn linked_catalog() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE musicbrainz_artist_links (
+                local_artist_key TEXT PRIMARY KEY, display_artist TEXT NOT NULL, mbid TEXT,
+                ignored INTEGER NOT NULL DEFAULT 0);
+             INSERT INTO musicbrainz_artist_links VALUES
+                ('a', 'A', 'mbid-a', 0), ('b', 'B', 'mbid-b', 0), ('c', 'C', 'mbid-c', 0),
+                ('d', 'D', NULL, 0), ('e', 'E', 'mbid-e', 1);",
+        )
+        .unwrap();
+        install_schema(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn status_counts_only_linked_artists_and_what_is_still_due() {
+        let mut conn = linked_catalog();
+        let empty = status_for_connection(&conn).unwrap();
+        assert_eq!(
+            (empty.linked_artists, empty.checked_artists, empty.due_artists),
+            (3, 0, 3)
+        );
+        assert_eq!(empty.last_checked_at, None);
+
+        let rows = [TrackSingle {
+            track_title: "Song".into(),
+            single_mbid: "s".into(),
+            single_title: "Song".into(),
+            single_year: Some(1991),
+            confidence: Confidence::Confirmed,
+            source: Source::TitleMatch,
+        }];
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &rows, "2099-01-01T00:00:00Z").unwrap();
+        conn.execute(
+            "INSERT INTO track_singles_checks VALUES ('b', 'mbid-b', 0, '2000-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        let status = status_for_connection(&conn).unwrap();
+        // "a" is fresh, "b" was checked long ago so it is due again, "c" never was.
+        assert_eq!(
+            (status.linked_artists, status.checked_artists, status.due_artists),
+            (3, 1, 2)
+        );
+        assert_eq!((status.confirmed_singles, status.possible_singles), (1, 0));
+        assert_eq!(status.last_checked_at.as_deref(), Some("2099-01-01T00:00:00Z"));
+        let (due, remaining) = due_artists(&conn, u32::MAX).unwrap();
+        assert_eq!(remaining, 2);
+        assert_eq!(
+            due.iter().map(|artist| artist.local_artist_key.as_str()).collect::<Vec<_>>(),
+            ["b", "c"]
+        );
+    }
+
+    #[test]
+    fn progress_message_reads_the_same_after_a_resume() {
+        assert_eq!(
+            progress_message(1234, 3000, 56, 0, Some("Bob Seger")),
+            "1234 of 3000 artists checked · 56 singles found this run · now: Bob Seger"
+        );
+        assert_eq!(
+            progress_message(10, 20, 0, 3, None),
+            "10 of 20 artists checked · 0 singles found this run · 3 failed (retried next run)"
+        );
     }
 
     #[test]
