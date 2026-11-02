@@ -1,0 +1,12 @@
+2012_uk_singles: 24100 rows, 0 problems, 10 notes
+
+note: Official UK Singles Chart 2012-03-03 #176: no duration in book (The Boy Is Mine)
+note: Official UK Singles Chart 2012-03-10 #142: no duration in book (The Boy Is Mine)
+note: Official UK Singles Chart 2012-03-17 #142: no duration in book (Jai Ho! (You Are My Destiny))
+note: Official UK Singles Chart 2012-03-24 #181: no duration in book (Jai Ho! (You Are My Destiny))
+note: Official Digital Download Chart 2012-03-03 #172: no duration in book (The Boy Is Mine)
+note: Official Digital Download Chart 2012-03-10 #136: no duration in book (The Boy Is Mine)
+note: Official Digital Download Chart 2012-03-17 #139: no duration in book (Jai Ho! (You Are My Destiny))
+note: Official Digital Download Chart 2012-03-24 #177: no duration in book (Jai Ho! (You Are My Destiny))
+note: Audio Streaming Chart (2012-2014) 2012-11-17 #93: no duration in book (Skyfall)
+note: Audio Streaming Chart (2012-2014) 2012-11-24 #99: no duration in book (Skyfall)

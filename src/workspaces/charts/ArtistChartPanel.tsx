@@ -249,8 +249,9 @@ export function ArtistChartPanel({
                   Clear
                 </button>
                 <small>
-                  Tracks that reached these Billboard charts, such as Mainstream
-                  Rock Tracks, also count as charted tracks.
+                  Tracks that reached these Billboard and UK charts, such as
+                  Mainstream Rock Tracks or the NME Singles Chart, also count as
+                  charted tracks.
                 </small>
               </div>
               <div className="artist-chart-published-list">

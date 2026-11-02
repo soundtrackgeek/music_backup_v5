@@ -1,0 +1,105 @@
+1977_uk_singles: 6505 rows, 0 problems, 103 notes
+
+note: Official UK Singles Chart 1977-12-17 #42: wrapped line joined: '8004  EP'
+note: Official UK Singles Chart 1977-12-24 #27: wrapped line joined: '8004  EP'
+note: Official UK Singles Chart 1977-12-31 #27: wrapped line joined: '8004  EP'
+note: Record Retailer Singles Breakers 1977-01-15: chart starts at #51
+note: Record Retailer Singles Breakers 1977-01-22: chart starts at #51
+note: Record Retailer Singles Breakers 1977-01-29: chart starts at #51
+note: Record Retailer Singles Breakers 1977-02-05: chart starts at #51
+note: Record Retailer Singles Breakers 1977-02-12: chart starts at #51
+note: Record Retailer Singles Breakers 1977-02-19: chart starts at #51
+note: Record Retailer Singles Breakers 1977-02-26: chart starts at #51
+note: Record Retailer Singles Breakers 1977-03-05: chart starts at #51
+note: Record Retailer Singles Breakers 1977-03-12: chart starts at #51
+note: Record Retailer Singles Breakers 1977-03-19: chart starts at #51
+note: Record Retailer Singles Breakers 1977-03-26: chart starts at #51
+note: Record Retailer Singles Breakers 1977-04-02: chart starts at #51
+note: Record Retailer Singles Breakers 1977-04-09: chart starts at #51
+note: Record Retailer Singles Breakers 1977-04-16: chart starts at #51
+note: Record Retailer Singles Breakers 1977-04-23: chart starts at #51
+note: Record Retailer Singles Breakers 1977-04-30: chart starts at #51
+note: Record Retailer Singles Breakers 1977-05-07: chart starts at #51
+note: Record Retailer Singles Breakers 1977-05-14: chart starts at #51
+note: Record Retailer Singles Breakers 1977-05-21: chart starts at #51
+note: Record Retailer Singles Breakers 1977-05-28: chart starts at #51
+note: Record Retailer Singles Breakers 1977-06-04: chart starts at #51
+note: Record Retailer Singles Breakers 1977-06-11: chart starts at #51
+note: Record Retailer Singles Breakers 1977-06-18: chart starts at #51
+note: Record Retailer Singles Breakers 1977-06-25: chart starts at #51
+note: Record Retailer Singles Breakers 1977-07-02: chart starts at #51
+note: Record Retailer Singles Breakers 1977-07-09: chart starts at #51
+note: Record Retailer Singles Breakers 1977-07-16: chart starts at #51
+note: Record Retailer Singles Breakers 1977-07-23: chart starts at #51
+note: Record Retailer Singles Breakers 1977-07-30: chart starts at #51
+note: Record Retailer Singles Breakers 1977-08-06: chart starts at #51
+note: Record Retailer Singles Breakers 1977-08-13: chart starts at #51
+note: Record Retailer Singles Breakers 1977-08-20: chart starts at #51
+note: Record Retailer Singles Breakers 1977-08-27: chart starts at #51
+note: Record Retailer Singles Breakers 1977-09-03: chart starts at #51
+note: Record Retailer Singles Breakers 1977-09-10: chart starts at #51
+note: Record Retailer Singles Breakers 1977-09-17: chart starts at #51
+note: Record Retailer Singles Breakers 1977-09-24: chart starts at #51
+note: Record Retailer Singles Breakers 1977-10-01: chart starts at #51
+note: Record Retailer Singles Breakers 1977-10-08: chart starts at #51
+note: Record Retailer Singles Breakers 1977-10-15: chart starts at #51
+note: Record Retailer Singles Breakers 1977-10-22: chart starts at #51
+note: Record Retailer Singles Breakers 1977-10-29: chart starts at #51
+note: Record Retailer Singles Breakers 1977-11-05: chart starts at #51
+note: Record Retailer Singles Breakers 1977-11-12: chart starts at #51
+note: Record Retailer Singles Breakers 1977-11-19: chart starts at #51
+note: Record Retailer Singles Breakers 1977-11-26: chart starts at #51
+note: Record Retailer Singles Breakers 1977-12-03: chart starts at #51
+note: Record Retailer Singles Breakers 1977-12-10: chart starts at #51
+note: Record Retailer Singles Breakers 1977-12-17: chart starts at #51
+note: Record Retailer Singles Breakers 1977-12-24: chart starts at #51
+note: NME Singles Breakers 1977-12-24 #32: wrapped line joined: '8004  EP'
+note: NME Singles Breakers 1977-01-15: chart starts at #31
+note: NME Singles Breakers 1977-01-22: chart starts at #31
+note: NME Singles Breakers 1977-01-29: chart starts at #31
+note: NME Singles Breakers 1977-02-05: chart starts at #31
+note: NME Singles Breakers 1977-02-12: chart starts at #31
+note: NME Singles Breakers 1977-02-19: chart starts at #31
+note: NME Singles Breakers 1977-02-26: chart starts at #31
+note: NME Singles Breakers 1977-03-05: chart starts at #31
+note: NME Singles Breakers 1977-03-12: chart starts at #31
+note: NME Singles Breakers 1977-03-19: chart starts at #31
+note: NME Singles Breakers 1977-03-26: chart starts at #31
+note: NME Singles Breakers 1977-04-02: chart starts at #31
+note: NME Singles Breakers 1977-04-09: chart starts at #31
+note: NME Singles Breakers 1977-04-23: chart starts at #31
+note: NME Singles Breakers 1977-04-30: chart starts at #31
+note: NME Singles Breakers 1977-05-07: chart starts at #31
+note: NME Singles Breakers 1977-05-14: chart starts at #31
+note: NME Singles Breakers 1977-05-21: chart starts at #31
+note: NME Singles Breakers 1977-05-28: chart starts at #31
+note: NME Singles Breakers 1977-06-04: chart starts at #31
+note: NME Singles Breakers 1977-06-11: chart starts at #31
+note: NME Singles Breakers 1977-06-18: chart starts at #31
+note: NME Singles Breakers 1977-06-25: chart starts at #31
+note: NME Singles Breakers 1977-07-02: chart starts at #31
+note: NME Singles Breakers 1977-07-09: chart starts at #31
+note: NME Singles Breakers 1977-07-16: chart starts at #31
+note: NME Singles Breakers 1977-07-23: chart starts at #31
+note: NME Singles Breakers 1977-07-30: chart starts at #31
+note: NME Singles Breakers 1977-08-06: chart starts at #31
+note: NME Singles Breakers 1977-08-13: chart starts at #31
+note: NME Singles Breakers 1977-08-20: chart starts at #31
+note: NME Singles Breakers 1977-08-27: chart starts at #31
+note: NME Singles Breakers 1977-09-03: chart starts at #31
+note: NME Singles Breakers 1977-09-10: chart starts at #31
+note: NME Singles Breakers 1977-09-17: chart starts at #31
+note: NME Singles Breakers 1977-09-24: chart starts at #31
+note: NME Singles Breakers 1977-10-01: chart starts at #31
+note: NME Singles Breakers 1977-10-08: chart starts at #31
+note: NME Singles Breakers 1977-10-15: chart starts at #31
+note: NME Singles Breakers 1977-10-22: chart starts at #31
+note: NME Singles Breakers 1977-11-12: chart starts at #31
+note: NME Singles Breakers 1977-11-19: chart starts at #31
+note: NME Singles Breakers 1977-11-26: chart starts at #31
+note: NME Singles Breakers 1977-12-03: chart starts at #31
+note: NME Singles Breakers 1977-12-10: chart starts at #31
+note: NME Singles Breakers 1977-12-17: chart starts at #31
+note: NME Singles Breakers 1977-12-24: chart starts at #31
+note: NME Singles Breakers: 14-day gap between charts 1977-04-09 and 1977-04-23
+note: NME Singles Breakers: 21-day gap between charts 1977-10-22 and 1977-11-12

@@ -1,0 +1,9 @@
+1957_uk_singles: 4201 rows, 0 problems, 7 notes
+
+note: Official UK Singles Chart 1957-01-04 #26: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror British Singles Chart 1957-01-26 #10: no duration in book (The Garden Of Eden)
+note: Record Mirror British Singles Chart 1957-02-09 #10: no duration in book (Give Her My Love (When You Meet Her))
+note: Record Mirror British Singles Chart 1957-03-16: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9]
+note: Record Mirror British Singles Chart 1957-05-18 #9: no duration in book (Marianne)
+note: Record Mirror British Singles Chart 1957-10-19 #9: no duration in book (Top Ten Special)
+note: Record Mirror British Singles Chart 1957-10-26 #10: no duration in book (Top Ten Special)

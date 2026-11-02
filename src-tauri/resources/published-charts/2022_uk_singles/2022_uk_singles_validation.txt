@@ -1,0 +1,36 @@
+2022_uk_singles: 20800 rows, 0 problems, 34 notes
+
+note: Official UK Singles Chart 2022-01-27 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-02-03 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-02-10 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-02-17 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-02-24 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-03-03 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-03-10 #1: wrapped line joined: 'USWV22127496'
+note: Official UK Singles Chart 2022-05-19 #24: no duration in book (The Heart Part 5)
+note: Official Digital Download Chart 2022-02-10 #138: wrapped line joined: 'USQ4E2100809'
+note: Official Digital Download Chart 2022-05-12 #94: wrapped line joined: 'USQ4E2100809'
+note: Official Digital Download Chart 2022-12-01 #49: wrapped line joined: 'QMDA72271656'
+note: Official Digital Download Chart 2022-12-22 #11: wrapped line joined: "Douglas, Duncan Chisholm, Gary Innes & Breabach Blazin' Fiddles DL: GBMJG2104493"
+note: Official Digital Download Chart 2022-01-06 #145: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2022-01-13 #180: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2022-02-24 #192: no duration in book (Stan)
+note: Official Digital Download Chart 2022-03-03 #185: no duration in book (Stan)
+note: Official Digital Download Chart 2022-03-10 #133: no duration in book (Think Twice)
+note: Official Digital Download Chart 2022-03-10 #134: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2022-04-28 #179: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2022-05-19 #37: no duration in book (The Heart Part 5)
+note: Official Digital Download Chart 2022-05-26 #52: no duration in book (The Heart Part 5)
+note: Official Digital Download Chart 2022-06-09 #124: no duration in book (God Save The Queen)
+note: Official Digital Download Chart 2022-06-16 #113: no duration in book (God Save The Queen)
+note: Official Digital Download Chart 2022-09-01 #183: no duration in book (One For Sorrow)
+note: Official Digital Download Chart 2022-09-22 #128: no duration in book (God Save The Queen)
+note: Audio Streaming Chart 2022-02-03 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-02-10 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-02-17 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-02-24 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-03-03 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-03-10 #1: wrapped line joined: 'USWV22127496'
+note: Audio Streaming Chart 2022-05-19 #45: no duration in book (The Heart Part 5)
+note: Audio Streaming Chart 2022-11-17 #17: no catalogue_number in book (BackOutsideBoyz)
+note: Audio Streaming Chart 2022-11-24 #88: no catalogue_number in book (BackOutsideBoyz)

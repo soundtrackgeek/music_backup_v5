@@ -104,7 +104,7 @@ const highlights: ArtistTrackHighlights = {
 describe("artist track highlight panels", () => {
   it("shows archive preparation, errors, and empty results clearly", () => {
     const { rerender } = render(<ArtistChartBustersPanel highlights={null} isLoading isPreparingCharts error={null} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Preparing US charts");
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing charts");
     rerender(<ArtistChartBustersPanel highlights={null} isLoading={false} error="Archive unavailable" />);
     expect(screen.getByText("Archive unavailable")).toBeInTheDocument();
     rerender(<ArtistChartBustersPanel highlights={{ ...highlights, chartTracks: [] }} isLoading={false} error={null} />);

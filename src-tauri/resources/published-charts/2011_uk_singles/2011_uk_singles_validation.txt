@@ -1,0 +1,47 @@
+2011_uk_singles: 21200 rows, 0 problems, 45 notes
+
+note: Official UK Singles Chart 2011-05-07 #124: wrapped line joined: 'Abbey  Decca DL: GBUM71103330'
+note: Official UK Singles Chart 2011-05-07 #154: wrapped line joined: 'Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103318'
+note: Official UK Singles Chart 2011-05-14 #100: wrapped line joined: 'Abbey  Decca DL: GBUM71103330'
+note: Official UK Singles Chart 2011-05-14 #107: wrapped line joined: 'Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103318'
+note: Official UK Singles Chart 2011-05-14 #120: wrapped line joined: "Christopher Warren-Green, Doctor Andrew Grant, The Choir Of Her Majesty's Chapel Royal, St. James Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103298"
+note: Official UK Singles Chart 2011-03-26 #173: no duration in book (On The Floor (Jennifer Lopez & Pitbull Cover))
+note: Official UK Singles Chart 2011-04-02 #84: no duration in book (On The Floor (Jennifer Lopez & Pitbull Cover))
+note: Official UK Singles Chart 2011-07-23 #187: no duration in book (It's Alright)
+note: Official UK Singles Chart 2011-08-06 #41: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official UK Singles Chart 2011-08-13 #78: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official UK Singles Chart 2011-08-20 #132: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official UK Singles Chart 2011-08-27 #72: no duration in book (Stan)
+note: Official UK Singles Chart 2011-09-03 #78: no duration in book (Stan)
+note: Official UK Singles Chart 2011-09-10 #115: no duration in book (Stan)
+note: Official UK Singles Chart 2011-09-17 #151: no duration in book (Loca People)
+note: Official UK Singles Chart 2011-10-01 #149: no duration in book (Stereo Hearts)
+note: Official UK Singles Chart 2011-10-15 #165: no duration in book (Out Here On My Own)
+note: Official UK Singles Chart 2011-10-22 #183: no duration in book (One For Sorrow)
+note: Official UK Singles Chart 2011-10-22 #187: no duration in book (Sam Our Captain)
+note: Official UK Singles Chart 2011-11-05 #141: no duration in book (Move It)
+note: Official UK Singles Chart 2011-11-19 #104: no duration in book (Stan)
+note: Official UK Singles Chart 2011-11-26 #124: no duration in book (Stan)
+note: Official UK Singles Chart 2011-12-03 #162: no duration in book (Stan)
+note: Official Digital Download Chart 2011-05-07 #123: wrapped line joined: 'Abbey  Decca DL: GBUM71103330'
+note: Official Digital Download Chart 2011-05-07 #152: wrapped line joined: 'Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103318'
+note: Official Digital Download Chart 2011-05-14 #99: wrapped line joined: 'Abbey  Decca DL: GBUM71103330'
+note: Official Digital Download Chart 2011-05-14 #106: wrapped line joined: 'Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103318'
+note: Official Digital Download Chart 2011-05-14 #118: wrapped line joined: "Christopher Warren-Green, Doctor Andrew Grant, The Choir Of Her Majesty's Chapel Royal, St. James Palace & The Choir Of Westminster Abbey Decca DL: GBUM71103298"
+note: Official Digital Download Chart 2011-03-26 #172: no duration in book (On The Floor (Jennifer Lopez & Pitbull Cover))
+note: Official Digital Download Chart 2011-04-02 #82: no duration in book (On The Floor (Jennifer Lopez & Pitbull Cover))
+note: Official Digital Download Chart 2011-07-23 #187: no duration in book (It's Alright)
+note: Official Digital Download Chart 2011-08-06 #41: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official Digital Download Chart 2011-08-13 #78: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official Digital Download Chart 2011-08-20 #131: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official Digital Download Chart 2011-08-27 #72: no duration in book (Stan)
+note: Official Digital Download Chart 2011-09-03 #77: no duration in book (Stan)
+note: Official Digital Download Chart 2011-09-10 #115: no duration in book (Stan)
+note: Official Digital Download Chart 2011-09-17 #151: no duration in book (Loca People)
+note: Official Digital Download Chart 2011-10-01 #147: no duration in book (Stereo Hearts)
+note: Official Digital Download Chart 2011-10-15 #164: no duration in book (Out Here On My Own)
+note: Official Digital Download Chart 2011-10-22 #180: no duration in book (One For Sorrow)
+note: Official Digital Download Chart 2011-10-22 #184: no duration in book (Sam Our Captain)
+note: Official Digital Download Chart 2011-11-19 #103: no duration in book (Stan)
+note: Official Digital Download Chart 2011-11-26 #124: no duration in book (Stan)
+note: Official Digital Download Chart 2011-12-03 #159: no duration in book (Stan)

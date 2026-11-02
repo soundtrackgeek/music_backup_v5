@@ -1,0 +1,95 @@
+1982_uk_singles: 8316 rows, 0 problems, 93 notes
+
+note: Official UK Singles Chart 1982-03-13 #42: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-03-20 #37: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-03-27 #27: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-04-03 #28: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-04-10 #25: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-04-17 #29: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-04-24 #37: wrapped line joined: 'RCA 196'
+note: Official UK Singles Chart 1982-01-02 #44: no duration in book (Five Tracks Of Laughter)
+note: Official UK Singles Chart 1982-01-09 #69: no duration in book (Five Tracks Of Laughter)
+note: NME Singles Chart 1982-03-27 #28: wrapped line joined: 'RCA 196'
+note: NME Singles Chart 1982-04-03 #23: wrapped line joined: 'RCA 196'
+note: BMRB Next 25 1982-03-06 #78: wrapped line joined: 'RCA 196'
+note: BMRB Next 25 1982-01-02: chart starts at #76
+note: BMRB Next 25 1982-01-02 #78: no duration in book (Christmas Dream)
+note: BMRB Next 25 1982-01-09: chart starts at #76
+note: BMRB Next 25 1982-01-16: chart starts at #76
+note: BMRB Next 25 1982-01-16 #94: no duration in book (Sonny Boy)
+note: BMRB Next 25 1982-01-23: chart starts at #76
+note: BMRB Next 25 1982-01-30: chart starts at #76
+note: BMRB Next 25 1982-02-06: chart starts at #76
+note: BMRB Next 25 1982-02-13: chart starts at #76
+note: BMRB Next 25 1982-02-20: chart starts at #76
+note: BMRB Next 25 1982-02-27: chart starts at #76
+note: BMRB Next 25 1982-03-06: chart starts at #76
+note: BMRB Next 25 1982-03-13: chart starts at #76
+note: BMRB Next 25 1982-03-20: chart starts at #76
+note: BMRB Next 25 1982-03-27: chart starts at #76
+note: BMRB Next 25 1982-04-03: chart starts at #76
+note: BMRB Next 25 1982-04-10: chart starts at #76
+note: BMRB Next 25 1982-04-17: chart starts at #76
+note: BMRB Next 25 1982-04-24: chart starts at #76
+note: BMRB Next 25 1982-05-01: chart starts at #76
+note: BMRB Next 25 1982-05-08: chart starts at #76
+note: BMRB Next 25 1982-05-15: chart starts at #76
+note: BMRB Next 25 1982-05-22: chart starts at #76
+note: BMRB Next 25 1982-05-29: chart starts at #76
+note: BMRB Next 25 1982-06-05: chart starts at #76
+note: BMRB Next 25 1982-06-05 #99: no duration in book ((I'm Into) Your Love)
+note: BMRB Next 25 1982-06-12: chart starts at #76
+note: BMRB Next 25 1982-06-12 #100: no duration in book ((I'm Into) Your Love)
+note: BMRB Next 25 1982-06-19: chart starts at #76
+note: BMRB Next 25 1982-06-19 #100: no duration in book ((I'm Into) Your Love)
+note: BMRB Next 25 1982-06-26: chart starts at #76
+note: BMRB Next 25 1982-06-26 #100: no duration in book ((I'm Into) Your Love)
+note: BMRB Next 25 1982-07-03: chart starts at #76
+note: BMRB Next 25 1982-07-10: chart starts at #76
+note: BMRB Next 25 1982-07-10 #79: no duration in book (Beach Boy Gold Part II)
+note: BMRB Next 25 1982-07-10 #81: no duration in book (Da Da Da, I Don't Love You, You Don't Love Me)
+note: BMRB Next 25 1982-07-17: chart starts at #76
+note: BMRB Next 25 1982-07-17 #78: no duration in book (Beach Boy Gold Part II)
+note: BMRB Next 25 1982-07-17 #80: no duration in book (Da Da Da, I Don't Love You, You Don't Love Me)
+note: BMRB Next 25 1982-07-24: chart starts at #76
+note: BMRB Next 25 1982-07-24 #77: no duration in book (Beach Boy Gold Part II)
+note: BMRB Next 25 1982-07-24 #80: no duration in book (Da Da Da, I Don't Love You, You Don't Love Me)
+note: BMRB Next 25 1982-07-31: chart starts at #76
+note: BMRB Next 25 1982-07-31 #78: no duration in book (Beach Boy Gold Part II)
+note: BMRB Next 25 1982-08-07: chart starts at #76
+note: BMRB Next 25 1982-08-07 #76: no duration in book (Beach Boy Gold Part II)
+note: BMRB Next 25 1982-08-14: chart starts at #76
+note: BMRB Next 25 1982-08-14 #76: no duration in book (Blind Date)
+note: BMRB Next 25 1982-08-21: chart starts at #76
+note: BMRB Next 25 1982-08-28: chart starts at #76
+note: BMRB Next 25 1982-09-04: chart starts at #76
+note: BMRB Next 25 1982-09-04 #93: no duration in book (Runaway)
+note: BMRB Next 25 1982-09-11: chart starts at #76
+note: BMRB Next 25 1982-09-11 #94: no duration in book (Runaway)
+note: BMRB Next 25 1982-09-18: chart starts at #76
+note: BMRB Next 25 1982-09-18 #94: no duration in book (Runaway)
+note: BMRB Next 25 1982-09-25: chart starts at #76
+note: BMRB Next 25 1982-09-25 #92: no duration in book (Runaway)
+note: BMRB Next 25 1982-09-25 #99: no duration in book (What's Happening)
+note: BMRB Next 25 1982-09-25 #100: no duration in book (When We Party (Uptown, Downtown))
+note: BMRB Next 25 1982-10-02: chart starts at #76
+note: BMRB Next 25 1982-10-02 #92: no duration in book (Runaway)
+note: BMRB Next 25 1982-10-02 #99: no duration in book (What's Happening)
+note: BMRB Next 25 1982-10-02 #100: no duration in book (When We Party (Uptown, Downtown))
+note: BMRB Next 25 1982-10-09: chart starts at #76
+note: BMRB Next 25 1982-10-09 #97: no duration in book (What's Happening)
+note: BMRB Next 25 1982-10-09 #98: no duration in book (When We Party (Uptown, Downtown))
+note: BMRB Next 25 1982-10-16: chart starts at #76
+note: BMRB Next 25 1982-10-23: chart starts at #76
+note: BMRB Next 25 1982-10-30: chart starts at #76
+note: BMRB Next 25 1982-11-06: chart starts at #76
+note: BMRB Next 25 1982-11-06 #94: no duration in book (Shining Light)
+note: BMRB Next 25 1982-11-13: chart starts at #76
+note: BMRB Next 25 1982-11-20: chart starts at #76
+note: BMRB Next 25 1982-11-27: chart starts at #76
+note: BMRB Next 25 1982-12-04: chart starts at #76
+note: BMRB Next 25 1982-12-04 #76: no duration in book (All Quiet On The Western Front)
+note: BMRB Next 25 1982-12-11: chart starts at #76
+note: BMRB Next 25 1982-12-18: chart starts at #76
+note: BMRB Next 25 1982-12-25: chart starts at #76
+note: BMRB Next 25 1982-12-25 #89: no duration in book (Five Tracks Of Laughter)

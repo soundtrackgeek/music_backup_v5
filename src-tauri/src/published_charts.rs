@@ -39,6 +39,38 @@ const ENTRY_HEADERS: [&str; 21] = [
     "source_page",
 ];
 
+/// Yearly books are named `<year><suffix>`; the suffix says which country's charts they hold.
+const BOOK_SUFFIXES: [(&str, &str); 2] = [("_us_singles", "US"), ("_uk_singles", "UK")];
+
+/// `(suffix, country)` of a yearly book name such as `1985_uk_singles`.
+fn book_region(book: &str) -> Option<(&'static str, &'static str)> {
+    BOOK_SUFFIXES
+        .iter()
+        .copied()
+        .find(|(suffix, _)| book.ends_with(suffix))
+}
+
+fn book_year(book: &str) -> Result<i32> {
+    book.get(0..4)
+        .and_then(|year| year.parse::<i32>().ok())
+        .with_context(|| format!("Invalid chart book {book}"))
+}
+
+/// The book suffix a chart lives in. Chart names are unique across countries, so the
+/// first stored book of the chart decides; unknown charts fall back to the US books.
+fn chart_book_suffix(conn: &Connection, chart: &str) -> Result<&'static str> {
+    let book = conn
+        .query_row(
+            "SELECT book FROM published_chart_books WHERE chart = ?1 LIMIT 1",
+            params![chart],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    Ok(book
+        .and_then(|book| book_region(&book))
+        .map_or(BOOK_SUFFIXES[0].0, |(suffix, _)| suffix))
+}
+
 #[cfg(not(test))]
 static IMPORT_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -143,6 +175,8 @@ pub struct PublishedChartCatalog {
 #[serde(rename_all = "camelCase")]
 pub struct PublishedChartSeries {
     pub chart: String,
+    /// Country whose publications the chart comes from: "US" or "UK".
+    pub country: String,
     pub years: Vec<i32>,
     pub first_week: String,
     pub last_week: String,
@@ -260,8 +294,18 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_published_chart_entries_week
             ON published_chart_entries(book_id, week_ending, position, source_row);
 
+        -- Kept for older builds sharing this catalog; it only ever holds US years.
         CREATE TABLE IF NOT EXISTS published_chart_import_years (
             year INTEGER PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            row_count INTEGER NOT NULL,
+            imported_at TEXT NOT NULL
+        );
+
+        -- One row per imported yearly book, whatever its country (1985_us_singles,
+        -- 1985_uk_singles), so the same year can exist for several countries.
+        CREATE TABLE IF NOT EXISTS published_chart_import_books (
+            book TEXT PRIMARY KEY,
             source_path TEXT NOT NULL,
             row_count INTEGER NOT NULL,
             imported_at TEXT NOT NULL
@@ -451,12 +495,12 @@ fn bundled_folder(app: &AppHandle) -> Result<PathBuf> {
             return Ok(development);
         }
     }
-    bail!("Bundled US chart data is missing from this installation")
+    bail!("Bundled chart data is missing from this installation")
 }
 
 fn bundle_hashes(
     folder: &Path,
-    books: &BTreeMap<i32, Vec<InventoryRow>>,
+    books: &BTreeMap<String, Vec<InventoryRow>>,
 ) -> Result<Option<HashMap<String, String>>> {
     let path = folder.join("manifest.json");
     if !path.is_file() {
@@ -469,39 +513,34 @@ fn bundle_hashes(
         .into_iter()
         .map(|book| (book.book, book.csv_sha256))
         .collect();
-    if hashes.len() != books.len()
-        || books
-            .keys()
-            .any(|year| !hashes.contains_key(&format!("{year}_us_singles")))
-    {
+    if hashes.len() != books.len() || books.keys().any(|book| !hashes.contains_key(book)) {
         bail!("Bundled chart manifest does not match the inventory");
     }
     Ok(Some(hashes))
 }
 
-fn read_inventory(folder: &Path) -> Result<BTreeMap<i32, Vec<InventoryRow>>> {
+/// The inventory grouped by yearly book (`1985_uk_singles`), in book-name order.
+fn read_inventory(folder: &Path) -> Result<BTreeMap<String, Vec<InventoryRow>>> {
     let path = folder.join("chart_inventory.csv");
     let mut reader = csv::Reader::from_path(&path)
         .with_context(|| format!("Could not read {}", path.display()))?;
-    let mut years: BTreeMap<i32, Vec<InventoryRow>> = BTreeMap::new();
+    let mut books: BTreeMap<String, Vec<InventoryRow>> = BTreeMap::new();
     let mut seen = HashSet::new();
     for row in reader.deserialize::<InventoryRow>() {
         let row = row.context("Invalid chart inventory row")?;
-        if !row.book.ends_with("_us_singles") {
+        if book_region(&row.book).is_none() {
             continue;
         }
-        let year = row.book[0..4]
-            .parse::<i32>()
-            .with_context(|| format!("Invalid US chart book {}", row.book))?;
+        book_year(&row.book)?;
         if !seen.insert((row.book.clone(), row.chart.clone())) {
             bail!("Duplicate inventory chart {} / {}", row.book, row.chart);
         }
-        years.entry(year).or_default().push(row);
+        books.entry(row.book.clone()).or_default().push(row);
     }
-    if years.is_empty() {
-        bail!("The chart inventory has no US singles charts");
+    if books.is_empty() {
+        bail!("The chart inventory has no singles charts");
     }
-    Ok(years)
+    Ok(books)
 }
 
 fn validate_report(folder: &Path, book: &str, expected_rows: usize) -> Result<()> {
@@ -516,6 +555,37 @@ fn validate_report(folder: &Path, book: &str, expected_rows: usize) -> Result<()
     Ok(())
 }
 
+/// What was recorded when this book was last imported. Installs from before the UK
+/// books only have the year-keyed US table, so a US book falls back to it and is
+/// not imported again just because the per-book table is new.
+fn previous_import(conn: &Connection, book: &str, year: i32) -> Result<Option<(String, i64)>> {
+    let recorded = conn
+        .query_row(
+            "SELECT source_path, row_count FROM published_chart_import_books WHERE book = ?1",
+            params![book],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()?;
+    if recorded.is_some() || !book.ends_with(BOOK_SUFFIXES[0].0) {
+        return Ok(recorded);
+    }
+    let legacy = conn
+        .query_row(
+            "SELECT source_path, row_count FROM published_chart_import_years WHERE year = ?1",
+            params![year],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()?;
+    if let Some((source_path, row_count)) = &legacy {
+        conn.execute(
+            "INSERT OR IGNORE INTO published_chart_import_books (book, source_path, row_count, imported_at)
+             VALUES (?1, ?2, ?3, datetime('now'))",
+            params![book, source_path, row_count],
+        )?;
+    }
+    Ok(legacy)
+}
+
 fn import_folder<F>(
     conn: &mut Connection,
     folder: &Path,
@@ -525,26 +595,23 @@ where
     F: FnMut(PublishedChartsImportProgress),
 {
     let started = Instant::now();
-    let years = read_inventory(folder)?;
-    let hashes = bundle_hashes(folder, &years)?;
-    let total_years = years.len();
+    ensure_schema(conn)?;
+    let inventory_books = read_inventory(folder)?;
+    let hashes = bundle_hashes(folder, &inventory_books)?;
+    let total_years = inventory_books.len();
     let mut imported_rows = 0;
     let mut chart_names = HashSet::new();
     let mut identity = IdentityKeys::default();
 
-    for (completed_years, (year, inventory)) in years.into_iter().enumerate() {
-        let book = format!("{year}_us_singles");
+    for (completed_years, (book, inventory)) in inventory_books.into_iter().enumerate() {
+        let year = book_year(&book)?;
         let expected_rows: usize = inventory.iter().map(|row| row.rows).sum();
         chart_names.extend(inventory.iter().map(|row| row.chart.clone()));
         let bundle_source = hashes
             .as_ref()
             .map(|items| format!("bundle:{}", items[&book]));
         if let Some(source) = &bundle_source {
-            let previous = conn.query_row(
-                "SELECT source_path, row_count FROM published_chart_import_years WHERE year = ?1",
-                params![year],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
-            ).optional()?;
+            let previous = previous_import(conn, &book, year)?;
             let expected_books: HashSet<_> = inventory
                 .iter()
                 .map(|row| {
@@ -722,17 +789,24 @@ where
                 bail!("{book} / {} disagrees with chart_inventory.csv", row.chart);
             }
         }
+        let source_path = bundle_source.unwrap_or_else(|| csv_path.to_string_lossy().to_string());
         tx.execute(
-            "INSERT INTO published_chart_import_years (year, source_path, row_count, imported_at)
+            "INSERT INTO published_chart_import_books (book, source_path, row_count, imported_at)
              VALUES (?1, ?2, ?3, datetime('now'))
-             ON CONFLICT(year) DO UPDATE SET source_path = excluded.source_path,
+             ON CONFLICT(book) DO UPDATE SET source_path = excluded.source_path,
                 row_count = excluded.row_count, imported_at = excluded.imported_at",
-            params![
-                year,
-                bundle_source.unwrap_or_else(|| csv_path.to_string_lossy().to_string()),
-                count as i64
-            ],
+            params![book, source_path, count as i64],
         )?;
+        if book.ends_with(BOOK_SUFFIXES[0].0) {
+            // Older builds read the year-keyed table; it only ever describes the US books.
+            tx.execute(
+                "INSERT INTO published_chart_import_years (year, source_path, row_count, imported_at)
+                 VALUES (?1, ?2, ?3, datetime('now'))
+                 ON CONFLICT(year) DO UPDATE SET source_path = excluded.source_path,
+                    row_count = excluded.row_count, imported_at = excluded.imported_at",
+                params![year, source_path, count as i64],
+            )?;
+        }
         tx.commit().context("Could not commit chart year import")?;
         imported_rows += count;
         progress(PublishedChartsImportProgress {
@@ -762,19 +836,28 @@ pub fn import_for_app(app: &AppHandle) -> Result<PublishedChartsImportSummary> {
     })
 }
 
-pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
-    let imported_years = conn.query_row(
-        "SELECT COUNT(*) FROM published_chart_import_years",
+/// Whether the per-book import table exists; a read-only connection cannot create it.
+fn import_books_exist(conn: &Connection) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'published_chart_import_books'",
         [],
         |row| row.get::<_, i64>(0),
-    )? as usize;
-    let total_rows = conn.query_row(
-        "SELECT COALESCE(SUM(row_count), 0) FROM published_chart_import_years",
-        [],
-        |row| row.get(0),
-    )?;
+    )? == 1)
+}
+
+pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
+    // `imported_years` counts imported yearly books; the name is kept for the UI contract.
+    let (imported_years, total_rows) = if import_books_exist(conn)? {
+        conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(row_count), 0) FROM published_chart_import_books",
+            [],
+            |row| Ok((row.get::<_, i64>(0)? as usize, row.get::<_, i64>(1)?)),
+        )?
+    } else {
+        (0, 0)
+    };
     let mut statement = conn.prepare(
-        "SELECT chart, CAST(SUBSTR(book, 1, 4) AS INTEGER), first_week, last_week, row_count
+        "SELECT chart, CAST(SUBSTR(book, 1, 4) AS INTEGER), first_week, last_week, row_count, book
          FROM published_chart_books ORDER BY chart, book",
     )?;
     let books = statement.query_map([], |row| {
@@ -784,14 +867,16 @@ pub fn catalog(conn: &Connection) -> Result<PublishedChartCatalog> {
             row.get::<_, String>(2)?,
             row.get::<_, String>(3)?,
             row.get::<_, i64>(4)?,
+            row.get::<_, String>(5)?,
         ))
     })?;
     let mut series: Vec<PublishedChartSeries> = Vec::new();
     for book in books {
-        let (chart, year, first, last, rows) = book?;
+        let (chart, year, first, last, rows, book_name) = book?;
         if series.last().is_none_or(|item| item.chart != chart) {
             series.push(PublishedChartSeries {
                 chart: chart.clone(),
+                country: book_region(&book_name).map_or("US", |(_, country)| country).to_string(),
                 years: Vec::new(),
                 first_week: first.clone(),
                 last_week: last.clone(),
@@ -824,7 +909,8 @@ pub fn catalog_with_inventory(conn: &Connection, folder: &Path) -> Result<Publis
     result.inventory_years = inventory.len();
     let mut by_chart: BTreeMap<String, PublishedChartSeries> = BTreeMap::new();
     let mut expected_books = HashSet::new();
-    for (year, rows) in inventory {
+    for (book, rows) in inventory {
+        let year = book_year(&book)?;
         for row in rows {
             expected_books.insert((
                 row.book.clone(),
@@ -838,6 +924,9 @@ pub fn catalog_with_inventory(conn: &Connection, folder: &Path) -> Result<Publis
                 .entry(row.chart.clone())
                 .or_insert_with(|| PublishedChartSeries {
                     chart: row.chart.clone(),
+                    country: book_region(&row.book)
+                        .map_or("US", |(_, country)| country)
+                        .to_string(),
                     years: Vec::new(),
                     first_week: row.first_week.clone(),
                     last_week: row.last_week.clone(),
@@ -870,16 +959,15 @@ pub fn catalog_with_inventory(conn: &Connection, folder: &Path) -> Result<Publis
         .collect::<rusqlite::Result<HashSet<_>>>()?;
     result.needs_import |= expected_books != imported_books;
     if let Some(hashes) = hashes {
-        let mut statement =
-            conn.prepare("SELECT year, source_path FROM published_chart_import_years")?;
-        let imported_sources = statement
-            .query_map([], |row| {
-                Ok((row.get::<_, i32>(0)?, row.get::<_, String>(1)?))
-            })?
-            .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+        let imported_sources = if import_books_exist(conn)? {
+            conn.prepare("SELECT book, source_path FROM published_chart_import_books")?
+                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+                .collect::<rusqlite::Result<HashMap<_, _>>>()?
+        } else {
+            HashMap::new()
+        };
         if hashes.iter().any(|(book, hash)| {
-            let year = book[0..4].parse::<i32>().unwrap();
-            imported_sources.get(&year).map(String::as_str)
+            imported_sources.get(book).map(String::as_str)
                 != Some(format!("bundle:{hash}").as_str())
         }) {
             result.needs_import = true;
@@ -924,8 +1012,9 @@ pub fn artists(
                   JOIN published_chart_entries e ON e.book_id = b.id
                   WHERE b.chart = ?1 AND b.book BETWEEN ?2 AND ?3
                     AND e.week_ending BETWEEN ?4 AND ?5";
-    let from_book = format!("{from_year}_us_singles");
-    let to_book = format!("{to_year}_us_singles");
+    let suffix = chart_book_suffix(conn, chart)?;
+    let from_book = format!("{from_year}{suffix}");
+    let to_book = format!("{to_year}{suffix}");
     let summary_sql = format!("SELECT COUNT(DISTINCT e.week_ending), COUNT(*) {filter}");
     let (chart_weeks, total_entries) = conn.query_row(
         &summary_sql,
@@ -1025,8 +1114,9 @@ pub fn songs(
                   JOIN published_chart_entries e ON e.book_id = b.id
                   WHERE b.chart = ?1 AND b.book BETWEEN ?2 AND ?3
                     AND e.week_ending BETWEEN ?4 AND ?5";
-    let from_book = format!("{from_year}_us_singles");
-    let to_book = format!("{to_year}_us_singles");
+    let suffix = chart_book_suffix(conn, chart)?;
+    let from_book = format!("{from_year}{suffix}");
+    let to_book = format!("{to_year}{suffix}");
     let summary_sql = format!("SELECT COUNT(DISTINCT e.week_ending), COUNT(*) {filter}");
     let (chart_weeks, total_entries) = conn.query_row(
         &summary_sql,
@@ -1104,7 +1194,7 @@ pub fn songs(
 }
 
 pub fn weeks(conn: &Connection, chart: &str, year: i32) -> Result<Vec<PublishedChartWeek>> {
-    let book = format!("{year}_us_singles");
+    let book = format!("{year}{}", chart_book_suffix(conn, chart)?);
     let mut statement = conn.prepare(
         "SELECT e.week_ending, COUNT(*) FROM published_chart_entries e
          JOIN published_chart_books b ON b.id = e.book_id
@@ -1130,7 +1220,7 @@ pub fn entries(
     offset: u32,
 ) -> Result<PublishedChartEntries> {
     let date = NaiveDate::parse_from_str(week, "%Y-%m-%d").context("Choose a valid chart date")?;
-    let book = format!("{}_us_singles", date.format("%Y"));
+    let book = format!("{}{}", date.format("%Y"), chart_book_suffix(conn, chart)?);
     let book_id = conn
         .query_row(
             "SELECT id FROM published_chart_books WHERE book = ?1 AND chart = ?2",
@@ -1375,31 +1465,41 @@ mod tests {
     }
 
     #[test]
-    fn bundled_inventory_lists_all_us_series_before_import() {
+    fn bundled_inventory_lists_all_us_and_uk_series_before_import() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let conn = Connection::open_in_memory().unwrap();
         ensure_schema(&conn).unwrap();
         let available = catalog_with_inventory(&conn, &source).unwrap();
-        assert_eq!(available.inventory_years, 86);
+        assert_eq!(available.inventory_years, 158);
         assert_eq!(available.imported_years, 0);
         assert!(available.needs_import);
         assert!(available
             .series
             .iter()
             .any(|series| series.chart == "Billboard Hot 100"));
-        assert_eq!(available.series.len(), 88);
-        assert_eq!(
+        let rows_for = |country: &str| {
             available
                 .series
                 .iter()
+                .filter(|series| series.country == country)
                 .map(|series| series.rows)
-                .sum::<i64>(),
-            3_279_068
-        );
-        assert!(available
-            .series
-            .iter()
-            .all(|series| !series.chart.starts_with("UK ")));
+                .sum::<i64>()
+        };
+        let count_for = |country: &str| {
+            available
+                .series
+                .iter()
+                .filter(|series| series.country == country)
+                .count()
+        };
+        assert_eq!((count_for("US"), rows_for("US")), (88, 3_279_068));
+        assert_eq!((count_for("UK"), rows_for("UK")), (20, 793_082));
+        let uk = |chart: &str| available.series.iter().find(|series| series.chart == chart);
+        assert!(uk("Melody Maker Singles Chart").is_some());
+        assert!(uk("NME Singles Chart").is_some());
+        // Not weekly singles charts, so they are not bundled.
+        assert!(uk("Digital Download Test Data").is_none());
+        assert!(uk("Record Mirror Albums Chart").is_none());
     }
 
     #[test]
@@ -1407,8 +1507,7 @@ mod tests {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let inventory = read_inventory(&source).unwrap();
         let mut total = 0_usize;
-        for (year, series) in inventory {
-            let book = format!("{year}_us_singles");
+        for (book, series) in inventory {
             let expected_rows: usize = series.iter().map(|item| item.rows).sum();
             validate_report(&source, &book, expected_rows).unwrap();
             let file =
@@ -1432,11 +1531,11 @@ mod tests {
             }
             total += expected_rows;
         }
-        assert_eq!(total, 3_279_068);
+        assert_eq!(total, 4_072_150);
     }
 
     #[test]
-    #[ignore = "imports all 3.28 million bundled entries into a temporary SQLite database"]
+    #[ignore = "imports all 4.07 million bundled entries into a temporary SQLite database"]
     fn imports_entire_bundled_collection() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/published-charts");
         let temp = tempfile::tempdir().unwrap();
@@ -1447,14 +1546,14 @@ mod tests {
         .unwrap();
         ensure_schema(&conn).unwrap();
         let summary = import_folder(&mut conn, &source, |_| {}).unwrap();
-        assert_eq!(summary.years_imported, 86);
-        assert_eq!(summary.rows_imported, 3_279_068);
+        assert_eq!(summary.years_imported, 158);
+        assert_eq!(summary.rows_imported, 4_072_150);
         let actual: i64 = conn
             .query_row("SELECT COUNT(*) FROM published_chart_entries", [], |row| {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(actual, 3_279_068);
+        assert_eq!(actual, 4_072_150);
         assert!(!catalog_with_inventory(&conn, &source).unwrap().needs_import);
         conn.execute_batch(
             "UPDATE published_chart_entries SET artist_group_key = NULL, title_key = NULL;
@@ -1669,6 +1768,117 @@ mod tests {
                 .unwrap();
         assert_eq!(history.len(), 3);
         assert_eq!(history[2].position, 2);
+    }
+
+
+    /// A US and a UK book of the same year; the UK chart prints one song in two weeks.
+    fn two_country_fixture(folder: &Path) {
+        fixture(folder, 2);
+        let year = folder.join("2019_uk_singles");
+        fs::create_dir_all(&year).unwrap();
+        let inventory = folder.join("chart_inventory.csv");
+        let mut text = fs::read_to_string(&inventory).unwrap();
+        text.push_str("2019_uk_singles,NME Singles Chart,2019-01-05,2019-01-12,2,3,40,41\n");
+        fs::write(&inventory, text).unwrap();
+        fs::write(
+            year.join("2019_uk_singles_validation.txt"),
+            "2019_uk_singles: 3 rows, 0 problems, 0 notes\n",
+        )
+        .unwrap();
+        fs::write(
+            year.join("2019_uk_singles_all_charts.csv"),
+            concat!(
+                "book,chart,week_ending,position,last_week,weeks_on_chart,entry_status,movement,title,artist,number_one_marker,label,format,catalogue_number,release_type,duration,peak_position,entry_date,peak_date,bpi_award,source_page\n",
+                "2019_uk_singles,NME Singles Chart,2019-01-05,1,,1,NEW,,Song A (Radio Edit),Artist A,,Label,7'',X 1,,03:00,1,2019-01-05,2019-01-05,,40\n",
+                "2019_uk_singles,NME Singles Chart,2019-01-12,1,1,2,,0,Song A (Radio Edit),Artist A,,Label,7'',X 1,,03:00,1,2019-01-05,2019-01-05,,41\n",
+                "2019_uk_singles,NME Singles Chart,2019-01-12,2,,1,NEW,,Song C,Artist C,,Label,7'',X 2,,03:00,2,2019-01-12,2019-01-12,,41\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn us_and_uk_books_of_one_year_coexist_and_queries_follow_the_chart() {
+        let temp = tempfile::tempdir().unwrap();
+        two_country_fixture(temp.path());
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        ensure_schema(&conn).unwrap();
+        let summary = import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert_eq!((summary.years_imported, summary.rows_imported), (2, 6));
+
+        let catalog = catalog(&conn).unwrap();
+        assert_eq!(catalog.imported_years, 2);
+        let country = |chart: &str| {
+            catalog
+                .series
+                .iter()
+                .find(|series| series.chart == chart)
+                .map(|series| series.country.clone())
+        };
+        assert_eq!(country("Billboard Hot 100").as_deref(), Some("US"));
+        assert_eq!(country("NME Singles Chart").as_deref(), Some("UK"));
+
+        // The same year resolves to the book of the chart that was asked for.
+        assert_eq!(weeks(&conn, "NME Singles Chart", 2019).unwrap().len(), 2);
+        assert_eq!(weeks(&conn, "Billboard Hot 100", 2019).unwrap().len(), 1);
+        let uk = entries(&conn, "NME Singles Chart", "2019-01-12", 0).unwrap();
+        assert_eq!(uk.total_rows, 2);
+        assert_eq!(uk.entries[0].book, "2019_uk_singles");
+        assert_eq!(uk.entries[0].catalogue_number, "X 1");
+        let us = entries(&conn, "Billboard Hot 100", "2019-01-05", 0).unwrap();
+        assert_eq!(us.entries[0].book, "2019_us_singles");
+        let ranking = artists(&conn, "NME Singles Chart", 2019, 2019, None, None, 0).unwrap();
+        assert_eq!(ranking.artists[0].artist, "Artist A");
+        assert_eq!(ranking.artists[0].number_one_weeks, 2);
+        assert_eq!(ranking.artists.len(), 2);
+        let ranked_songs = songs(&conn, "NME Singles Chart", 2019, 2019, None, None, 0).unwrap();
+        assert_eq!(ranked_songs.songs.len(), 2);
+    }
+
+    #[test]
+    fn existing_us_imports_are_not_repeated_when_uk_books_arrive() {
+        let temp = tempfile::tempdir().unwrap();
+        two_country_fixture(temp.path());
+        let manifest = temp.path().join("manifest.json");
+        fs::write(
+            &manifest,
+            r#"{"books":[{"book":"2019_us_singles","csv_sha256":"us"},{"book":"2019_uk_singles","csv_sha256":"uk"}]}"#,
+        )
+        .unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        ensure_schema(&conn).unwrap();
+        import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert!(!catalog_with_inventory(&conn, temp.path()).unwrap().needs_import);
+
+        // An install from before UK books only knew the year-keyed table.
+        conn.execute("DELETE FROM published_chart_import_books", []).unwrap();
+        assert!(catalog_with_inventory(&conn, temp.path()).unwrap().needs_import);
+        let rows_before: i64 = conn
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM published_chart_entries", [], |row| row.get(0))
+            .unwrap();
+        import_folder(&mut conn, temp.path(), |_| {}).unwrap();
+        assert!(!catalog_with_inventory(&conn, temp.path()).unwrap().needs_import);
+        let us_rows_kept: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM published_chart_entries e JOIN published_chart_books b ON b.id = e.book_id
+                 WHERE b.book = '2019_us_singles' AND e.id <= ?1",
+                params![rows_before],
+                |row| row.get(0),
+            )
+            .unwrap();
+        // The US book was recognised from the legacy table and kept; the UK book was read again.
+        assert_eq!(us_rows_kept, 3);
+        let uk_rows_kept: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM published_chart_entries e JOIN published_chart_books b ON b.id = e.book_id
+                 WHERE b.book = '2019_uk_singles' AND e.id <= ?1",
+                params![rows_before],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(uk_rows_kept, 0);
     }
 
     #[test]

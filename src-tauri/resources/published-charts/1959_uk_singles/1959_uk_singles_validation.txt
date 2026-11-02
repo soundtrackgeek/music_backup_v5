@@ -1,0 +1,60 @@
+1959_uk_singles: 5287 rows, 0 problems, 58 notes
+
+note: Official UK Singles Chart 1959-05-15 #30: odd duration as printed: '03028' (Come Dance With Me!)
+note: Record Mirror Singles Chart 1959-11-28: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13, 14, 15, 16, 17, 18, 18, 20, 20]
+note: Melody Maker Singles Chart 1959-01-03 #20: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1959-01-24: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10]
+note: Record Mirror British Singles Chart 1959-02-07 #10: no duration in book (Willingly)
+note: Record Mirror British Singles Chart 1959-02-14 #8: no duration in book (The Greatest Mistake Of My Life)
+note: Record Mirror British Singles Chart 1959-08-08: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 9, 10]
+note: Record Mirror British Singles Chart 1959-11-07 #9: no duration in book (Pinky And Perky's Party Sing-Song)
+note: Record Mirror British Singles Chart: 49-day gap between charts 1959-06-20 and 1959-08-08
+note: Disc Breakers Chart 1959-01-10: chart starts at #21
+note: Disc Breakers Chart 1959-01-17: chart starts at #21
+note: Disc Breakers Chart 1959-01-24: chart starts at #21
+note: Disc Breakers Chart 1959-01-31: chart starts at #21
+note: Disc Breakers Chart 1959-02-07: chart starts at #21
+note: Disc Breakers Chart 1959-02-14: chart starts at #21
+note: Disc Breakers Chart 1959-02-21: chart starts at #21
+note: Disc Breakers Chart 1959-02-28: chart starts at #21
+note: Disc Breakers Chart 1959-03-14: chart starts at #21
+note: Disc Breakers Chart 1959-03-21: chart starts at #21
+note: Disc Breakers Chart 1959-04-04: chart starts at #21
+note: Disc Breakers Chart 1959-04-11: chart starts at #21
+note: Disc Breakers Chart 1959-04-18: chart starts at #21
+note: Disc Breakers Chart 1959-04-25: chart starts at #21
+note: Disc Breakers Chart 1959-05-02: chart starts at #21
+note: Disc Breakers Chart 1959-05-16: chart starts at #21
+note: Disc Breakers Chart 1959-05-23: chart starts at #21
+note: Disc Breakers Chart 1959-05-30: chart starts at #21
+note: Disc Breakers Chart 1959-06-06: chart starts at #21
+note: Disc Breakers Chart 1959-06-13: chart starts at #21
+note: Disc Breakers Chart 1959-06-20: chart starts at #21
+note: Disc Breakers Chart 1959-07-18: chart starts at #21
+note: Disc Breakers Chart 1959-07-25: chart starts at #21
+note: Disc Breakers Chart 1959-08-01: chart starts at #21
+note: Disc Breakers Chart 1959-08-15: chart starts at #21
+note: Disc Breakers Chart 1959-08-22: chart starts at #21
+note: Disc Breakers Chart 1959-08-29: chart starts at #21
+note: Disc Breakers Chart 1959-09-12: chart starts at #21
+note: Disc Breakers Chart 1959-09-19: chart starts at #21
+note: Disc Breakers Chart 1959-09-26: chart starts at #21
+note: Disc Breakers Chart 1959-10-10: chart starts at #21
+note: Disc Breakers Chart 1959-10-17: chart starts at #21
+note: Disc Breakers Chart 1959-10-24: chart starts at #21
+note: Disc Breakers Chart 1959-10-31: chart starts at #21
+note: Disc Breakers Chart 1959-11-07: chart starts at #21
+note: Disc Breakers Chart 1959-11-14: chart starts at #21
+note: Disc Breakers Chart 1959-11-21: chart starts at #21
+note: Disc Breakers Chart 1959-11-28: chart starts at #21
+note: Disc Breakers Chart 1959-12-05: chart starts at #21
+note: Disc Breakers Chart 1959-12-12: chart starts at #21
+note: Disc Breakers Chart 1959-12-19: chart starts at #21
+note: Disc Breakers Chart 1959-12-26: chart starts at #21
+note: Disc Breakers Chart: 14-day gap between charts 1959-02-28 and 1959-03-14
+note: Disc Breakers Chart: 14-day gap between charts 1959-03-21 and 1959-04-04
+note: Disc Breakers Chart: 14-day gap between charts 1959-05-02 and 1959-05-16
+note: Disc Breakers Chart: 28-day gap between charts 1959-06-20 and 1959-07-18
+note: Disc Breakers Chart: 14-day gap between charts 1959-08-01 and 1959-08-15
+note: Disc Breakers Chart: 14-day gap between charts 1959-08-29 and 1959-09-12
+note: Disc Breakers Chart: 14-day gap between charts 1959-09-26 and 1959-10-10

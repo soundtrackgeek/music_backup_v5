@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.212.0] - 2026-11-02
+
+### Added
+- **UK music-paper and sales charts in Published Charts**: the chart books now ship with the app next to the US ones, so the Published Charts view, the Artists chart's **Lesser charts** list and Aurora can use them. They are the NME Singles Chart (1960-88), Melody Maker Singles Chart (1956-88), Disc Singles Chart (1958-67), Record Mirror Singles and British Singles Charts (1955-62), Pop Weekly and Top Pop Singles (1962-71), the Record Retailer EP and Breakers charts, the Melody Maker EP chart, the NME breakers and Top 12 British Artists charts, BMRB Next 25, Disc Breakers and Bubbling Under, and the Official Digital Download and Audio Streaming charts (2004-2023), plus the books' Official UK Singles Chart as a weekly archive. That is 72 yearly books and about 793,000 chart entries (the three one-off test or tiny series and an albums chart that sits in a singles book are left out). The chart picker groups charts by country.
+- **Library tracks are checked against the UK charts** the same way as the US ones: printed version tags such as "(Radio Edit)", "(Airplay Mix)" or "(7\" Remix)" are ignored when the library title is plain, using the existing singles naming rules. Tracks you add from Aurora's Inbox are matched as soon as they are in the catalog, so no relinking step is needed.
+- `scripts/rebuild_official_uk_singles.py` regenerates `CSV_SINGLES_UK` from the Official UK chart in the books (`--apply` saves a verified copy first); `npm run test:uk-singles` tests it.
+
+### Changed
+- **The Official UK singles chart now comes from the books for 1952-2022**: more complete than the earlier scrape, with full printed titles and credits, and with the top 200 for 1994-2017 where the earlier data stopped at 100. 2023 and later keep the earlier data. All 3,847 weeks keep their existing dates and ISO week keys; only the rows differ. Run **Imports → Official UK singles** once to load the new files (the previous ones are saved under `chart-ranking-backups`).
+- Published Charts reads US and UK books of the same year side by side (the import record is now kept per book, `published_chart_import_books`). Existing installs do not re-import their US books.
+- Aurora 0.54.1 labels the UK published charts as UK in its chart history and track chart peaks.
+
 ## [0.211.0] - 2026-11-02
 
 ### Added

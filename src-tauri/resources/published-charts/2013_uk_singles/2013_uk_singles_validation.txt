@@ -1,0 +1,38 @@
+2013_uk_singles: 26000 rows, 0 problems, 36 notes
+
+note: Official UK Singles Chart 2013-01-12 #172: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-01-12 #184: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-01-19 #118: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-01-19 #149: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-01-26 #127: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-01-26 #177: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-02-02 #178: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-04-27 #143: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-04-27 #153: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-05-04 #119: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-05-04 #124: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-05-11 #176: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-05-11 #180: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official UK Singles Chart 2013-05-18 #197: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-09-28 #130: wrapped line joined: 'DL: USUM71209197'
+note: Official UK Singles Chart 2013-06-08 #199: no duration in book (She's Got That Vibe)
+note: Official UK Singles Chart 2013-09-07 #188: no duration in book (Stan)
+note: Official Digital Download Chart 2013-01-12 #169: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-01-12 #178: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-01-19 #115: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-01-19 #139: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-01-26 #123: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-01-26 #169: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-02-02 #173: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-04-27 #136: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-04-27 #145: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-05-04 #117: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-05-04 #123: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-05-11 #168: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-05-11 #171: wrapped line joined: 'Time / No Diggity) -  The Barden Bellas, The Treblemakers & The Bu Harmonics  Island DL: USUM71209199'
+note: Official Digital Download Chart 2013-05-18 #191: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-09-28 #127: wrapped line joined: 'DL: USUM71209197'
+note: Official Digital Download Chart 2013-06-08 #194: no duration in book (She's Got That Vibe)
+note: Official Digital Download Chart 2013-06-22 #198: no duration in book (Think Twice)
+note: Official Digital Download Chart 2013-09-07 #179: no duration in book (Stan)
+note: Official Digital Download Chart 2013-11-23 #132: no duration in book (Think Twice)

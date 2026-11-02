@@ -15,8 +15,8 @@ vi.mock("../../backend/publishedCharts", () => ({
       needsImport: false,
       totalRows: 10,
       series: [
-        { chart: "Mainstream Rock Tracks", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
-        { chart: "Modern Rock Tracks", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
+        { chart: "Mainstream Rock Tracks", country: "US", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
+        { chart: "Modern Rock Tracks", country: "US", years: [1990], firstWeek: "1990-01-06", lastWeek: "1990-12-29", rows: 5 },
       ],
     }),
 }));

@@ -380,7 +380,7 @@ export function ArtistChartBustersPanel({
           isLoading={isLoading || (highlights == null && error == null)}
           error={error}
           empty="No local tracks by this artist are matched to an imported singles chart."
-          loadingText={isPreparingCharts ? "Preparing US charts… The bundled archive only needs preparation on first use or when it changes." : "Loading artist chart history…"}
+          loadingText={isPreparingCharts ? "Preparing charts… The bundled archive only needs preparation on first use or when it changes." : "Loading artist chart history…"}
         />
       )}
     </section>

@@ -1,0 +1,15 @@
+2018_uk_singles: 20800 rows, 0 problems, 13 notes
+
+note: Official UK Singles Chart 2018-05-10 #56: no duration in book (Kevin's Heart)
+note: Official Digital Download Chart 2018-05-31 #45: wrapped line joined: 'Members Of The English Chamber Orchestra, Philharmonia Orchestra & Christopher Warren-Green Decca DL: GBUM71801950'
+note: Official Digital Download Chart 2018-05-31 #59: wrapped line joined: 'Orchestra & Christopher Warren-Green Decca DL: GBUM71801957'
+note: Official Digital Download Chart 2018-05-31 #78: wrapped line joined: 'Orchestra & Christopher Warren-Green Decca DL: GBUM71801958'
+note: Official Digital Download Chart 2018-05-31 #86: wrapped line joined: 'Philharmonia Orchestra & Christopher Warren-Green Decca DL: GBUM71801959'
+note: Official Digital Download Chart 2018-05-31 #138: wrapped line joined: 'Universal DL: GBUM70700405'
+note: Official Digital Download Chart 2018-12-13 #153: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2018-12-20 #100: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2018-12-27 #111: no duration in book (All Alone On Christmas)
+note: Audio Streaming Chart 2018-02-08 #93: no catalogue_number in book (Gang Gang)
+note: Audio Streaming Chart 2018-05-03 #35: no duration in book (Kevin's Heart)
+note: Audio Streaming Chart 2018-05-03 #59: no duration in book (Brackets)
+note: Audio Streaming Chart 2018-05-10 #85: no duration in book (Kevin's Heart)

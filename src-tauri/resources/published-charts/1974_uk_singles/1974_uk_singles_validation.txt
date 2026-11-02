@@ -1,0 +1,65 @@
+1974_uk_singles: 6918 rows, 0 problems, 63 notes
+
+note: Official UK Singles Chart 1974-12-07 #28: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Official UK Singles Chart 1974-12-14 #23: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Official UK Singles Chart 1974-12-21 #12: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Official UK Singles Chart 1974-12-28 #16: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: NME Singles Chart 1974-12-14 #13: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: NME Singles Chart 1974-12-21 #18: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: NME Singles Chart 1974-12-28 #16: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Melody Maker Singles Chart 1974-12-14 #17: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Melody Maker Singles Chart 1974-12-21 #13: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Melody Maker Singles Chart 1974-12-28 #13: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Record Retailer Singles Breakers 1974-11-30 #56: wrapped line joined: "Stewart  Warner Bros. 7'': K 16494"
+note: Record Retailer Singles Breakers 1974-01-05: chart starts at #51
+note: Record Retailer Singles Breakers 1974-01-12: chart starts at #51
+note: Record Retailer Singles Breakers 1974-01-19: chart starts at #51
+note: Record Retailer Singles Breakers 1974-01-26: chart starts at #51
+note: Record Retailer Singles Breakers 1974-02-02: chart starts at #51
+note: Record Retailer Singles Breakers 1974-02-09: chart starts at #51
+note: Record Retailer Singles Breakers 1974-02-16: chart starts at #51
+note: Record Retailer Singles Breakers 1974-02-23: chart starts at #51
+note: Record Retailer Singles Breakers 1974-03-02: chart starts at #51
+note: Record Retailer Singles Breakers 1974-03-09: chart starts at #51
+note: Record Retailer Singles Breakers 1974-03-16: chart starts at #51
+note: Record Retailer Singles Breakers 1974-03-23: chart starts at #51
+note: Record Retailer Singles Breakers 1974-03-30: chart starts at #51
+note: Record Retailer Singles Breakers 1974-04-06: chart starts at #51
+note: Record Retailer Singles Breakers 1974-04-13: chart starts at #51
+note: Record Retailer Singles Breakers 1974-04-20: chart starts at #51
+note: Record Retailer Singles Breakers 1974-04-27: chart starts at #51
+note: Record Retailer Singles Breakers 1974-05-04: chart starts at #51
+note: Record Retailer Singles Breakers 1974-05-11: chart starts at #51
+note: Record Retailer Singles Breakers 1974-05-18: chart starts at #51
+note: Record Retailer Singles Breakers 1974-05-25: chart starts at #51
+note: Record Retailer Singles Breakers 1974-06-01: chart starts at #51
+note: Record Retailer Singles Breakers 1974-06-08: chart starts at #51
+note: Record Retailer Singles Breakers 1974-06-15: chart starts at #51
+note: Record Retailer Singles Breakers 1974-06-22: chart starts at #51
+note: Record Retailer Singles Breakers 1974-06-29: chart starts at #51
+note: Record Retailer Singles Breakers 1974-07-06: chart starts at #51
+note: Record Retailer Singles Breakers 1974-07-13: chart starts at #51
+note: Record Retailer Singles Breakers 1974-07-20: chart starts at #51
+note: Record Retailer Singles Breakers 1974-07-27: chart starts at #51
+note: Record Retailer Singles Breakers 1974-08-03: chart starts at #51
+note: Record Retailer Singles Breakers 1974-08-10: chart starts at #51
+note: Record Retailer Singles Breakers 1974-08-17: chart starts at #51
+note: Record Retailer Singles Breakers 1974-08-24: chart starts at #51
+note: Record Retailer Singles Breakers 1974-08-31: chart starts at #51
+note: Record Retailer Singles Breakers 1974-09-07: chart starts at #51
+note: Record Retailer Singles Breakers 1974-09-14: chart starts at #51
+note: Record Retailer Singles Breakers 1974-09-21: chart starts at #51
+note: Record Retailer Singles Breakers 1974-09-28: chart starts at #51
+note: Record Retailer Singles Breakers 1974-10-05: chart starts at #51
+note: Record Retailer Singles Breakers 1974-10-12: chart starts at #51
+note: Record Retailer Singles Breakers 1974-10-19: chart starts at #51
+note: Record Retailer Singles Breakers 1974-10-26: chart starts at #51
+note: Record Retailer Singles Breakers 1974-11-02: chart starts at #51
+note: Record Retailer Singles Breakers 1974-11-09: chart starts at #51
+note: Record Retailer Singles Breakers 1974-11-16: chart starts at #51
+note: Record Retailer Singles Breakers 1974-11-23: chart starts at #51
+note: Record Retailer Singles Breakers 1974-11-30: chart starts at #51
+note: Record Retailer Singles Breakers 1974-12-07: chart starts at #51
+note: Record Retailer Singles Breakers 1974-12-14: chart starts at #51
+note: Record Retailer Singles Breakers 1974-12-14: irregular numbering, as printed: [51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 68, 69, 70, 71, 72, 73, 74, 78]
+note: Record Retailer Singles Breakers 1974-12-21: chart starts at #51

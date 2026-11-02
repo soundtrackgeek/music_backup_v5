@@ -1,0 +1,65 @@
+1960_uk_singles: 9216 rows, 0 problems, 63 notes
+
+note: Official UK Singles Chart: 6-day gap between charts 1960-03-04 and 1960-03-10
+note: NME Singles Chart 1960-07-15 #20: odd duration as printed: '03127' (Elvis Is Back!)
+note: NME Singles Chart 1960-07-22 #17: odd duration as printed: '03127' (Elvis Is Back!)
+note: NME Singles Chart 1960-07-29 #24: odd duration as printed: '03127' (Elvis Is Back!)
+note: NME Singles Chart 1960-08-05 #29: odd duration as printed: '03127' (Elvis Is Back!)
+note: NME Singles Chart 1960-08-12 #30: odd duration as printed: '03127' (Elvis Is Back!)
+note: NME Singles Chart 1960-12-09 #25: odd duration as printed: '02622' (G.I. Blues (OST))
+note: NME Singles Chart 1960-12-16 #30: odd duration as printed: '02622' (G.I. Blues (OST))
+note: NME Singles Chart 1960-12-23 #29: odd duration as printed: '02622' (G.I. Blues (OST))
+note: NME Singles Chart 1960-12-30 #27: odd duration as printed: '02622' (G.I. Blues (OST))
+note: Record Mirror Singles Chart 1960-07-16 #20: odd duration as printed: '03127' (Elvis Is Back!)
+note: Record Mirror British Singles Chart 1960-06-04 #10: no duration in book (Oh, Honey Love Me)
+note: Disc Singles Bubbling Under Chart 1960-01-02: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-01-09: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-01-16: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-01-23: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-01-30: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-02-06: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-02-13: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-02-20: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-02-27: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-03-12: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-03-19: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-03-26: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-04-02: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-04-09: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-04-16: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-04-30: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-05-28: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-06-04: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-06-11: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-06-18: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-06-25: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-07-02: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-07-09: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-07-16: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-07-23: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-07-30: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-08-06: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-08-13: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-08-20: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-08-27: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-09-10: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-09-17: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-09-24: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-10-01: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-10-08: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-10-15: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-10-22: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-10-29: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-11-05: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-11-12: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-11-19: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-11-26: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-12-03: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-12-10: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-12-17: chart starts at #21
+note: Disc Singles Bubbling Under Chart 1960-12-31: chart starts at #21
+note: Disc Singles Bubbling Under Chart: 14-day gap between charts 1960-02-27 and 1960-03-12
+note: Disc Singles Bubbling Under Chart: 14-day gap between charts 1960-04-16 and 1960-04-30
+note: Disc Singles Bubbling Under Chart: 28-day gap between charts 1960-04-30 and 1960-05-28
+note: Disc Singles Bubbling Under Chart: 14-day gap between charts 1960-08-27 and 1960-09-10
+note: Disc Singles Bubbling Under Chart: 14-day gap between charts 1960-12-17 and 1960-12-31

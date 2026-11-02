@@ -1,0 +1,12 @@
+2015_uk_singles: 26500 rows, 0 problems, 10 notes
+
+note: Official UK Singles Chart: 5-day gap between charts 2015-07-04 and 2015-07-09
+note: Official Digital Download Chart 2015-09-17 #96: wrapped line joined: "Rzeznik, Angelique Kidjo, Krewella, Kelsea Ballerini, Nicole Scherzinger, Christina Grimmie, Victoria Justice & Q'orianka Kilcher  United Nations Foundation DL: "
+note: Official Digital Download Chart 2015-09-17 #96: wrapped line joined: 'TCACI1503967'
+note: Official Digital Download Chart 2015-03-21 #193: no duration in book (Valerie (BBC Radio 1 Live Lounge))
+note: Official Digital Download Chart 2015-12-17 #90: no duration in book (Yours)
+note: Official Digital Download Chart 2015-12-17 #188: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2015-12-24 #142: no duration in book (Yours)
+note: Official Digital Download Chart 2015-12-31 #175: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart: 5-day gap between charts 2015-07-04 and 2015-07-09
+note: Audio Streaming Chart: 5-day gap between charts 2015-07-04 and 2015-07-09

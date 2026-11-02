@@ -1,0 +1,20 @@
+2023_uk_singles: 10400 rows, 0 problems, 18 notes
+
+note: Official Digital Download Chart 2023-04-27 #109: wrapped line joined: 'Jimmy Constable, Pauline Henry, Doris Pearson, Kule T & The Mark De-Lisser Singers  Wildlife Aid DL: NLRD52316316'
+note: Official Digital Download Chart 2023-05-18 #56: wrapped line joined: 'GBUM72302487'
+note: Official Digital Download Chart 2023-05-18 #174: wrapped line joined: '00602455759559  S'
+note: Official Digital Download Chart 2023-05-04 #156: no duration in book (Mandala)
+note: Official Digital Download Chart 2023-05-18 #173: no catalogue_number in book (Chasing Cars)
+note: Official Digital Download Chart 2023-05-18 #174: no catalogue_number in book (Make A Joyful Noise 00602455759559)
+note: Official Digital Download Chart 2023-06-15 #124: no duration in book (Tere Vaaste)
+note: Official Digital Download Chart 2023-06-22 #136: no duration in book (Tere Vaaste)
+note: Official Digital Download Chart 2023-06-29 #176: no duration in book (Tere Vaaste)
+note: Audio Streaming Chart 2023-01-19 #96: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-01-26 #92: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-02-02 #83: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-02-09 #74: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-02-16 #85: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-02-23 #69: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-03-02 #76: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-03-09 #91: no catalogue_number in book (Collide)
+note: Audio Streaming Chart 2023-03-16 #97: no catalogue_number in book (Collide)

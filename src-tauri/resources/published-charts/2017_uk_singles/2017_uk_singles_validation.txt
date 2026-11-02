@@ -1,0 +1,10 @@
+2017_uk_singles: 23500 rows, 0 problems, 8 notes
+
+note: Official Digital Download Chart 2017-03-30 #185: wrapped line joined: 'Disney DL: USWD11778851'
+note: Official Digital Download Chart 2017-08-03 #195: wrapped line joined: 'USWD11779698'
+note: Official Digital Download Chart 2017-03-09 #121: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2017-09-07 #194: no duration in book (Stan)
+note: Official Digital Download Chart 2017-09-28 #187: no duration in book (Some Kind Of Love)
+note: Official Digital Download Chart 2017-12-14 #153: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2017-12-21 #142: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2017-12-28 #118: no duration in book (All Alone On Christmas)

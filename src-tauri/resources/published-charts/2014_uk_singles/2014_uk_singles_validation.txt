@@ -1,0 +1,16 @@
+2014_uk_singles: 26000 rows, 0 problems, 14 notes
+
+note: Official UK Singles Chart 2014-02-08 #188: no duration in book (Survivor)
+note: Official UK Singles Chart 2014-05-24 #71: no duration in book (Messed Up Kids EP)
+note: Official UK Singles Chart 2014-05-31 #145: no duration in book (Messed Up Kids EP)
+note: Official UK Singles Chart 2014-10-18 #186: no duration in book (Stan)
+note: Official UK Singles Chart 2014-10-25 #197: no duration in book (Stan)
+note: Official Digital Download Chart 2014-02-08 #179: no duration in book (Survivor)
+note: Official Digital Download Chart 2014-07-19 #179: no duration in book (Stan)
+note: Official Digital Download Chart 2014-08-16 #113: no duration in book (Dignity)
+note: Official Digital Download Chart 2014-10-18 #121: no duration in book (Stan)
+note: Official Digital Download Chart 2014-10-18 #173: no duration in book (Steadfast)
+note: Official Digital Download Chart 2014-10-25 #129: no duration in book (Stan)
+note: Official Digital Download Chart 2014-10-25 #199: no duration in book (Steadfast)
+note: Official Digital Download Chart 2014-12-13 #188: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2014-12-20 #168: no duration in book (All Alone On Christmas)

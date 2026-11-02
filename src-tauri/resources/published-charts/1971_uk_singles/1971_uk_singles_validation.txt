@@ -1,0 +1,51 @@
+1971_uk_singles: 6339 rows, 0 problems, 49 notes
+
+note: Melody Maker Singles Chart 1971-02-06: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 42, 43, 46, 48, 49]
+note: Record Retailer Singles Breakers 1971-01-09: chart starts at #51
+note: Record Retailer Singles Breakers 1971-02-06: chart starts at #41
+note: Record Retailer Singles Breakers 1971-02-13: chart starts at #41
+note: Record Retailer Singles Breakers 1971-02-20: chart starts at #41
+note: Record Retailer Singles Breakers 1971-02-27: chart starts at #41
+note: Record Retailer Singles Breakers 1971-03-06: chart starts at #41
+note: Record Retailer Singles Breakers 1971-03-13: chart starts at #41
+note: Record Retailer Singles Breakers 1971-03-20: chart starts at #41
+note: Record Retailer Singles Breakers 1971-03-27: chart starts at #51
+note: Record Retailer Singles Breakers 1971-04-03: chart starts at #51
+note: Record Retailer Singles Breakers 1971-04-10: chart starts at #51
+note: Record Retailer Singles Breakers 1971-04-17: chart starts at #51
+note: Record Retailer Singles Breakers 1971-04-24: chart starts at #51
+note: Record Retailer Singles Breakers 1971-05-01: chart starts at #51
+note: Record Retailer Singles Breakers 1971-05-08: chart starts at #51
+note: Record Retailer Singles Breakers 1971-05-15: chart starts at #51
+note: Record Retailer Singles Breakers 1971-05-22: chart starts at #51
+note: Record Retailer Singles Breakers 1971-05-29: chart starts at #51
+note: Record Retailer Singles Breakers 1971-06-05: chart starts at #51
+note: Record Retailer Singles Breakers 1971-06-12: chart starts at #51
+note: Record Retailer Singles Breakers 1971-06-19: chart starts at #51
+note: Record Retailer Singles Breakers 1971-06-26: chart starts at #51
+note: Record Retailer Singles Breakers 1971-07-03: chart starts at #51
+note: Record Retailer Singles Breakers 1971-07-10: chart starts at #51
+note: Record Retailer Singles Breakers 1971-07-17: chart starts at #51
+note: Record Retailer Singles Breakers 1971-07-24: chart starts at #51
+note: Record Retailer Singles Breakers 1971-07-31: chart starts at #51
+note: Record Retailer Singles Breakers 1971-08-07: chart starts at #51
+note: Record Retailer Singles Breakers 1971-08-14: chart starts at #51
+note: Record Retailer Singles Breakers 1971-08-21: chart starts at #51
+note: Record Retailer Singles Breakers 1971-08-28: chart starts at #51
+note: Record Retailer Singles Breakers 1971-09-04: chart starts at #51
+note: Record Retailer Singles Breakers 1971-09-11: chart starts at #51
+note: Record Retailer Singles Breakers 1971-09-18: chart starts at #51
+note: Record Retailer Singles Breakers 1971-09-25: chart starts at #51
+note: Record Retailer Singles Breakers 1971-10-02: chart starts at #51
+note: Record Retailer Singles Breakers 1971-10-09: chart starts at #51
+note: Record Retailer Singles Breakers 1971-10-16: chart starts at #51
+note: Record Retailer Singles Breakers 1971-10-23: chart starts at #51
+note: Record Retailer Singles Breakers 1971-10-30: chart starts at #51
+note: Record Retailer Singles Breakers 1971-11-06: chart starts at #51
+note: Record Retailer Singles Breakers 1971-11-13: chart starts at #51
+note: Record Retailer Singles Breakers 1971-11-20: chart starts at #51
+note: Record Retailer Singles Breakers 1971-11-27: chart starts at #51
+note: Record Retailer Singles Breakers 1971-12-04: chart starts at #51
+note: Record Retailer Singles Breakers 1971-12-11: chart starts at #51
+note: Record Retailer Singles Breakers 1971-12-18: chart starts at #51
+note: Record Retailer Singles Breakers: 28-day gap between charts 1971-01-09 and 1971-02-06

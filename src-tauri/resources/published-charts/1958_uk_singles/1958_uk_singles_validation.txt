@@ -1,0 +1,171 @@
+1958_uk_singles: 5193 rows, 0 problems, 169 notes
+
+note: Official UK Singles Chart 1958-05-02 #28: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-05-09 #29: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-05-16 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-05-23 #11: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-05-30 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-06-06 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-06-13 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-06-20 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-06-27 #8: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-07-04 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-07-11 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-07-18 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-07-25 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-01 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-08 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-15 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-22 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-29 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-09-05 #14: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-09-12 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-09-19 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-09-26 #16: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-10-03 #19: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-10-10 #26: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-10-17 #27: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Official UK Singles Chart 1958-08-29: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21, 22, 22, 24, 25, 26, 26, 28, 29, 30]
+note: Record Mirror Singles Chart 1958-05-17 #16: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-05-24 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-05-31 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-06-07 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-06-14 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-06-21 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-06-28 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-07-05 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-07-12 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-07-19 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-07-26 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-08-02 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-08-09 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-08-16 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-08-23 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-08-30 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-09-06 #12: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-09-13 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-09-20 #16: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-09-27 #20: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror Singles Chart 1958-04-12: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18, 19, 20]
+note: Melody Maker Singles Chart 1958-05-17 #12: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-05-24 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-05-31 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-06-07 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-06-14 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-06-21 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-06-28 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-07-05 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-07-12 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-07-19 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-07-26 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-08-02 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-08-09 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-08-16 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-08-23 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-08-30 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-09-06 #14: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-09-13 #12: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Melody Maker Singles Chart 1958-09-20 #12: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-05-17 #15: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-05-24 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-05-31 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-06-07 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-06-14 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-06-21 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-06-28 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-07-05 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-07-12 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-07-19 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-07-26 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-02 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-09 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-16 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-23 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-30 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-09-06 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-09-13 #13: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-09-20 #17: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-09-27 #16: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Singles Chart 1958-08-16: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+note: Record Mirror British Singles Chart 1958-04-26 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-05-03 #10: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-05-10 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-05-17 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-05-24 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-05-31 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-06-07 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-06-14 #4: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-06-21 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-06-28 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-07-05 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-07-12 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-07-19 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-07-26 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-08-02 #1: wrapped line joined: "Orchestra  Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-08-09 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-08-16 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-08-23 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-08-30 #2: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-09-06 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-09-13 #3: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-09-20 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-09-27 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-10-04 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-10-11 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-10-11 #10: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-10-18 #5: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-10-18 #9: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-10-25 #5: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-11-01 #7: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-11-01 #9: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-11-08 #6: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-11-08 #7: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-11-15 #9: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Record Mirror British Singles Chart 1958-11-15 #10: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-11-22 #9: wrapped line joined: "Philips 7'': 45-PB 865"
+note: Record Mirror British Singles Chart 1958-12-20 #10: no duration in book (As I Love You)
+note: Record Mirror British Singles Chart 1958-12-27 #10: no duration in book (As I Love You)
+note: Disc Breakers Chart 1958-05-03 #21: wrapped line joined: "Decca 7'': 45-F 11004"
+note: Disc Breakers Chart 1958-02-08: chart starts at #21
+note: Disc Breakers Chart 1958-02-15: chart starts at #21
+note: Disc Breakers Chart 1958-03-08: chart starts at #21
+note: Disc Breakers Chart 1958-03-15: chart starts at #21
+note: Disc Breakers Chart 1958-03-22: chart starts at #21
+note: Disc Breakers Chart 1958-03-29: chart starts at #21
+note: Disc Breakers Chart 1958-04-19: chart starts at #21
+note: Disc Breakers Chart 1958-04-26: chart starts at #21
+note: Disc Breakers Chart 1958-05-03: chart starts at #21
+note: Disc Breakers Chart 1958-05-10: chart starts at #21
+note: Disc Breakers Chart 1958-05-17: chart starts at #21
+note: Disc Breakers Chart 1958-05-31: chart starts at #21
+note: Disc Breakers Chart 1958-06-07: chart starts at #21
+note: Disc Breakers Chart 1958-06-14: chart starts at #21
+note: Disc Breakers Chart 1958-07-05: chart starts at #21
+note: Disc Breakers Chart 1958-07-12: chart starts at #21
+note: Disc Breakers Chart 1958-07-19: chart starts at #21
+note: Disc Breakers Chart 1958-07-26: chart starts at #21
+note: Disc Breakers Chart 1958-08-02: chart starts at #21
+note: Disc Breakers Chart 1958-08-09: chart starts at #21
+note: Disc Breakers Chart 1958-08-16: chart starts at #21
+note: Disc Breakers Chart 1958-08-23: chart starts at #21
+note: Disc Breakers Chart 1958-08-30: chart starts at #21
+note: Disc Breakers Chart 1958-09-06: chart starts at #21
+note: Disc Breakers Chart 1958-09-13: chart starts at #21
+note: Disc Breakers Chart 1958-09-27: chart starts at #21
+note: Disc Breakers Chart 1958-10-04: chart starts at #21
+note: Disc Breakers Chart 1958-10-11: chart starts at #21
+note: Disc Breakers Chart 1958-10-25: chart starts at #21
+note: Disc Breakers Chart 1958-11-01: chart starts at #21
+note: Disc Breakers Chart 1958-11-08: chart starts at #21
+note: Disc Breakers Chart 1958-11-15: chart starts at #21
+note: Disc Breakers Chart 1958-11-22: chart starts at #21
+note: Disc Breakers Chart 1958-11-29: chart starts at #21
+note: Disc Breakers Chart 1958-12-13: chart starts at #21
+note: Disc Breakers Chart 1958-12-20: chart starts at #21
+note: Disc Breakers Chart: 21-day gap between charts 1958-02-15 and 1958-03-08
+note: Disc Breakers Chart: 21-day gap between charts 1958-03-29 and 1958-04-19
+note: Disc Breakers Chart: 14-day gap between charts 1958-05-17 and 1958-05-31
+note: Disc Breakers Chart: 21-day gap between charts 1958-06-14 and 1958-07-05
+note: Disc Breakers Chart: 14-day gap between charts 1958-09-13 and 1958-09-27
+note: Disc Breakers Chart: 14-day gap between charts 1958-10-11 and 1958-10-25
+note: Disc Breakers Chart: 14-day gap between charts 1958-11-29 and 1958-12-13

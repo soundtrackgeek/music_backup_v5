@@ -1,0 +1,47 @@
+1981_uk_singles: 7658 rows, 0 problems, 45 notes
+
+note: Official UK Singles Chart 1981-12-12 #73: no duration in book (Five Tracks Of Laughter)
+note: Official UK Singles Chart 1981-12-19 #44: no duration in book (Five Tracks Of Laughter)
+note: Official UK Singles Chart 1981-12-26 #44: no duration in book (Five Tracks Of Laughter)
+note: NME Singles Breakers 1981-01-03: chart starts at #31
+note: NME Singles Breakers 1981-01-10: chart starts at #31
+note: NME Singles Breakers 1981-01-17: chart starts at #31
+note: NME Singles Breakers 1981-01-24: chart starts at #31
+note: NME Singles Breakers 1981-01-31: chart starts at #31
+note: NME Singles Breakers 1981-02-07: chart starts at #31
+note: NME Singles Breakers 1981-02-14: chart starts at #31
+note: NME Singles Breakers 1981-02-21: chart starts at #31
+note: NME Singles Breakers 1981-02-28: chart starts at #31
+note: NME Singles Breakers 1981-03-07: chart starts at #31
+note: NME Singles Breakers 1981-03-14: chart starts at #31
+note: NME Singles Breakers 1981-03-21: chart starts at #31
+note: NME Singles Breakers 1981-03-28: chart starts at #31
+note: NME Singles Breakers 1981-04-04: chart starts at #31
+note: NME Singles Breakers 1981-04-11: chart starts at #31
+note: NME Singles Breakers 1981-04-18: chart starts at #31
+note: NME Singles Breakers 1981-04-25: chart starts at #31
+note: NME Singles Breakers 1981-05-02: chart starts at #31
+note: NME Singles Breakers 1981-05-09: chart starts at #31
+note: NME Singles Breakers 1981-05-09 #33: odd duration as printed: '01441' (Why)
+note: BMRB Next 25 1981-08-08: chart starts at #76
+note: BMRB Next 25 1981-08-15: chart starts at #76
+note: BMRB Next 25 1981-08-22: chart starts at #76
+note: BMRB Next 25 1981-08-29: chart starts at #76
+note: BMRB Next 25 1981-09-05: chart starts at #76
+note: BMRB Next 25 1981-09-12: chart starts at #76
+note: BMRB Next 25 1981-09-19: chart starts at #76
+note: BMRB Next 25 1981-09-26: chart starts at #76
+note: BMRB Next 25 1981-10-03: chart starts at #76
+note: BMRB Next 25 1981-10-10: chart starts at #76
+note: BMRB Next 25 1981-10-17: chart starts at #76
+note: BMRB Next 25 1981-10-24: chart starts at #76
+note: BMRB Next 25 1981-10-31: chart starts at #76
+note: BMRB Next 25 1981-11-07: chart starts at #76
+note: BMRB Next 25 1981-11-14: chart starts at #76
+note: BMRB Next 25 1981-11-21: chart starts at #76
+note: BMRB Next 25 1981-11-28: chart starts at #76
+note: BMRB Next 25 1981-12-05: chart starts at #76
+note: BMRB Next 25 1981-12-12: chart starts at #76
+note: BMRB Next 25 1981-12-19: chart starts at #76
+note: BMRB Next 25 1981-12-26: chart starts at #76
+note: BMRB Next 25 1981-12-26 #78: no duration in book (Christmas Dream)

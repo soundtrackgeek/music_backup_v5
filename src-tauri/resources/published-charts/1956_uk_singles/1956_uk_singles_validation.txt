@@ -1,0 +1,185 @@
+1956_uk_singles: 3829 rows, 0 problems, 183 notes
+
+note: Official UK Singles Chart 1956-06-29 #30: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-07-06 #6: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-07-13 #4: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-07-20 #5: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-07-27 #8: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-08-03 #10: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-08-10 #13: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-08-17 #12: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-08-24 #20: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-08-31 #25: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Official UK Singles Chart 1956-06-15 #26: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-06-15 #27: odd duration as printed: '05054' (Carousel)
+note: Official UK Singles Chart 1956-06-22 #16: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-06-29 #13: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-07-06 #12: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-07-06 #26: odd duration as printed: '05054' (Carousel)
+note: Official UK Singles Chart 1956-07-13: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 7, 9, 10, 11, 12, 13, 13, 14, 15, 16, 17, 18, 19, 20, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 30]
+note: Official UK Singles Chart 1956-07-13 #15: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-07-20 #15: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-07-27 #22: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-08-03 #26: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Official UK Singles Chart 1956-11-09 #30: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Official UK Singles Chart 1956-12-21 #28: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Official UK Singles Chart 1956-12-28 #29: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Singles Chart 1956-07-07 #18: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-07-14 #3: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-07-21 #4: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-07-28 #4: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-08-04 #6: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-08-11 #16: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-08-25 #17: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror Singles Chart 1956-06-16: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 11, 12, 13, 14, 15, 16, 18, 18, 20]
+note: Record Mirror Singles Chart 1956-06-23 #13: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Singles Chart 1956-06-23 #19: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Singles Chart 1956-06-30 #13: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Singles Chart 1956-07-07: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20]
+note: Record Mirror Singles Chart 1956-07-07 #16: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Singles Chart 1956-07-07 #20: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Singles Chart 1956-07-14 #11: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Singles Chart 1956-07-21 #13: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Melody Maker Singles Chart 1956-07-07 #9: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-07-14 #9: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-07-21 #10: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-07-28 #10: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-08-04 #13: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-08-11 #13: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Melody Maker Singles Chart 1956-09-22 #14: wrapped line joined: 'Decca 78: F 10780'
+note: Melody Maker Singles Chart 1956-03-31: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 20]
+note: Record Mirror British Singles Chart 1956-07-07 #7: wrapped line joined: 'Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-07-14 #2: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-07-21 #2: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-07-28 #2: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-08-04 #1: wrapped line joined: 'Goons With Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-08-11 #5: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-08-18 #8: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-08-25 #3: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-09-08 #10: wrapped line joined: 'Maurice Ponké And His Orchestre Fromage  Decca 78: F 10756'
+note: Record Mirror British Singles Chart 1956-09-15 #10: wrapped line joined: 'Decca 78: F 10780'
+note: Record Mirror British Singles Chart 1956-09-22 #8: wrapped line joined: 'Decca 78: F 10780'
+note: Record Mirror British Singles Chart 1956-09-29 #10: wrapped line joined: 'Decca 78: F 10780'
+note: Record Mirror British Singles Chart 1956-10-06 #7: wrapped line joined: 'Decca 78: F 10780'
+note: Record Mirror British Singles Chart 1956-10-20 #10: wrapped line joined: 'Decca 78: F 10780'
+note: Record Mirror British Singles Chart 1956-11-24 #10: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror British Singles Chart 1956-12-15 #10: no duration in book (That Dear Old Gentleman)
+note: Record Mirror Albums Chart 1956-07-28 #1: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-07-28 #2: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-07-28 #3: odd duration as printed: '04209' (Mel Tormé At The Crescendo)
+note: Record Mirror Albums Chart 1956-07-28 #4: odd duration as printed: '04853' (At The Crescendo Vol. 1)
+note: Record Mirror Albums Chart 1956-07-28 #5: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-08-04 #1: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-08-04 #2: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-08-04 #3: odd duration as printed: '04209' (Mel Tormé At The Crescendo)
+note: Record Mirror Albums Chart 1956-08-04 #4: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-08-04 #5: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-08-04 #5: odd duration as printed: '03943' (Salad Days)
+note: Record Mirror Albums Chart 1956-08-11 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-08-11 #2: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-08-11 #3: odd duration as printed: '04209' (Mel Tormé At The Crescendo)
+note: Record Mirror Albums Chart 1956-08-11 #4: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-08-11 #4: odd duration as printed: '04511' (Songs From The Student Prince And Other Favourites)
+note: Record Mirror Albums Chart 1956-08-18 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-08-18 #2: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-08-18 #3: odd duration as printed: '04209' (Mel Tormé At The Crescendo)
+note: Record Mirror Albums Chart 1956-08-18 #4: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-08-18 #5: odd duration as printed: '03851' (Mel Tormé With The Marty Paich Dek-Tette)
+note: Record Mirror Albums Chart 1956-08-25 #1: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-08-25 #2: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-08-25 #3: odd duration as printed: '03851' (Mel Tormé With The Marty Paich Dek-Tette)
+note: Record Mirror Albums Chart 1956-08-25 #4: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-08-25 #5: odd duration as printed: '03359' (The Eddy Duchin Story (OST))
+note: Record Mirror Albums Chart 1956-09-01 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-09-01 #2: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-09-01 #3: odd duration as printed: '03359' (The Eddy Duchin Story (OST))
+note: Record Mirror Albums Chart 1956-09-01 #4: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-09-01 #5: odd duration as printed: '03851' (Mel Tormé With The Marty Paich Dek-Tette)
+note: Record Mirror Albums Chart 1956-09-01 #5: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-09-08 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-09-08 #2: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-09-08 #3: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-09-08 #4: odd duration as printed: '03359' (The Eddy Duchin Story (OST))
+note: Record Mirror Albums Chart 1956-09-08 #5: odd duration as printed: '03851' (Mel Tormé With The Marty Paich Dek-Tette)
+note: Record Mirror Albums Chart 1956-09-15 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-09-15 #2: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-09-15 #3: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-09-15 #4: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-09-15 #5: odd duration as printed: '03359' (The Eddy Duchin Story (OST))
+note: Record Mirror Albums Chart 1956-09-22 #1: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-09-22 #2: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-09-22 #3: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-09-22 #4: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-09-22 #5: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-09-29 #1: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-09-29 #2: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-09-29 #3: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-09-29 #4: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-09-29 #5: odd duration as printed: '03943' (Salad Days)
+note: Record Mirror Albums Chart 1956-10-06 #1: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-10-06 #2: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-10-06 #3: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-10-06 #3: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-10-06 #5: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-10-13 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-10-13 #2: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-10-13 #3: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-10-13 #4: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-10-13 #5: odd duration as printed: '04426' (Songs For Swingin' Lovers!)
+note: Record Mirror Albums Chart 1956-10-20 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-10-20 #2: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-10-20 #3: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-10-20 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-10-20 #5: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-10-27 #1: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-10-27 #2: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-10-27 #3: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-10-27 #4: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-10-27 #5: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-11-03 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-11-03 #2: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-11-03 #3: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-11-03 #3: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-11-03 #5: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-11-03 #5: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-11-10 #1: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-11-10 #2: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-11-10 #3: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-11-10 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-11-10 #5: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-11-17 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-11-17 #2: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-11-17 #3: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-11-17 #4: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-11-17 #4: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-11-24 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-11-24 #2: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-11-24 #3: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-11-24 #3: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-11-24 #5: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-12-01 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-12-01 #2: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-12-01 #3: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-12-01 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-12-01 #5: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-12-08 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-12-08 #2: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-12-08 #3: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-12-08 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-12-08 #5: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-12-08 #5: odd duration as printed: '04133' (Oklahoma!)
+note: Record Mirror Albums Chart 1956-12-15 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-12-15 #2: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-12-15 #3: odd duration as printed: '03023' (Rock 'n' Roll Stage Show)
+note: Record Mirror Albums Chart 1956-12-15 #4: odd duration as printed: '02748' (Rock 'N' Roll)
+note: Record Mirror Albums Chart 1956-12-15 #5: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-12-22 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-12-22 #2: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-12-22 #3: odd duration as printed: '03146' (High Society)
+note: Record Mirror Albums Chart 1956-12-22 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-12-22 #5: odd duration as printed: '03142' (Rock Around The Clock)
+note: Record Mirror Albums Chart 1956-12-29 #1: odd duration as printed: '04606' (The King And I)
+note: Record Mirror Albums Chart 1956-12-29 #2: odd duration as printed: '02644' (Lonnie Donegan Showcase)
+note: Record Mirror Albums Chart 1956-12-29 #3: odd duration as printed: '03146' (High Society)
+note: Record Mirror Albums Chart 1956-12-29 #4: odd duration as printed: '05054' (Carousel)
+note: Record Mirror Albums Chart 1956-12-29 #5: odd duration as printed: '03142' (Rock Around The Clock)

@@ -1,0 +1,120 @@
+1972_uk_singles: 6047 rows, 0 problems, 118 notes
+
+note: Official UK Singles Chart 1972-04-01 #31: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-04-08 #3: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-04-15 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-04-22 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-04-29 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-05-06 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-05-13 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-05-20 #2: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-05-27 #3: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-06-03 #8: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-06-10 #11: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-06-17 #18: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-06-24 #23: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-07-01 #26: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-07-08 #28: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-07-15 #32: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-07-22 #28: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-07-29 #30: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-08-05 #31: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-08-12 #37: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-08-19 #38: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-08-19 #42: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-08-26 #33: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-08-26 #39: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-09-02 #31: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-09-02 #41: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-09-09 #30: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-09-09 #43: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-09-16 #35: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-09-23 #39: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-09-30 #43: wrapped line joined: "Bandmaster W.O.I. C.I. Herbert  RCA Victor 7'': RCA 2251"
+note: Official UK Singles Chart 1972-12-02 #36: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Official UK Singles Chart 1972-12-09 #28: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Official UK Singles Chart 1972-12-16 #20: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Official UK Singles Chart 1972-12-23 #13: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Official UK Singles Chart 1972-12-23 #42: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Official UK Singles Chart 1972-12-30 #13: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Official UK Singles Chart 1972-12-30 #42: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-04-08 #12: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-04-15 #2: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-04-22 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-04-29 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-05-06 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-05-13 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-05-20 #3: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-05-27 #6: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-06-03 #13: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-06-10 #14: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-06-17 #19: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: NME Singles Chart 1972-12-02 #27: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: NME Singles Chart 1972-12-16 #19: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: NME Singles Chart 1972-12-23 #16: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: NME Singles Chart 1972-12-30 #14: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Melody Maker Singles Chart 1972-04-08 #21: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-04-15 #2: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-04-22 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-04-29 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-05-06 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-05-13 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-05-20 #1: wrapped line joined: "W.O.II. J. Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-05-27 #5: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-06-03 #7: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-06-10 #11: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-06-17 #16: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-06-24 #23: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-07-01 #29: wrapped line joined: "Pryde  RCA Victor 7'': RCA 2191"
+note: Melody Maker Singles Chart 1972-12-09 #27: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Melody Maker Singles Chart 1972-12-16 #17: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Melody Maker Singles Chart 1972-12-23 #12: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Melody Maker Singles Chart 1972-12-30 #12: wrapped line joined: "RCA Victor 7'': RCA 2301"
+note: Record Retailer Singles Breakers 1972-01-08: chart starts at #51
+note: Record Retailer Singles Breakers 1972-01-15: chart starts at #51
+note: Record Retailer Singles Breakers 1972-01-22: chart starts at #51
+note: Record Retailer Singles Breakers 1972-01-29: chart starts at #51
+note: Record Retailer Singles Breakers 1972-02-05: chart starts at #51
+note: Record Retailer Singles Breakers 1972-02-12: chart starts at #51
+note: Record Retailer Singles Breakers 1972-02-19: chart starts at #51
+note: Record Retailer Singles Breakers 1972-03-04: chart starts at #51
+note: Record Retailer Singles Breakers 1972-03-11: chart starts at #51
+note: Record Retailer Singles Breakers 1972-03-18: chart starts at #51
+note: Record Retailer Singles Breakers 1972-04-08: chart starts at #51
+note: Record Retailer Singles Breakers 1972-04-15: chart starts at #51
+note: Record Retailer Singles Breakers 1972-04-22: chart starts at #51
+note: Record Retailer Singles Breakers 1972-04-29: chart starts at #51
+note: Record Retailer Singles Breakers 1972-05-06: chart starts at #51
+note: Record Retailer Singles Breakers 1972-05-27: chart starts at #51
+note: Record Retailer Singles Breakers 1972-06-03: chart starts at #51
+note: Record Retailer Singles Breakers 1972-06-10: chart starts at #51
+note: Record Retailer Singles Breakers 1972-06-17: chart starts at #51
+note: Record Retailer Singles Breakers 1972-06-24: chart starts at #51
+note: Record Retailer Singles Breakers 1972-07-01: chart starts at #51
+note: Record Retailer Singles Breakers 1972-07-08: chart starts at #51
+note: Record Retailer Singles Breakers 1972-07-15: chart starts at #51
+note: Record Retailer Singles Breakers 1972-07-22: chart starts at #51
+note: Record Retailer Singles Breakers 1972-07-29: chart starts at #51
+note: Record Retailer Singles Breakers 1972-08-05: chart starts at #51
+note: Record Retailer Singles Breakers 1972-08-12: chart starts at #51
+note: Record Retailer Singles Breakers 1972-08-19: chart starts at #51
+note: Record Retailer Singles Breakers 1972-08-26: chart starts at #51
+note: Record Retailer Singles Breakers 1972-09-02: chart starts at #51
+note: Record Retailer Singles Breakers 1972-09-09: chart starts at #51
+note: Record Retailer Singles Breakers 1972-09-16: chart starts at #51
+note: Record Retailer Singles Breakers 1972-09-23: chart starts at #51
+note: Record Retailer Singles Breakers 1972-09-30: chart starts at #51
+note: Record Retailer Singles Breakers 1972-10-07: chart starts at #51
+note: Record Retailer Singles Breakers 1972-10-14: chart starts at #51
+note: Record Retailer Singles Breakers 1972-10-21: chart starts at #51
+note: Record Retailer Singles Breakers 1972-10-28: chart starts at #51
+note: Record Retailer Singles Breakers 1972-11-04: chart starts at #51
+note: Record Retailer Singles Breakers 1972-11-11: chart starts at #51
+note: Record Retailer Singles Breakers 1972-11-18: chart starts at #51
+note: Record Retailer Singles Breakers 1972-11-25: chart starts at #51
+note: Record Retailer Singles Breakers 1972-12-02: chart starts at #51
+note: Record Retailer Singles Breakers 1972-12-09: chart starts at #51
+note: Record Retailer Singles Breakers 1972-12-16: chart starts at #51
+note: Record Retailer Singles Breakers: 14-day gap between charts 1972-02-19 and 1972-03-04
+note: Record Retailer Singles Breakers: 21-day gap between charts 1972-03-18 and 1972-04-08
+note: Record Retailer Singles Breakers: 21-day gap between charts 1972-05-06 and 1972-05-27

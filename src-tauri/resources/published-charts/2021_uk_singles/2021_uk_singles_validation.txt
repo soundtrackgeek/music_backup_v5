@@ -1,0 +1,48 @@
+2021_uk_singles: 20800 rows, 0 problems, 46 notes
+
+note: Official UK Singles Chart 2021-11-04 #93: no duration in book (Praise God)
+note: Official UK Singles Chart 2021-11-11 #94: no duration in book (Praise God)
+note: Official UK Singles Chart 2021-11-18 #99: no duration in book (Praise God)
+note: Official UK Singles Chart 2021-11-25 #96: no duration in book (Praise God)
+note: Official Digital Download Chart 2021-01-07 #58: wrapped line joined: 'Angharad, Gwenno Elan, Mari Gwenllian & Ed Holden Sain DL: GBCFU2000059'
+note: Official Digital Download Chart 2021-03-25 #9: wrapped line joined: "Douglas, Duncan Chisholm, Gary Innes & Breabach Blazin' Fiddles DL: GBMJG2104493"
+note: Official Digital Download Chart 2021-04-01 #197: wrapped line joined: "Douglas, Duncan Chisholm, Gary Innes & Breabach Blazin' Fiddles DL: GBMJG2104493"
+note: Official Digital Download Chart 2021-10-21 #51: wrapped line joined: 'USQ4E2100809'
+note: Official Digital Download Chart 2021-10-28 #171: wrapped line joined: 'USQ4E2100809'
+note: Official Digital Download Chart 2021-11-04 #177: wrapped line joined: 'USQ4E2100809'
+note: Official Digital Download Chart 2021-01-14 #176: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-01-28 #109: no duration in book (Wellerman Sea Shanty)
+note: Official Digital Download Chart 2021-02-18 #146: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-02-25 #144: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-03-04 #82: no duration in book (Think Twice)
+note: Official Digital Download Chart 2021-03-04 #189: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-03-11 #107: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-03-18 #120: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-03-25 #138: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-04-01 #78: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-04-08 #75: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-04-15 #78: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-04-22 #92: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-04-29 #89: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-05-06 #118: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-05-13 #121: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-05-20 #153: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-05-27 #173: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-06-03 #172: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-06-10 #127: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-06-17 #182: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-07-01 #128: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-07-08 #150: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-07-15 #181: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-07-22 #160: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-07-29 #150: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-08-05 #175: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-08-12 #188: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-08-19 #159: no duration in book (Send Me On My Way)
+note: Official Digital Download Chart 2021-12-09 #159: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2021-12-16 #121: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2021-12-23 #83: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2021-12-30 #97: no duration in book (All Alone On Christmas)
+note: Audio Streaming Chart 2021-05-27 #27: no catalogue_number in book (9 5 . S O U T H)
+note: Audio Streaming Chart 2021-07-29 #53: no duration in book (Number 2)
+note: Audio Streaming Chart 2021-09-09 #35: no duration in book (Praise God)

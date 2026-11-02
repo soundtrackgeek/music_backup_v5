@@ -1,0 +1,9 @@
+1991_uk_singles: 4251 rows, 0 problems, 7 notes
+
+note: Official UK Singles Chart 1991-12-14 #69: wrapped line joined: "Columbia 7'': 657606 7"
+note: Official UK Singles Chart 1991-12-21 #59: wrapped line joined: "Columbia 7'': 657606 7"
+note: Official UK Singles Chart 1991-12-28 #49: wrapped line joined: "Columbia 7'': 657606 7"
+note: Official UK Singles Chart 1991-07-06 #36: odd duration as printed: '53:1' (Best I Can (Radio Edit))
+note: Official UK Singles Chart 1991-07-13 #46: odd duration as printed: '53:1' (Best I Can (Radio Edit))
+note: Official UK Singles Chart 1991-07-13 #66: no duration in book (Rock And Roll)
+note: Official UK Singles Chart 1991-07-20 #73: odd duration as printed: '53:1' (Best I Can (Radio Edit))

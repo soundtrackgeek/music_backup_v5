@@ -1,0 +1,57 @@
+1968_uk_singles: 7108 rows, 0 problems, 55 notes
+
+note: NME Singles Chart 1968-11-30 #20: odd duration as printed: '09148' (The Beatles (White Album))
+note: NME Singles Chart 1968-12-07 #24: odd duration as printed: '09148' (The Beatles (White Album))
+note: NME Singles Chart 1968-12-14 #29: odd duration as printed: '09148' (The Beatles (White Album))
+note: Top Pop Singles Chart 1968-07-27: irregular numbering, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 27, 30]
+note: Record Retailer Singles Breakers 1968-01-03: chart starts at #51
+note: Record Retailer Singles Breakers 1968-01-10: chart starts at #51
+note: Record Retailer Singles Breakers 1968-01-17: chart starts at #51
+note: Record Retailer Singles Breakers 1968-01-24: chart starts at #51
+note: Record Retailer Singles Breakers 1968-01-31: chart starts at #51
+note: Record Retailer Singles Breakers 1968-02-07: chart starts at #51
+note: Record Retailer Singles Breakers 1968-02-14: chart starts at #51
+note: Record Retailer Singles Breakers 1968-02-21: chart starts at #51
+note: Record Retailer Singles Breakers 1968-02-28: chart starts at #51
+note: Record Retailer Singles Breakers 1968-03-06: chart starts at #51
+note: Record Retailer Singles Breakers 1968-03-13: chart starts at #51
+note: Record Retailer Singles Breakers 1968-03-20: chart starts at #51
+note: Record Retailer Singles Breakers 1968-03-27: chart starts at #51
+note: Record Retailer Singles Breakers 1968-04-03: chart starts at #51
+note: Record Retailer Singles Breakers 1968-04-10: chart starts at #51
+note: Record Retailer Singles Breakers 1968-04-17: chart starts at #51
+note: Record Retailer Singles Breakers 1968-04-24: chart starts at #51
+note: Record Retailer Singles Breakers 1968-05-01: chart starts at #51
+note: Record Retailer Singles Breakers 1968-05-08: chart starts at #51
+note: Record Retailer Singles Breakers 1968-05-15: chart starts at #51
+note: Record Retailer Singles Breakers 1968-05-22: chart starts at #51
+note: Record Retailer Singles Breakers 1968-05-29: chart starts at #51
+note: Record Retailer Singles Breakers 1968-06-05: chart starts at #51
+note: Record Retailer Singles Breakers 1968-06-12: chart starts at #51
+note: Record Retailer Singles Breakers 1968-06-19: chart starts at #51
+note: Record Retailer Singles Breakers 1968-06-26: chart starts at #51
+note: Record Retailer Singles Breakers 1968-07-03: chart starts at #51
+note: Record Retailer Singles Breakers 1968-07-10: chart starts at #51
+note: Record Retailer Singles Breakers 1968-07-17: chart starts at #51
+note: Record Retailer Singles Breakers 1968-07-24: chart starts at #51
+note: Record Retailer Singles Breakers 1968-07-31: chart starts at #51
+note: Record Retailer Singles Breakers 1968-08-07: chart starts at #51
+note: Record Retailer Singles Breakers 1968-08-14: chart starts at #51
+note: Record Retailer Singles Breakers 1968-08-21: chart starts at #51
+note: Record Retailer Singles Breakers 1968-08-28: chart starts at #51
+note: Record Retailer Singles Breakers 1968-09-04: chart starts at #51
+note: Record Retailer Singles Breakers 1968-09-11: chart starts at #51
+note: Record Retailer Singles Breakers 1968-09-18: chart starts at #51
+note: Record Retailer Singles Breakers 1968-09-25: chart starts at #51
+note: Record Retailer Singles Breakers 1968-10-02: chart starts at #51
+note: Record Retailer Singles Breakers 1968-10-09: chart starts at #51
+note: Record Retailer Singles Breakers 1968-10-16: chart starts at #51
+note: Record Retailer Singles Breakers 1968-10-23: chart starts at #51
+note: Record Retailer Singles Breakers 1968-10-30: chart starts at #51
+note: Record Retailer Singles Breakers 1968-11-06: chart starts at #51
+note: Record Retailer Singles Breakers 1968-11-13: chart starts at #51
+note: Record Retailer Singles Breakers 1968-11-20: chart starts at #51
+note: Record Retailer Singles Breakers 1968-11-27: chart starts at #51
+note: Record Retailer Singles Breakers 1968-12-04: chart starts at #51
+note: Record Retailer Singles Breakers 1968-12-11: chart starts at #51
+note: Record Retailer Singles Breakers 1968-12-18: chart starts at #51

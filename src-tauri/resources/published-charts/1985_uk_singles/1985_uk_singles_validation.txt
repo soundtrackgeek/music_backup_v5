@@ -1,0 +1,106 @@
+1985_uk_singles: 10400 rows, 0 problems, 104 notes
+
+note: Official UK Singles Chart 1985-03-23 #14: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-03-30 #3: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-04-06 #3: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-04-13 #4: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-04-20 #10: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-04-27 #26: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-05-04 #37: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-05-11 #61: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-06-01 #96: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Official UK Singles Chart 1985-01-19 #87: no duration in book (The Angels Know)
+note: Official UK Singles Chart 1985-01-19 #95: no duration in book (You Take My Breath Away)
+note: Official UK Singles Chart 1985-01-26 #88: no duration in book (The Angels Know)
+note: Official UK Singles Chart 1985-01-26 #93: no duration in book (You Take My Breath Away)
+note: Official UK Singles Chart 1985-02-02 #82: no duration in book (The Angels Know)
+note: Official UK Singles Chart 1985-02-02 #93: no duration in book (Operator)
+note: Official UK Singles Chart 1985-02-02 #100: no duration in book (You Take My Breath Away)
+note: Official UK Singles Chart 1985-02-09 #91: no duration in book (Operator)
+note: Official UK Singles Chart 1985-02-09 #96: no duration in book (Slip Away)
+note: Official UK Singles Chart 1985-02-09 #100: no duration in book (Take Me To Heaven)
+note: Official UK Singles Chart 1985-02-16 #86: no duration in book (Operator)
+note: Official UK Singles Chart 1985-02-16 #89: no duration in book (Slip Away)
+note: Official UK Singles Chart 1985-02-23 #95: no duration in book (Operator)
+note: Official UK Singles Chart 1985-03-09 #73: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-03-09 #97: no duration in book (Tears Idle Tears)
+note: Official UK Singles Chart 1985-03-16 #45: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-03-16 #76: no duration in book (Unreleased Recordings 1978 / 1979, Volume 3)
+note: Official UK Singles Chart 1985-03-16 #91: no duration in book (Contract Of The Heart)
+note: Official UK Singles Chart 1985-03-16 #92: no duration in book (Tears Idle Tears)
+note: Official UK Singles Chart 1985-03-16 #99: no duration in book (Ignore The Machine)
+note: Official UK Singles Chart 1985-03-16 #100: no duration in book (Miss Marple - Theme From The BBC TV Series)
+note: Official UK Singles Chart 1985-03-23 #25: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-03-23 #82: no duration in book (Unreleased Recordings 1978 / 1979, Volume 2)
+note: Official UK Singles Chart 1985-03-23 #89: no duration in book (Unreleased Recordings 1978 / 1979, Volume 3)
+note: Official UK Singles Chart 1985-03-23 #96: no duration in book (Tears Idle Tears)
+note: Official UK Singles Chart 1985-03-23 #97: no duration in book (Contract Of The Heart)
+note: Official UK Singles Chart 1985-03-30 #21: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-03-30 #92: no duration in book (Unreleased Recordings 1978 / 1979, Volume 2)
+note: Official UK Singles Chart 1985-03-30 #95: no duration in book (Miss Marple - Theme From The BBC TV Series)
+note: Official UK Singles Chart 1985-04-06 #23: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-04-13 #29: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-04-20 #46: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-04-27 #62: no duration in book (Dancing In The Dark)
+note: Official UK Singles Chart 1985-04-27 #94: no duration in book (Love Comes)
+note: Official UK Singles Chart 1985-04-27 #100: no duration in book (Let's Make Africa Green Again)
+note: Official UK Singles Chart 1985-05-04 #91: no duration in book (Love Comes)
+note: Official UK Singles Chart 1985-05-04 #100: no duration in book (Two Worlds Apart)
+note: Official UK Singles Chart 1985-05-18 #87: no duration in book (This Is The Shirt)
+note: Official UK Singles Chart 1985-05-18 #92: no duration in book (Love Comes)
+note: Official UK Singles Chart 1985-05-25 #85: no duration in book (Sweet 2th - Wig Wam Willy Mix / Sweet 2th - The Teen-Action Mix)
+note: Official UK Singles Chart 1985-05-25 #92: no duration in book (This Is The Shirt)
+note: Official UK Singles Chart 1985-06-01 #85: no duration in book (Sweet 2th - Wig Wam Willy Mix / Sweet 2th - The Teen-Action Mix)
+note: Official UK Singles Chart 1985-06-01 #97: no duration in book (This Is The Shirt)
+note: Official UK Singles Chart 1985-06-08 #99: no duration in book (Hotel California (Edit.))
+note: Official UK Singles Chart 1985-06-15 #87: no duration in book (A Physical Presence EP)
+note: Official UK Singles Chart 1985-06-15 #98: no duration in book (Irresistible)
+note: Official UK Singles Chart 1985-06-15 #99: no duration in book (Hotel California (Edit.))
+note: Official UK Singles Chart 1985-06-22 #81: no duration in book (Irresistible)
+note: Official UK Singles Chart 1985-06-29 #82: no duration in book (Take It Easy)
+note: Official UK Singles Chart 1985-06-29 #83: no duration in book (Irresistible)
+note: Official UK Singles Chart 1985-06-29 #97: no duration in book (Why Can't We Be Friends)
+note: Official UK Singles Chart 1985-07-06 #84: no duration in book (Irresistible)
+note: Official UK Singles Chart 1985-07-06 #97: no duration in book (Why Can't We Be Friends)
+note: Official UK Singles Chart 1985-07-13 #88: no duration in book (Why Can't We Be Friends)
+note: Official UK Singles Chart 1985-07-13 #92: no duration in book (Little Things Mean A Lot)
+note: Official UK Singles Chart 1985-07-13 #99: no duration in book (Irresistible)
+note: Official UK Singles Chart 1985-07-20 #98: no duration in book (Little Things Mean A Lot)
+note: Official UK Singles Chart 1985-07-27 #99: no duration in book (Little Things Mean A Lot)
+note: Official UK Singles Chart 1985-08-17 #97: no duration in book (World War III)
+note: Official UK Singles Chart 1985-09-07 #99: no duration in book (Let Me Hold You)
+note: Official UK Singles Chart 1985-09-07 #100: no duration in book (Maggie)
+note: Official UK Singles Chart 1985-09-21 #100: no duration in book (Maggie)
+note: Official UK Singles Chart 1985-09-28 #97: no duration in book (No Faith Is Blind)
+note: Official UK Singles Chart 1985-10-05 #85: no duration in book (No Faith Is Blind)
+note: Official UK Singles Chart 1985-10-05 #86: no duration in book (Set It Off)
+note: Official UK Singles Chart 1985-10-12 #95: no duration in book (Set It Off)
+note: Official UK Singles Chart 1985-10-26 #99: no duration in book (Maggie)
+note: Official UK Singles Chart 1985-11-09 #97: no duration in book (Bite This)
+note: Official UK Singles Chart 1985-11-30 #91: no duration in book (Growing Up Is Hard)
+note: Official UK Singles Chart 1985-12-07 #83: no duration in book (Growing Up Is Hard)
+note: NME Singles Chart 1985-03-30 #11: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-04-06 #3: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-04-13 #3: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-04-20 #4: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-04-27 #13: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-05-04 #32: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: NME Singles Chart 1985-03-23 #38: no duration in book (Dancing In The Dark)
+note: NME Singles Chart 1985-03-30 #22: no duration in book (Dancing In The Dark)
+note: NME Singles Chart 1985-04-06 #21: no duration in book (Dancing In The Dark)
+note: NME Singles Chart 1985-04-13 #24: no duration in book (Dancing In The Dark)
+note: NME Singles Chart 1985-04-20 #38: no duration in book (Dancing In The Dark)
+note: NME Singles Chart 1985-12-07 #46: no duration in book (Edie)
+note: Melody Maker Singles Chart 1985-03-23 #24: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-03-30 #7: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-04-06 #2: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-04-13 #4: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-04-20 #8: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-04-27 #20: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-05-04 #42: wrapped line joined: "Lorin Maazel HMV 7'': WEBBER 1"
+note: Melody Maker Singles Chart 1985-03-16 #47: no duration in book (Dancing In The Dark)
+note: Melody Maker Singles Chart 1985-03-23 #28: no duration in book (Dancing In The Dark)
+note: Melody Maker Singles Chart 1985-03-30 #17: no duration in book (Dancing In The Dark)
+note: Melody Maker Singles Chart 1985-04-06 #24: no duration in book (Dancing In The Dark)
+note: Melody Maker Singles Chart 1985-04-13 #32: no duration in book (Dancing In The Dark)
+note: Melody Maker Singles Chart 1985-05-11 #49: no duration in book (Be With Me)

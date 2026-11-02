@@ -35,7 +35,7 @@ describe("PublishedChartsWorkspace", () => {
     importCharts.mockResolvedValue({ rowsImported: 6, yearsImported: 2, chartSeries: 1 });
     getCatalog.mockResolvedValue({
       importedYears: 2, inventoryYears: 2, needsImport: false, totalRows: 6,
-      series: [{ chart: "Billboard Hot 100", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 }],
+      series: [{ chart: "Billboard Hot 100", country: "US", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 }],
     });
     listWeeks.mockImplementation((_chart: string, year: number) => Promise.resolve(year === 2019
       ? [{ weekEnding: "2019-01-05", rows: 2 }, { weekEnding: "2019-01-12", rows: 1 }]
@@ -62,6 +62,26 @@ describe("PublishedChartsWorkspace", () => {
     expect(getRankings).toHaveBeenCalledTimes(1);
   });
 
+  it("groups the chart picker by country so UK charts sit beside the US ones", async () => {
+    getCatalog.mockResolvedValue({
+      importedYears: 3, inventoryYears: 3, needsImport: false, totalRows: 9,
+      series: [
+        { chart: "Billboard Hot 100", country: "US", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 },
+        { chart: "NME Singles Chart", country: "UK", years: [2019], firstWeek: "2019-01-05", lastWeek: "2019-01-12", rows: 3 },
+      ],
+    });
+    render(<PublishedChartsWorkspace />);
+    const picker = await screen.findByRole("combobox", { name: "Chart" });
+    const groups = Array.from(picker.querySelectorAll("optgroup")).map((group) => ({
+      label: group.getAttribute("label"),
+      charts: Array.from(group.querySelectorAll("option")).map((option) => option.textContent),
+    }));
+    expect(groups).toEqual([
+      { label: "United States", charts: ["Billboard Hot 100"] },
+      { label: "United Kingdom", charts: ["NME Singles Chart"] },
+    ]);
+  });
+
   it("opens full song history beyond the selected range", async () => {
     render(<PublishedChartsWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /First artist – First song/ }));
@@ -76,7 +96,7 @@ describe("PublishedChartsWorkspace", () => {
   it("shows bundled chart choices immediately and prepares missing rows automatically", async () => {
     getCatalog.mockResolvedValueOnce({
       importedYears: 0, inventoryYears: 2, needsImport: true, totalRows: 0,
-      series: [{ chart: "Billboard Hot 100", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 }],
+      series: [{ chart: "Billboard Hot 100", country: "US", years: [2018, 2019], firstWeek: "2018-01-06", lastWeek: "2019-01-12", rows: 6 }],
     });
     render(<PublishedChartsWorkspace />);
     expect(await screen.findByRole("option", { name: "Billboard Hot 100" })).toBeInTheDocument();

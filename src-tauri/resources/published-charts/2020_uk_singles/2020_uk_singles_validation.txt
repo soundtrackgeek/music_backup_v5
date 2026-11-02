@@ -1,0 +1,13 @@
+2020_uk_singles: 21200 rows, 0 problems, 11 notes
+
+note: Official Digital Download Chart 2020-07-09 #39: wrapped line joined: 'QZ8BZ2000233'
+note: Official Digital Download Chart 2020-07-16 #63: wrapped line joined: 'QZ8BZ2000233'
+note: Official Digital Download Chart 2020-07-23 #115: wrapped line joined: 'QZ8BZ2000233'
+note: Official Digital Download Chart 2020-07-30 #179: wrapped line joined: 'QZ8BZ2000233'
+note: Official Digital Download Chart 2020-09-17 #100: wrapped line joined: 'USUM72016354'
+note: Official Digital Download Chart 2020-01-02 #112: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2020-06-11 #192: no duration in book (Dignity)
+note: Official Digital Download Chart 2020-12-10 #127: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2020-12-17 #98: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2020-12-24 #95: no duration in book (All Alone On Christmas)
+note: Official Digital Download Chart 2020-12-31 #89: no duration in book (All Alone On Christmas)

@@ -1662,3 +1662,246 @@ book,chart,first_week,last_week,weekly_charts,rows,first_page,last_page
 2025_us_singles,Hot Dance Airplay,2025-01-04,2025-12-27,52,2080,5389,5432
 2025_us_singles,Rock Airplay,2025-01-04,2025-12-27,52,2600,5536,5587
 2025_us_singles,Bubbling Under The Hot 100,2025-01-04,2025-12-27,52,1300,5754,5781
+1952_uk_singles,Official UK Singles Chart,1952-11-14,1952-12-26,7,102,40,42
+1953_uk_singles,Official UK Singles Chart,1953-01-02,1953-12-25,52,673,54,71
+1954_uk_singles,Official UK Singles Chart,1954-01-01,1954-12-31,53,773,56,75
+1954_uk_singles,NME Top 12 British Artists Chart,1954-04-09,1954-09-24,25,307,150,158
+1955_uk_singles,Official UK Singles Chart,1955-01-07,1955-12-30,52,1060,66,91
+1955_uk_singles,Record Mirror Singles Chart,1955-01-22,1955-12-31,50,659,184,200
+1955_uk_singles,Record Mirror British Singles Chart,1955-12-03,1955-12-31,5,50,253,254
+1956_uk_singles,Official UK Singles Chart,1956-01-06,1956-12-28,52,1434,71,115
+1956_uk_singles,Record Mirror Singles Chart,1956-01-07,1956-12-29,52,1051,219,244
+1956_uk_singles,Melody Maker Singles Chart,1956-03-31,1956-12-29,40,814,338,357
+1956_uk_singles,Record Mirror British Singles Chart,1956-01-07,1956-12-29,52,530,431,444
+1957_uk_singles,Official UK Singles Chart,1957-01-04,1957-12-27,52,1565,69,120
+1957_uk_singles,Record Mirror Singles Chart,1957-01-05,1957-12-28,52,1048,220,245
+1957_uk_singles,Melody Maker Singles Chart,1957-01-05,1957-12-28,52,1065,330,355
+1957_uk_singles,Record Mirror British Singles Chart,1957-01-05,1957-12-28,52,523,431,443
+1958_uk_singles,Official UK Singles Chart,1958-01-03,1958-12-26,52,1567,73,124
+1958_uk_singles,Record Mirror Singles Chart,1958-01-04,1958-12-27,52,1045,229,254
+1958_uk_singles,Melody Maker Singles Chart,1958-01-04,1958-12-27,52,1050,343,368
+1958_uk_singles,Disc Singles Chart,1958-02-08,1958-12-27,47,941,448,471
+1958_uk_singles,Record Mirror British Singles Chart,1958-01-04,1958-12-27,52,522,540,552
+1958_uk_singles,Disc Breakers Chart,1958-02-08,1958-12-20,36,68,611,613
+1959_uk_singles,Official UK Singles Chart,1959-01-02,1959-12-25,52,1569,73,124
+1959_uk_singles,Record Mirror Singles Chart,1959-01-03,1959-12-26,52,1043,225,250
+1959_uk_singles,Melody Maker Singles Chart,1959-01-03,1959-12-26,52,1040,332,357
+1959_uk_singles,Disc Singles Chart,1959-01-03,1959-12-26,52,1040,438,463
+1959_uk_singles,Record Mirror British Singles Chart,1959-01-03,1959-12-26,46,461,534,545
+1959_uk_singles,Melody Maker EP Chart,1959-11-21,1959-12-26,6,60,593,594
+1959_uk_singles,Disc Breakers Chart,1959-01-10,1959-12-26,42,74,634,636
+1960_uk_singles,Official UK Singles Chart,1960-01-01,1960-12-29,53,2451,90,142
+1960_uk_singles,NME Singles Chart,1960-01-01,1960-12-30,53,1601,288,340
+1960_uk_singles,Record Mirror Singles Chart,1960-01-02,1960-12-31,53,1072,449,475
+1960_uk_singles,Melody Maker Singles Chart,1960-01-02,1960-12-31,53,1060,567,593
+1960_uk_singles,Disc Singles Chart,1960-01-02,1960-12-31,53,1060,679,705
+1960_uk_singles,Record Mirror British Singles Chart,1960-01-02,1960-12-31,53,531,781,794
+1960_uk_singles,Melody Maker EP Chart,1960-01-02,1960-12-31,53,530,855,868
+1960_uk_singles,Record Retailer EP Chart,1960-03-12,1960-12-31,43,845,927,947
+1960_uk_singles,Disc Singles Bubbling Under Chart,1960-01-02,1960-12-31,46,66,1008,1010
+1961_uk_singles,Official UK Singles Chart,1961-01-05,1961-12-28,52,2600,89,140
+1961_uk_singles,NME Singles Chart,1961-01-06,1961-12-29,52,1574,292,343
+1961_uk_singles,Record Mirror Singles Chart,1961-01-07,1961-12-30,52,1048,456,481
+1961_uk_singles,Melody Maker Singles Chart,1961-01-07,1961-12-30,52,1040,575,600
+1961_uk_singles,Disc Singles Chart,1961-01-07,1961-12-30,52,1040,690,715
+1961_uk_singles,Record Mirror British Singles Chart,1961-01-07,1961-04-15,15,150,787,790
+1961_uk_singles,Melody Maker EP Chart,1961-01-07,1961-12-30,52,520,841,853
+1961_uk_singles,Record Retailer EP Chart,1961-01-07,1961-12-30,52,1040,908,933
+1961_uk_singles,Disc Singles Bubbling Under Chart,1961-01-07,1961-12-30,51,87,1001,1004
+1962_uk_singles,Official UK Singles Chart,1962-01-04,1962-12-27,52,2600,84,135
+1962_uk_singles,NME Singles Chart,1962-01-05,1962-12-28,52,1579,277,328
+1962_uk_singles,Record Mirror Singles Chart,1962-01-06,1962-03-17,11,221,425,430
+1962_uk_singles,Melody Maker Singles Chart,1962-01-06,1962-12-29,52,1741,513,557
+1962_uk_singles,Disc Singles Chart,1962-01-06,1962-12-29,52,1170,671,703
+1962_uk_singles,Pop Weekly Singles Chart,1962-09-01,1962-12-29,18,540,783,800
+1962_uk_singles,Melody Maker EP Chart,1962-01-06,1962-12-29,52,520,856,868
+1962_uk_singles,Record Retailer EP Chart,1962-01-06,1962-12-29,52,1040,924,949
+1962_uk_singles,Disc Singles Bubbling Under Chart,1962-01-06,1962-09-29,38,94,1019,1022
+1963_uk_singles,Official UK Singles Chart,1963-01-03,1963-12-26,52,2600,88,139
+1963_uk_singles,NME Singles Chart,1963-01-04,1963-12-27,52,1574,287,338
+1963_uk_singles,Melody Maker Singles Chart,1963-01-05,1963-12-28,52,2602,463,516
+1963_uk_singles,Disc Singles Chart,1963-01-05,1963-12-28,52,1560,648,699
+1963_uk_singles,Pop Weekly Singles Chart,1963-01-05,1963-12-28,52,1561,803,854
+1963_uk_singles,Melody Maker EP Chart,1963-01-05,1963-05-25,21,210,926,931
+1963_uk_singles,Record Retailer EP Chart,1963-01-05,1963-12-28,52,1040,987,1012
+1964_uk_singles,Official UK Singles Chart,1964-01-02,1964-12-31,53,2650,88,140
+1964_uk_singles,NME Singles Chart,1964-01-03,1964-12-25,52,1574,295,346
+1964_uk_singles,Melody Maker Singles Chart,1964-01-04,1964-12-26,52,2601,476,528
+1964_uk_singles,Disc Singles Chart,1964-01-04,1964-12-26,52,1560,664,715
+1964_uk_singles,Pop Weekly Singles Chart,1964-01-04,1964-12-26,52,1560,821,872
+1964_uk_singles,Record Retailer EP Chart,1964-01-04,1964-12-26,52,1040,967,992
+1965_uk_singles,Official UK Singles Chart,1965-01-07,1965-12-30,52,2600,89,140
+1965_uk_singles,NME Singles Chart,1965-01-01,1965-12-31,53,1610,298,350
+1965_uk_singles,Melody Maker Singles Chart,1965-01-02,1965-12-25,52,2600,485,536
+1965_uk_singles,Disc Singles Chart,1965-01-02,1965-12-25,52,1560,680,731
+1965_uk_singles,Pop Weekly Singles Chart,1965-01-02,1965-12-25,52,1490,843,891
+1965_uk_singles,Record Retailer EP Chart,1965-01-02,1965-12-25,52,1040,989,1014
+1965_uk_singles,Pop Weekly EP Chart,1965-09-18,1965-11-06,8,40,1063,1064
+1966_uk_singles,Official UK Singles Chart,1966-01-06,1966-12-29,52,2600,86,137
+1966_uk_singles,NME Singles Chart,1966-01-07,1966-12-31,52,1575,293,344
+1966_uk_singles,Melody Maker Singles Chart,1966-01-01,1966-12-31,53,2630,480,532
+1966_uk_singles,Disc Singles Chart,1966-01-01,1966-12-31,53,2330,692,744
+1966_uk_singles,Pop Weekly Singles Chart,1966-01-01,1966-02-12,7,210,856,862
+1966_uk_singles,Record Retailer EP Chart,1966-01-01,1966-12-31,53,680,927,943
+1966_uk_singles,Record Retailer Singles Breakers,1966-04-21,1966-12-15,34,289,1014,1021
+1967_uk_singles,Official UK Singles Chart,1967-01-05,1967-12-27,52,2600,82,133
+1967_uk_singles,NME Singles Chart,1967-01-07,1967-12-30,52,1566,275,326
+1967_uk_singles,Melody Maker Singles Chart,1967-01-07,1967-12-30,52,1800,446,497
+1967_uk_singles,Disc Singles Chart,1967-01-07,1967-08-26,34,1260,625,658
+1967_uk_singles,Record Retailer EP Chart,1967-01-07,1967-12-16,50,500,745,757
+1967_uk_singles,Record Retailer Singles Breakers,1967-01-05,1967-12-20,50,401,827,837
+1968_uk_singles,Official UK Singles Chart,1968-01-03,1968-12-25,52,2600,84,135
+1968_uk_singles,NME Singles Chart,1968-01-06,1968-12-28,52,1569,280,331
+1968_uk_singles,Melody Maker Singles Chart,1968-01-06,1968-12-28,52,1560,450,501
+1968_uk_singles,Top Pop Singles Chart,1968-05-25,1968-12-28,32,955,594,625
+1968_uk_singles,Record Retailer Singles Breakers,1968-01-03,1968-12-18,51,424,714,724
+1969_uk_singles,Official UK Singles Chart,1969-01-01,1969-12-27,52,2602,89,142
+1969_uk_singles,NME Singles Chart,1969-01-04,1969-12-27,52,1569,291,342
+1969_uk_singles,Melody Maker Singles Chart,1969-01-04,1969-12-27,52,1859,467,523
+1969_uk_singles,Top Pop Singles Chart,1969-01-04,1969-12-27,52,1553,645,696
+1969_uk_singles,Record Retailer Singles Breakers,1969-01-08,1969-07-02,22,86,783,785
+1970_uk_singles,Official UK Singles Chart,1970-01-03,1970-12-26,52,2600,83,134
+1970_uk_singles,NME Singles Chart,1970-01-03,1970-12-26,52,1567,276,327
+1970_uk_singles,Melody Maker Singles Chart,1970-01-03,1970-12-26,52,2577,461,518
+1970_uk_singles,Top Pop Singles Chart,1970-01-03,1970-12-26,52,1560,653,704
+1970_uk_singles,Record Retailer Singles Breakers,1970-09-19,1970-12-19,14,52,792,793
+1971_uk_singles,Official UK Singles Chart,1971-01-02,1971-12-25,52,2530,78,129
+1971_uk_singles,NME Singles Chart,1971-01-02,1971-12-25,52,1565,267,318
+1971_uk_singles,Melody Maker Singles Chart,1971-01-02,1971-12-25,52,1816,431,483
+1971_uk_singles,Top Pop Singles Chart,1971-01-02,1971-02-27,9,270,588,596
+1971_uk_singles,Record Retailer Singles Breakers,1971-01-09,1971-12-18,47,158,666,670
+1972_uk_singles,Official UK Singles Chart,1972-01-01,1972-12-30,53,2651,86,171
+1972_uk_singles,NME Singles Chart,1972-01-01,1972-12-30,53,1594,316,368
+1972_uk_singles,Melody Maker Singles Chart,1972-01-01,1972-12-30,53,1593,484,536
+1972_uk_singles,Record Retailer Singles Breakers,1972-01-08,1972-12-16,45,209,640,645
+1973_uk_singles,Official UK Singles Chart,1973-01-06,1973-12-29,52,2540,84,138
+1973_uk_singles,NME Singles Chart,1973-01-06,1973-12-29,52,1559,284,335
+1973_uk_singles,Melody Maker Singles Chart,1973-01-06,1973-12-29,52,1565,454,505
+1973_uk_singles,Record Retailer Singles Breakers,1973-01-13,1973-12-15,48,485,613,626
+1974_uk_singles,Official UK Singles Chart,1974-01-05,1974-12-28,52,2600,87,142
+1974_uk_singles,NME Singles Chart,1974-01-05,1974-12-28,52,1561,302,353
+1974_uk_singles,Melody Maker Singles Chart,1974-01-05,1974-12-28,52,1564,484,535
+1974_uk_singles,Record Retailer Singles Breakers,1974-01-05,1974-12-21,51,1193,678,705
+1975_uk_singles,Official UK Singles Chart,1975-01-04,1975-12-27,52,2600,90,146
+1975_uk_singles,NME Singles Chart,1975-01-04,1975-12-27,52,1560,308,359
+1975_uk_singles,Melody Maker Singles Chart,1975-01-04,1975-12-27,52,1563,490,541
+1975_uk_singles,Record Retailer Singles Breakers,1975-01-04,1975-12-27,52,1003,679,701
+1975_uk_singles,NME Singles Breakers,1975-03-22,1975-12-27,38,190,788,793
+1976_uk_singles,Official UK Singles Chart,1976-01-03,1976-12-25,52,2600,91,142
+1976_uk_singles,NME Singles Chart,1976-01-03,1976-12-25,52,1561,302,353
+1976_uk_singles,Melody Maker Singles Chart,1976-01-03,1976-12-25,52,1562,482,533
+1976_uk_singles,Record Retailer Singles Breakers,1976-01-10,1976-12-25,50,500,659,671
+1976_uk_singles,NME Singles Breakers,1976-01-10,1976-12-25,37,178,750,754
+1977_uk_singles,Official UK Singles Chart,1977-01-01,1977-12-31,53,2630,96,151
+1977_uk_singles,NME Singles Chart,1977-01-01,1977-12-31,53,1590,316,368
+1977_uk_singles,Melody Maker Singles Chart,1977-01-01,1977-12-31,53,1592,499,551
+1977_uk_singles,Record Retailer Singles Breakers,1977-01-15,1977-12-24,50,498,679,691
+1977_uk_singles,NME Singles Breakers,1977-01-15,1977-12-24,47,195,777,782
+1978_uk_singles,Official UK Singles Chart,1978-01-07,1978-12-30,52,3430,107,195
+1978_uk_singles,NME Singles Chart,1978-01-07,1978-12-30,52,1560,387,438
+1978_uk_singles,Melody Maker Singles Chart,1978-01-07,1978-12-30,52,1562,573,624
+1978_uk_singles,Record Retailer Singles Breakers,1978-01-14,1978-05-06,17,170,733,737
+1978_uk_singles,NME Singles Breakers,1978-01-07,1978-12-16,48,191,811,816
+1979_uk_singles,Official UK Singles Chart,1979-01-06,1979-12-29,52,3900,114,217
+1979_uk_singles,NME Singles Chart,1979-01-06,1979-12-29,52,1560,424,475
+1979_uk_singles,Melody Maker Singles Chart,1979-01-06,1979-12-29,52,1561,610,661
+1979_uk_singles,NME Singles Breakers,1979-01-13,1979-12-22,49,253,777,783
+1980_uk_singles,Official UK Singles Chart,1980-01-05,1980-12-27,52,3900,112,215
+1980_uk_singles,NME Singles Chart,1980-01-05,1980-12-27,52,1560,426,477
+1980_uk_singles,Melody Maker Singles Chart,1980-01-05,1980-12-27,52,1560,616,667
+1980_uk_singles,NME Singles Breakers,1980-01-12,1980-12-20,44,262,791,798
+1981_uk_singles,Official UK Singles Chart,1981-01-03,1981-12-26,52,3901,115,218
+1981_uk_singles,NME Singles Chart,1981-01-03,1981-12-26,52,1560,427,478
+1981_uk_singles,Melody Maker Singles Chart,1981-01-03,1981-12-26,52,1560,615,666
+1981_uk_singles,NME Singles Breakers,1981-01-03,1981-05-09,19,114,776,779
+1981_uk_singles,BMRB Next 25,1981-08-08,1981-12-26,21,523,853,872
+1982_uk_singles,Official UK Singles Chart,1982-01-02,1982-12-25,52,3901,116,219
+1982_uk_singles,NME Singles Chart,1982-01-02,1982-12-25,52,1560,437,488
+1982_uk_singles,Melody Maker Singles Chart,1982-01-02,1982-12-25,52,1560,631,682
+1982_uk_singles,BMRB Next 25,1982-01-02,1982-12-25,52,1295,839,889
+1983_uk_singles,Official UK Singles Chart,1983-01-01,1983-12-31,53,5275,162,267
+1983_uk_singles,NME Singles Chart,1983-01-01,1983-12-31,53,3205,595,682
+1983_uk_singles,Melody Maker Singles Chart,1983-01-01,1983-12-31,53,1590,898,950
+1984_uk_singles,Official UK Singles Chart,1984-01-07,1984-12-29,52,5200,170,273
+1984_uk_singles,NME Singles Chart,1984-01-07,1984-12-29,52,3700,594,689
+1984_uk_singles,Melody Maker Singles Chart,1984-01-07,1984-12-29,47,2302,972,1018
+1985_uk_singles,Official UK Singles Chart,1985-01-05,1985-12-28,52,5200,176,288
+1985_uk_singles,NME Singles Chart,1985-01-05,1985-12-28,52,2600,592,649
+1985_uk_singles,Melody Maker Singles Chart,1985-01-05,1985-12-28,52,2600,853,911
+1986_uk_singles,Official UK Singles Chart,1986-01-04,1986-12-27,52,5200,165,268
+1986_uk_singles,NME Singles Chart,1986-01-04,1986-12-27,52,2600,575,626
+1986_uk_singles,Melody Maker Singles Chart,1986-01-04,1986-12-27,52,2600,828,879
+1987_uk_singles,Official UK Singles Chart,1987-01-03,1987-12-26,52,5200,160,275
+1987_uk_singles,NME Singles Chart,1987-01-03,1987-12-26,52,2600,590,641
+1987_uk_singles,Melody Maker Singles Chart,1987-01-03,1987-12-26,52,2600,844,895
+1988_uk_singles,Official UK Singles Chart,1988-01-02,1988-12-31,53,5300,174,279
+1988_uk_singles,NME Singles Chart,1988-01-02,1988-05-28,22,1100,577,598
+1988_uk_singles,Melody Maker Singles Chart,1988-01-02,1988-06-04,23,1150,731,753
+1989_uk_singles,Official UK Singles Chart,1989-01-07,1989-12-30,52,5200,184,287
+1990_uk_singles,Official UK Singles Chart,1990-01-06,1990-12-29,52,5200,196,299
+1991_uk_singles,Official UK Singles Chart,1991-01-05,1991-12-28,52,4251,167,270
+1992_uk_singles,Official UK Singles Chart,1992-01-04,1992-12-26,52,4283,188,291
+1993_uk_singles,Official UK Singles Chart,1993-01-02,1993-12-25,52,5200,237,340
+1994_uk_singles,Official UK Singles Chart,1994-01-01,1994-12-31,53,10000,407,606
+1995_uk_singles,Official UK Singles Chart,1995-01-07,1995-12-30,52,10399,420,628
+1996_uk_singles,Official UK Singles Chart,1996-01-06,1996-12-28,52,10400,413,620
+1997_uk_singles,Official UK Singles Chart,1997-01-04,1997-12-27,52,10400,390,597
+1998_uk_singles,Official UK Singles Chart,1998-01-03,1998-12-26,52,10400,392,599
+1999_uk_singles,Official UK Singles Chart,1999-01-02,1999-12-25,52,10400,376,583
+2000_uk_singles,Official UK Singles Chart,2000-01-01,2000-12-30,53,10600,375,586
+2001_uk_singles,Official UK Singles Chart,2001-01-06,2001-12-29,52,10400,367,575
+2002_uk_singles,Official UK Singles Chart,2002-01-05,2002-12-28,52,10400,406,613
+2003_uk_singles,Official UK Singles Chart,2003-01-04,2003-12-27,52,10400,427,634
+2004_uk_singles,Official UK Singles Chart,2004-01-03,2004-12-25,52,10400,441,648
+2004_uk_singles,Official Digital Download Chart,2004-09-04,2004-12-25,17,440,1262,1272
+2005_uk_singles,Official UK Singles Chart,2005-01-01,2005-12-31,53,12450,330,578
+2005_uk_singles,Official Digital Download Chart,2005-01-01,2005-12-31,53,2120,1111,1163
+2006_uk_singles,Official UK Singles Chart,2006-01-07,2006-12-30,52,10900,238,455
+2006_uk_singles,Official Digital Download Chart,2006-01-07,2006-12-30,52,7000,963,1106
+2007_uk_singles,Official UK Singles Chart,2007-01-06,2007-12-29,52,10400,232,439
+2007_uk_singles,Official Digital Download Chart,2007-01-06,2007-12-29,52,5835,931,1048
+2008_uk_singles,Official UK Singles Chart,2008-01-05,2008-12-27,52,10400,214,421
+2008_uk_singles,Official Digital Download Chart,2008-01-05,2008-12-27,52,5253,870,975
+2009_uk_singles,Official UK Singles Chart,2009-01-03,2009-12-26,52,10400,216,423
+2009_uk_singles,Official Digital Download Chart,2009-01-03,2009-12-26,52,5311,862,968
+2010_uk_singles,Official UK Singles Chart,2010-01-02,2010-12-25,52,10400,235,442
+2010_uk_singles,Official Digital Download Chart,2010-01-02,2010-12-25,52,8400,980,1147
+2011_uk_singles,Official UK Singles Chart,2011-01-01,2011-12-31,53,10600,243,456
+2011_uk_singles,Official Digital Download Chart,2011-01-01,2011-12-31,53,10600,1035,1248
+2012_uk_singles,Official UK Singles Chart,2012-01-07,2012-12-29,52,10400,257,464
+2012_uk_singles,Official Digital Download Chart,2012-01-07,2012-12-29,52,10400,1089,1296
+2012_uk_singles,Audio Streaming Chart (2012-2014),2012-05-19,2012-12-29,33,3300,1745,1810
+2013_uk_singles,Official UK Singles Chart,2013-01-05,2013-12-28,52,10400,270,486
+2013_uk_singles,Official Digital Download Chart,2013-01-05,2013-12-28,52,10400,1180,1396
+2013_uk_singles,Audio Streaming Chart (2012-2014),2013-01-05,2013-12-28,52,5200,1889,1992
+2014_uk_singles,Official UK Singles Chart,2014-01-04,2014-12-27,52,10400,249,456
+2014_uk_singles,Official Digital Download Chart,2014-01-04,2014-12-27,52,10400,1118,1325
+2014_uk_singles,Audio Streaming Chart (2012-2014),2014-01-04,2014-07-05,27,2700,1821,1874
+2014_uk_singles,Audio Streaming Chart,2014-07-12,2014-12-27,25,2500,2031,2080
+2015_uk_singles,Official UK Singles Chart,2015-01-03,2015-12-31,53,10600,219,430
+2015_uk_singles,Official Digital Download Chart,2015-01-03,2015-12-31,53,10600,1037,1249
+2015_uk_singles,Audio Streaming Chart,2015-01-03,2015-12-31,53,5300,1794,1899
+2016_uk_singles,Official UK Singles Chart,2016-01-07,2016-12-29,52,10400,188,395
+2016_uk_singles,Official Digital Download Chart,2016-01-07,2016-12-29,52,10400,949,1156
+2016_uk_singles,Audio Streaming Chart,2016-01-07,2016-12-29,52,5200,1706,1816
+2017_uk_singles,Official UK Singles Chart,2017-01-05,2017-12-28,52,7900,182,341
+2017_uk_singles,Official Digital Download Chart,2017-01-05,2017-12-28,52,10400,903,1113
+2017_uk_singles,Audio Streaming Chart,2017-01-05,2017-12-28,52,5200,1635,1738
+2018_uk_singles,Official UK Singles Chart,2018-01-04,2018-12-27,52,5200,152,255
+2018_uk_singles,Official Digital Download Chart,2018-01-04,2018-12-27,52,10400,760,976
+2018_uk_singles,Audio Streaming Chart,2018-01-04,2018-12-27,52,5200,1470,1574
+2019_uk_singles,Official UK Singles Chart,2019-01-03,2019-12-26,52,5200,156,259
+2019_uk_singles,Official Digital Download Chart,2019-01-03,2019-12-26,52,10400,783,1013
+2019_uk_singles,Audio Streaming Chart,2019-01-03,2019-12-26,52,5200,1529,1654
+2020_uk_singles,Official UK Singles Chart,2020-01-02,2020-12-31,53,5300,163,268
+2020_uk_singles,Official Digital Download Chart,2020-01-02,2020-12-31,53,10600,871,1119
+2020_uk_singles,Audio Streaming Chart,2020-01-02,2020-12-31,53,5300,1739,1867
+2021_uk_singles,Official UK Singles Chart,2021-01-07,2021-12-30,52,5200,162,269
+2021_uk_singles,Official Digital Download Chart,2021-01-07,2021-12-30,52,10400,887,1137
+2021_uk_singles,Audio Streaming Chart,2021-01-07,2021-12-30,52,5200,1777,1923
+2022_uk_singles,Official UK Singles Chart,2022-01-06,2022-12-29,52,5200,155,276
+2022_uk_singles,Official Digital Download Chart,2022-01-06,2022-12-29,52,10400,880,1135
+2022_uk_singles,Audio Streaming Chart,2022-01-06,2022-12-29,52,5200,1759,1913
+2023_uk_singles,Official UK Singles Chart,2023-01-05,2023-06-29,26,2600,115,182
+2023_uk_singles,Official Digital Download Chart,2023-01-05,2023-06-29,26,5200,568,697
+2023_uk_singles,Audio Streaming Chart,2023-01-05,2023-06-29,26,2600,1128,1205

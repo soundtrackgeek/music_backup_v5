@@ -1,0 +1,74 @@
+1987_uk_singles: 10400 rows, 0 problems, 72 notes
+
+note: Official UK Singles Chart 1987-01-10 #66: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-01-17 #44: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-01-24 #41: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-01-31 #24: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-02-07 #19: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-02-14 #7: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-02-21 #11: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-02-28 #19: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-03-07 #28: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-03-14 #41: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-03-21 #59: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-04-04 #79: wrapped line joined: "Polydor 7'': POSP 803"
+note: Official UK Singles Chart 1987-01-24 #91: no duration in book (Heatstroke)
+note: Official UK Singles Chart 1987-02-07 #94: no duration in book (Blue Chair)
+note: Official UK Singles Chart 1987-02-07 #95: no duration in book (Slave Of Love)
+note: Official UK Singles Chart 1987-02-07 #97: no duration in book (Jackin')
+note: Official UK Singles Chart 1987-02-21 #86: no duration in book (Hooked On You)
+note: Official UK Singles Chart 1987-02-21 #100: no duration in book (She Don't Know I'm Alive)
+note: Official UK Singles Chart 1987-02-28 #79: no duration in book (Hooked On You)
+note: Official UK Singles Chart 1987-02-28 #80: no duration in book (The Morning After (Edited Remix))
+note: Official UK Singles Chart 1987-03-07 #83: no duration in book (Hooked On You)
+note: Official UK Singles Chart 1987-03-07 #88: no duration in book (The Morning After (Edited Remix))
+note: Official UK Singles Chart 1987-03-07 #91: no duration in book (Jack Mix)
+note: Official UK Singles Chart 1987-03-14 #83: no duration in book (Hooked On You)
+note: Official UK Singles Chart 1987-03-14 #93: no duration in book (The Morning After (Edited Remix))
+note: Official UK Singles Chart 1987-03-21 #85: no duration in book (Hooked On You)
+note: Official UK Singles Chart 1987-03-21 #98: no duration in book (I'm Your Puppet)
+note: Official UK Singles Chart 1987-03-28 #83: no duration in book (Still In Love (Lights Down Mix))
+note: Official UK Singles Chart 1987-04-04 #90: no duration in book (Still In Love (Lights Down Mix))
+note: Official UK Singles Chart 1987-04-11 #98: no duration in book (This Is The Shirt)
+note: Official UK Singles Chart 1987-04-18 #99: no duration in book (Cry Mercy Judge)
+note: Official UK Singles Chart 1987-05-02 #99: no duration in book (So Fine)
+note: Official UK Singles Chart 1987-05-09 #86: no duration in book (Heaven's Just A Breath Away)
+note: Official UK Singles Chart 1987-05-16 #84: no duration in book (Heaven's Just A Breath Away)
+note: Official UK Singles Chart 1987-05-23 #91: no duration in book (Heaven's Just A Breath Away)
+note: Official UK Singles Chart 1987-05-23 #97: no duration in book (Hanky Panky)
+note: Official UK Singles Chart 1987-05-30 #87: no duration in book (Hanky Panky)
+note: Official UK Singles Chart 1987-06-06 #95: no duration in book (Hanky Panky)
+note: Official UK Singles Chart 1987-07-11 #83: no duration in book (Wish On A Star)
+note: Official UK Singles Chart 1987-07-18 #85: no duration in book (The Majorca Song (Filthy Version))
+note: Official UK Singles Chart 1987-07-25 #81: no duration in book (Doin' The Crab)
+note: Official UK Singles Chart 1987-07-25 #89: no duration in book (The Majorca Song (Filthy Version))
+note: Official UK Singles Chart 1987-07-25 #95: no duration in book (Start Wrekkin')
+note: Official UK Singles Chart 1987-08-01 #92: no duration in book (Doin' The Crab)
+note: Official UK Singles Chart 1987-08-08 #95: no duration in book (Edge Of A Broken Heart)
+note: Official UK Singles Chart 1987-08-22 #86: no duration in book (Hot Mix 1)
+note: Official UK Singles Chart 1987-08-22 #89: no duration in book (It Won't Be Easy (Theme From The BBC-TV Series 'Star Cops'))
+note: Official UK Singles Chart 1987-08-29 #88: no duration in book (It Won't Be Easy (Theme From The BBC-TV Series 'Star Cops'))
+note: Official UK Singles Chart 1987-09-05 #93: no duration in book (It Won't Be Easy (Theme From The BBC-TV Series 'Star Cops'))
+note: Official UK Singles Chart 1987-09-12 #83: no duration in book (It Won't Be Easy (Theme From The BBC-TV Series 'Star Cops'))
+note: Official UK Singles Chart 1987-09-26 #91: no duration in book (Don't Leave Me Now)
+note: Official UK Singles Chart 1987-10-03 #83: no duration in book (Don't Leave Me Now)
+note: Official UK Singles Chart 1987-10-03 #93: no duration in book (Hot Mix II)
+note: Official UK Singles Chart 1987-10-03 #94: no duration in book (Boys With The Best Intentions)
+note: Official UK Singles Chart 1987-10-10 #78: no duration in book (Ricochet)
+note: Official UK Singles Chart 1987-10-10 #83: no duration in book (Don't Leave Me Now)
+note: Official UK Singles Chart 1987-10-10 #94: no duration in book (Take It To The Top)
+note: Official UK Singles Chart 1987-10-17 #71: no duration in book (Ricochet)
+note: Official UK Singles Chart 1987-10-24 #82: no duration in book (Ricochet)
+note: Official UK Singles Chart 1987-10-24 #99: no duration in book (Be Thankful For What You Got)
+note: Official UK Singles Chart 1987-11-07 #98: no duration in book (The Longer The Road)
+note: Official UK Singles Chart 1987-11-07 #99: no duration in book (Foureleven-Fortyfour)
+note: Official UK Singles Chart 1987-11-14 #80: no duration in book (Foureleven-Fortyfour)
+note: Official UK Singles Chart 1987-11-14 #99: no duration in book (Mr Johnson)
+note: Official UK Singles Chart 1987-11-21 #77: no duration in book (Groove)
+note: Official UK Singles Chart 1987-11-21 #79: no duration in book (Foureleven-Fortyfour)
+note: Official UK Singles Chart 1987-11-28 #87: no duration in book (Groove)
+note: Official UK Singles Chart 1987-12-19 #87: no duration in book (The Phil Spector Christmas Mix)
+note: Official UK Singles Chart 1987-12-26 #86: no duration in book (The Phil Spector Christmas Mix)
+note: Official UK Singles Chart 1987-12-26 #90: no duration in book (My Family And Other Animals)
+note: Melody Maker Singles Chart 1987-11-21 #50: odd duration as printed: '03759' (Love)
+note: Melody Maker Singles Chart 1987-12-12: ties ranked densely, as printed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]

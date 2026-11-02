@@ -4128,6 +4128,8 @@ export type PublishedChartEntry = {
 
 export type PublishedChartSeries = {
 	chart: string,
+	/**  Country whose publications the chart comes from: "US" or "UK". */
+	country: string,
 	years: number[],
 	firstWeek: string,
 	lastWeek: string,

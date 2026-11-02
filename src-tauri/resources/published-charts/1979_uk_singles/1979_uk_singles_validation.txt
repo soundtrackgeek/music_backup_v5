@@ -1,0 +1,64 @@
+1979_uk_singles: 7274 rows, 0 problems, 62 notes
+
+note: Official UK Singles Chart 1979-11-03 #61: wrapped line joined: "(Organ), Conducted by Barry Rose Different 7'': HAVE 20"
+note: Official UK Singles Chart 1979-11-10 #56: wrapped line joined: "(Organ), Conducted by Barry Rose Different 7'': HAVE 20"
+note: Official UK Singles Chart 1979-11-17 #58: wrapped line joined: "(Organ), Conducted by Barry Rose Different 7'': HAVE 20"
+note: Official UK Singles Chart 1979-11-24 #67: wrapped line joined: "(Organ), Conducted by Barry Rose Different 7'': HAVE 20"
+note: Official UK Singles Chart 1979-12-01 #62: odd duration as printed: '55:0' (She's Not There)
+note: Official UK Singles Chart 1979-12-08 #36: odd duration as printed: '55:0' (She's Not There)
+note: Official UK Singles Chart 1979-12-15 #38: odd duration as printed: '55:0' (She's Not There)
+note: Official UK Singles Chart 1979-12-22 #51: odd duration as printed: '55:0' (She's Not There)
+note: Official UK Singles Chart 1979-12-29 #51: odd duration as printed: '55:0' (She's Not There)
+note: Melody Maker Singles Chart 1979-12-15 #27: odd duration as printed: '55:0' (She's Not There)
+note: NME Singles Breakers 1979-01-13: chart starts at #31
+note: NME Singles Breakers 1979-01-20: chart starts at #31
+note: NME Singles Breakers 1979-01-27: chart starts at #31
+note: NME Singles Breakers 1979-02-03: chart starts at #31
+note: NME Singles Breakers 1979-02-17: chart starts at #31
+note: NME Singles Breakers 1979-02-24: chart starts at #31
+note: NME Singles Breakers 1979-03-03: chart starts at #31
+note: NME Singles Breakers 1979-03-10: chart starts at #31
+note: NME Singles Breakers 1979-03-17: chart starts at #31
+note: NME Singles Breakers 1979-03-24: chart starts at #31
+note: NME Singles Breakers 1979-03-31: chart starts at #31
+note: NME Singles Breakers 1979-04-07: chart starts at #31
+note: NME Singles Breakers 1979-04-14: chart starts at #31
+note: NME Singles Breakers 1979-04-21: chart starts at #31
+note: NME Singles Breakers 1979-04-28: chart starts at #31
+note: NME Singles Breakers 1979-05-05: chart starts at #31
+note: NME Singles Breakers 1979-05-12: chart starts at #31
+note: NME Singles Breakers 1979-05-19: chart starts at #31
+note: NME Singles Breakers 1979-05-26: chart starts at #31
+note: NME Singles Breakers 1979-06-02: chart starts at #31
+note: NME Singles Breakers 1979-06-09: chart starts at #31
+note: NME Singles Breakers 1979-06-16: chart starts at #31
+note: NME Singles Breakers 1979-06-23: chart starts at #31
+note: NME Singles Breakers 1979-06-30: chart starts at #31
+note: NME Singles Breakers 1979-07-07: chart starts at #31
+note: NME Singles Breakers 1979-07-14: chart starts at #31
+note: NME Singles Breakers 1979-07-21: chart starts at #31
+note: NME Singles Breakers 1979-07-28: chart starts at #31
+note: NME Singles Breakers 1979-08-04: chart starts at #31
+note: NME Singles Breakers 1979-08-11: chart starts at #31
+note: NME Singles Breakers 1979-08-18: chart starts at #31
+note: NME Singles Breakers 1979-08-25: chart starts at #31
+note: NME Singles Breakers 1979-09-01: chart starts at #31
+note: NME Singles Breakers 1979-09-08: chart starts at #31
+note: NME Singles Breakers 1979-09-15: chart starts at #31
+note: NME Singles Breakers 1979-09-22: chart starts at #31
+note: NME Singles Breakers 1979-09-29: chart starts at #31
+note: NME Singles Breakers 1979-10-06: chart starts at #31
+note: NME Singles Breakers 1979-10-13: chart starts at #31
+note: NME Singles Breakers 1979-10-20: chart starts at #31
+note: NME Singles Breakers 1979-10-27: chart starts at #31
+note: NME Singles Breakers 1979-11-03: chart starts at #31
+note: NME Singles Breakers 1979-11-10: chart starts at #31
+note: NME Singles Breakers 1979-11-17: chart starts at #31
+note: NME Singles Breakers 1979-11-24: chart starts at #31
+note: NME Singles Breakers 1979-12-01: chart starts at #31
+note: NME Singles Breakers 1979-12-08: chart starts at #31
+note: NME Singles Breakers 1979-12-08 #34: odd duration as printed: '55:0' (She's Not There)
+note: NME Singles Breakers 1979-12-15: chart starts at #31
+note: NME Singles Breakers 1979-12-15 #35: odd duration as printed: '55:0' (She's Not There)
+note: NME Singles Breakers 1979-12-22: chart starts at #31
+note: NME Singles Breakers: 14-day gap between charts 1979-02-03 and 1979-02-17

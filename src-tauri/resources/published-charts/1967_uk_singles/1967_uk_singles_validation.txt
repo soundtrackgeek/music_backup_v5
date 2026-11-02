@@ -1,0 +1,64 @@
+1967_uk_singles: 8127 rows, 0 problems, 62 notes
+
+note: Official UK Singles Chart: 6-day gap between charts 1967-06-29 and 1967-07-05
+note: NME Singles Chart 1967-06-03 #26: odd duration as printed: '03901' (Sgt. Pepper's Lonely Hearts Club Band)
+note: NME Singles Chart 1967-06-10 #21: odd duration as printed: '03901' (Sgt. Pepper's Lonely Hearts Club Band)
+note: NME Singles Chart 1967-06-17 #27: odd duration as printed: '03901' (Sgt. Pepper's Lonely Hearts Club Band)
+note: NME Singles Chart 1967-06-24 #30: odd duration as printed: '03901' (Sgt. Pepper's Lonely Hearts Club Band)
+note: NME Singles Chart 1967-07-01 #30: odd duration as printed: '03901' (Sgt. Pepper's Lonely Hearts Club Band)
+note: Record Retailer Singles Breakers 1967-01-05: chart starts at #51
+note: Record Retailer Singles Breakers 1967-01-12: chart starts at #51
+note: Record Retailer Singles Breakers 1967-01-19: chart starts at #51
+note: Record Retailer Singles Breakers 1967-01-26: chart starts at #51
+note: Record Retailer Singles Breakers 1967-02-02: chart starts at #51
+note: Record Retailer Singles Breakers 1967-02-09: chart starts at #51
+note: Record Retailer Singles Breakers 1967-02-16: chart starts at #51
+note: Record Retailer Singles Breakers 1967-02-23: chart starts at #51
+note: Record Retailer Singles Breakers 1967-03-02: chart starts at #51
+note: Record Retailer Singles Breakers 1967-03-09: chart starts at #51
+note: Record Retailer Singles Breakers 1967-03-16: chart starts at #51
+note: Record Retailer Singles Breakers 1967-03-30: chart starts at #51
+note: Record Retailer Singles Breakers 1967-04-06: chart starts at #51
+note: Record Retailer Singles Breakers 1967-04-13: chart starts at #51
+note: Record Retailer Singles Breakers 1967-04-20: chart starts at #51
+note: Record Retailer Singles Breakers 1967-04-27: chart starts at #51
+note: Record Retailer Singles Breakers 1967-05-04: chart starts at #51
+note: Record Retailer Singles Breakers 1967-05-11: chart starts at #51
+note: Record Retailer Singles Breakers 1967-05-18: chart starts at #51
+note: Record Retailer Singles Breakers 1967-05-25: chart starts at #51
+note: Record Retailer Singles Breakers 1967-06-01: chart starts at #51
+note: Record Retailer Singles Breakers 1967-06-08: chart starts at #51
+note: Record Retailer Singles Breakers 1967-06-15: chart starts at #51
+note: Record Retailer Singles Breakers 1967-06-22: chart starts at #51
+note: Record Retailer Singles Breakers 1967-06-29: chart starts at #51
+note: Record Retailer Singles Breakers 1967-07-05: chart starts at #51
+note: Record Retailer Singles Breakers 1967-07-12: chart starts at #51
+note: Record Retailer Singles Breakers 1967-07-19: chart starts at #51
+note: Record Retailer Singles Breakers 1967-07-26: chart starts at #51
+note: Record Retailer Singles Breakers 1967-08-02: chart starts at #51
+note: Record Retailer Singles Breakers 1967-08-09: chart starts at #51
+note: Record Retailer Singles Breakers 1967-08-16: chart starts at #51
+note: Record Retailer Singles Breakers 1967-08-23: chart starts at #51
+note: Record Retailer Singles Breakers 1967-08-30: chart starts at #51
+note: Record Retailer Singles Breakers 1967-09-06: chart starts at #51
+note: Record Retailer Singles Breakers 1967-09-13: chart starts at #51
+note: Record Retailer Singles Breakers 1967-09-20: chart starts at #51
+note: Record Retailer Singles Breakers 1967-09-27: chart starts at #51
+note: Record Retailer Singles Breakers 1967-10-04: chart starts at #51
+note: Record Retailer Singles Breakers 1967-10-11: chart starts at #51
+note: Record Retailer Singles Breakers 1967-10-18: chart starts at #51
+note: Record Retailer Singles Breakers 1967-10-25: chart starts at #51
+note: Record Retailer Singles Breakers 1967-11-01: chart starts at #51
+note: Record Retailer Singles Breakers 1967-11-08: chart starts at #51
+note: Record Retailer Singles Breakers 1967-11-15: chart starts at #51
+note: Record Retailer Singles Breakers 1967-11-22: chart starts at #51
+note: Record Retailer Singles Breakers 1967-11-29: chart starts at #51
+note: Record Retailer Singles Breakers 1967-12-06: chart starts at #51
+note: Record Retailer Singles Breakers 1967-12-13: chart starts at #51
+note: Record Retailer Singles Breakers 1967-12-20: chart starts at #51
+note: Record Retailer Singles Breakers: 14-day gap between charts 1967-03-16 and 1967-03-30
+note: Record Retailer Singles Breakers: 6-day gap between charts 1967-06-29 and 1967-07-05
+note: Record Retailer EP Breakers 1967-01-14: chart starts at #11
+note: Record Retailer EP Breakers 1967-01-14 #12: no duration in book (Third Delivery)
+note: Record Retailer EP Breakers 1967-02-18: chart starts at #11
+note: Record Retailer EP Breakers: 35-day gap between charts 1967-01-14 and 1967-02-18

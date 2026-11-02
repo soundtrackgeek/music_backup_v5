@@ -1,0 +1,50 @@
+1966_uk_singles: 10314 rows, 0 problems, 48 notes
+
+note: NME Singles Chart 1966-08-12 #25: odd duration as printed: '03439' (Revolver)
+note: NME Singles Chart 1966-08-19 #18: odd duration as printed: '03439' (Revolver)
+note: NME Singles Chart 1966-08-26 #19: odd duration as printed: '03439' (Revolver)
+note: NME Singles Chart 1966-09-02 #20: odd duration as printed: '03439' (Revolver)
+note: NME Singles Chart: 8-day gap between charts 1966-11-25 and 1966-12-03
+note: Disc Singles Chart 1966-01-01 #25: odd duration as printed: '03636' (Rubber Soul)
+note: Disc Singles Chart 1966-01-08 #26: odd duration as printed: '03636' (Rubber Soul)
+note: Record Retailer Singles Breakers 1966-04-21: chart starts at #51
+note: Record Retailer Singles Breakers 1966-04-28: chart starts at #51
+note: Record Retailer Singles Breakers 1966-05-05: chart starts at #51
+note: Record Retailer Singles Breakers 1966-05-12: chart starts at #51
+note: Record Retailer Singles Breakers 1966-05-19: chart starts at #51
+note: Record Retailer Singles Breakers 1966-05-26: chart starts at #51
+note: Record Retailer Singles Breakers 1966-06-02: chart starts at #51
+note: Record Retailer Singles Breakers 1966-06-09: chart starts at #51
+note: Record Retailer Singles Breakers 1966-06-16: chart starts at #51
+note: Record Retailer Singles Breakers 1966-06-23: chart starts at #51
+note: Record Retailer Singles Breakers 1966-06-30: chart starts at #51
+note: Record Retailer Singles Breakers 1966-07-07: chart starts at #51
+note: Record Retailer Singles Breakers 1966-07-14: chart starts at #51
+note: Record Retailer Singles Breakers 1966-07-21: chart starts at #51
+note: Record Retailer Singles Breakers 1966-07-28: chart starts at #51
+note: Record Retailer Singles Breakers 1966-08-04: chart starts at #51
+note: Record Retailer Singles Breakers 1966-08-11: chart starts at #51
+note: Record Retailer Singles Breakers 1966-08-18: chart starts at #51
+note: Record Retailer Singles Breakers 1966-08-25: chart starts at #51
+note: Record Retailer Singles Breakers 1966-09-01: chart starts at #51
+note: Record Retailer Singles Breakers 1966-09-15: chart starts at #51
+note: Record Retailer Singles Breakers 1966-09-22: chart starts at #51
+note: Record Retailer Singles Breakers 1966-09-29: chart starts at #51
+note: Record Retailer Singles Breakers 1966-10-06: chart starts at #51
+note: Record Retailer Singles Breakers 1966-10-13: chart starts at #51
+note: Record Retailer Singles Breakers 1966-10-20: chart starts at #51
+note: Record Retailer Singles Breakers 1966-10-27: chart starts at #51
+note: Record Retailer Singles Breakers 1966-11-03: chart starts at #51
+note: Record Retailer Singles Breakers 1966-11-10: chart starts at #51
+note: Record Retailer Singles Breakers 1966-11-17: chart starts at #51
+note: Record Retailer Singles Breakers 1966-11-24: chart starts at #51
+note: Record Retailer Singles Breakers 1966-12-01: chart starts at #51
+note: Record Retailer Singles Breakers 1966-12-08: chart starts at #51
+note: Record Retailer Singles Breakers 1966-12-15: chart starts at #51
+note: Record Retailer Singles Breakers: 14-day gap between charts 1966-09-01 and 1966-09-15
+note: Record Retailer EP Breakers 1966-07-16: chart starts at #11
+note: Record Retailer EP Breakers 1966-10-15: chart starts at #11
+note: Record Retailer EP Breakers 1966-11-19: chart starts at #11
+note: Record Retailer EP Breakers 1966-11-26: chart starts at #11
+note: Record Retailer EP Breakers: 91-day gap between charts 1966-07-16 and 1966-10-15
+note: Record Retailer EP Breakers: 35-day gap between charts 1966-10-15 and 1966-11-19

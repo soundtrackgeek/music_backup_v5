@@ -1,0 +1,17 @@
+1963_uk_singles: 11147 rows, 0 problems, 15 notes
+
+note: NME Singles Chart 1963-11-29 #15: odd duration as printed: '03354' (With The Beatles)
+note: NME Singles Chart 1963-12-06 #11: odd duration as printed: '03354' (With The Beatles)
+note: NME Singles Chart 1963-12-13 #14: odd duration as printed: '03354' (With The Beatles)
+note: NME Singles Chart 1963-12-20 #17: odd duration as printed: '03354' (With The Beatles)
+note: NME Singles Chart 1963-12-27 #15: odd duration as printed: '03354' (With The Beatles)
+note: Disc Singles Chart 1963-11-30 #14: odd duration as printed: '03354' (With The Beatles)
+note: Disc Singles Chart 1963-12-07 #11: odd duration as printed: '03354' (With The Beatles)
+note: Disc Singles Chart 1963-12-14 #13: odd duration as printed: '03354' (With The Beatles)
+note: Disc Singles Chart 1963-12-21 #15: odd duration as printed: '03354' (With The Beatles)
+note: Disc Singles Chart 1963-12-28 #17: odd duration as printed: '03354' (With The Beatles)
+note: Pop Weekly Singles Chart 1963-08-10 #30: no duration in book (Busy Doing Nothing)
+note: Pop Weekly Singles Chart 1963-08-17 #30: no duration in book (Busy Doing Nothing)
+note: Pop Weekly Singles Chart 1963-12-07 #22: odd duration as printed: '03354' (With The Beatles)
+note: Pop Weekly Singles Chart 1963-12-21 #24: odd duration as printed: '03354' (With The Beatles)
+note: Pop Weekly Singles Chart 1963-12-28 #22: odd duration as printed: '03354' (With The Beatles)

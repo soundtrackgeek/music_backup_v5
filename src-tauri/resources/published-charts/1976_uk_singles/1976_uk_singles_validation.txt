@@ -1,0 +1,93 @@
+1976_uk_singles: 6401 rows, 0 problems, 91 notes
+
+note: Record Retailer Singles Breakers 1976-01-10: chart starts at #51
+note: Record Retailer Singles Breakers 1976-01-17: chart starts at #51
+note: Record Retailer Singles Breakers 1976-01-24: chart starts at #51
+note: Record Retailer Singles Breakers 1976-01-31: chart starts at #51
+note: Record Retailer Singles Breakers 1976-02-07: chart starts at #51
+note: Record Retailer Singles Breakers 1976-02-14: chart starts at #51
+note: Record Retailer Singles Breakers 1976-02-28: chart starts at #51
+note: Record Retailer Singles Breakers 1976-03-06: chart starts at #51
+note: Record Retailer Singles Breakers 1976-03-13: chart starts at #51
+note: Record Retailer Singles Breakers 1976-03-20: chart starts at #51
+note: Record Retailer Singles Breakers 1976-03-27: chart starts at #51
+note: Record Retailer Singles Breakers 1976-04-03: chart starts at #51
+note: Record Retailer Singles Breakers 1976-04-10: chart starts at #51
+note: Record Retailer Singles Breakers 1976-04-17: chart starts at #51
+note: Record Retailer Singles Breakers 1976-04-24: chart starts at #51
+note: Record Retailer Singles Breakers 1976-05-01: chart starts at #51
+note: Record Retailer Singles Breakers 1976-05-08: chart starts at #51
+note: Record Retailer Singles Breakers 1976-05-15: chart starts at #51
+note: Record Retailer Singles Breakers 1976-05-22: chart starts at #51
+note: Record Retailer Singles Breakers 1976-05-29: chart starts at #51
+note: Record Retailer Singles Breakers 1976-06-05: chart starts at #51
+note: Record Retailer Singles Breakers 1976-06-12: chart starts at #51
+note: Record Retailer Singles Breakers 1976-06-19: chart starts at #51
+note: Record Retailer Singles Breakers 1976-06-26: chart starts at #51
+note: Record Retailer Singles Breakers 1976-07-03: chart starts at #51
+note: Record Retailer Singles Breakers 1976-07-10: chart starts at #51
+note: Record Retailer Singles Breakers 1976-07-17: chart starts at #51
+note: Record Retailer Singles Breakers 1976-07-24: chart starts at #51
+note: Record Retailer Singles Breakers 1976-07-31: chart starts at #51
+note: Record Retailer Singles Breakers 1976-08-07: chart starts at #51
+note: Record Retailer Singles Breakers 1976-08-14: chart starts at #51
+note: Record Retailer Singles Breakers 1976-08-21: chart starts at #51
+note: Record Retailer Singles Breakers 1976-08-28: chart starts at #51
+note: Record Retailer Singles Breakers 1976-09-04: chart starts at #51
+note: Record Retailer Singles Breakers 1976-09-11: chart starts at #51
+note: Record Retailer Singles Breakers 1976-09-18: chart starts at #51
+note: Record Retailer Singles Breakers 1976-09-25: chart starts at #51
+note: Record Retailer Singles Breakers 1976-10-02: chart starts at #51
+note: Record Retailer Singles Breakers 1976-10-09: chart starts at #51
+note: Record Retailer Singles Breakers 1976-10-16: chart starts at #51
+note: Record Retailer Singles Breakers 1976-10-23: chart starts at #51
+note: Record Retailer Singles Breakers 1976-10-30: chart starts at #51
+note: Record Retailer Singles Breakers 1976-11-06: chart starts at #51
+note: Record Retailer Singles Breakers 1976-11-13: chart starts at #51
+note: Record Retailer Singles Breakers 1976-11-20: chart starts at #51
+note: Record Retailer Singles Breakers 1976-11-27: chart starts at #51
+note: Record Retailer Singles Breakers 1976-12-04: chart starts at #51
+note: Record Retailer Singles Breakers 1976-12-11: chart starts at #51
+note: Record Retailer Singles Breakers 1976-12-18: chart starts at #51
+note: Record Retailer Singles Breakers 1976-12-25: chart starts at #51
+note: Record Retailer Singles Breakers: 14-day gap between charts 1976-02-14 and 1976-02-28
+note: NME Singles Breakers 1976-01-10: chart starts at #31
+note: NME Singles Breakers 1976-01-17: chart starts at #31
+note: NME Singles Breakers 1976-01-24: chart starts at #31
+note: NME Singles Breakers 1976-01-31: chart starts at #31
+note: NME Singles Breakers 1976-02-07: chart starts at #31
+note: NME Singles Breakers 1976-02-14: chart starts at #31
+note: NME Singles Breakers 1976-02-21: chart starts at #31
+note: NME Singles Breakers 1976-05-15: chart starts at #31
+note: NME Singles Breakers 1976-05-22: chart starts at #31
+note: NME Singles Breakers 1976-05-29: chart starts at #31
+note: NME Singles Breakers 1976-06-05: chart starts at #31
+note: NME Singles Breakers 1976-06-12: chart starts at #31
+note: NME Singles Breakers 1976-06-19: chart starts at #31
+note: NME Singles Breakers 1976-06-26: chart starts at #31
+note: NME Singles Breakers 1976-07-03: chart starts at #31
+note: NME Singles Breakers 1976-07-10: chart starts at #31
+note: NME Singles Breakers 1976-07-17: chart starts at #31
+note: NME Singles Breakers 1976-07-24: chart starts at #31
+note: NME Singles Breakers 1976-07-31: chart starts at #31
+note: NME Singles Breakers 1976-08-14: chart starts at #31
+note: NME Singles Breakers 1976-08-21: chart starts at #31
+note: NME Singles Breakers 1976-09-11: chart starts at #31
+note: NME Singles Breakers 1976-09-18: chart starts at #31
+note: NME Singles Breakers 1976-09-25: chart starts at #31
+note: NME Singles Breakers 1976-10-02: chart starts at #31
+note: NME Singles Breakers 1976-10-09: chart starts at #31
+note: NME Singles Breakers 1976-10-16: chart starts at #31
+note: NME Singles Breakers 1976-10-23: chart starts at #31
+note: NME Singles Breakers 1976-10-30: chart starts at #31
+note: NME Singles Breakers 1976-11-06: chart starts at #31
+note: NME Singles Breakers 1976-11-13: chart starts at #31
+note: NME Singles Breakers 1976-11-20: chart starts at #31
+note: NME Singles Breakers 1976-11-27: chart starts at #31
+note: NME Singles Breakers 1976-12-04: chart starts at #31
+note: NME Singles Breakers 1976-12-11: chart starts at #31
+note: NME Singles Breakers 1976-12-18: chart starts at #31
+note: NME Singles Breakers 1976-12-25: chart starts at #31
+note: NME Singles Breakers: 84-day gap between charts 1976-02-21 and 1976-05-15
+note: NME Singles Breakers: 14-day gap between charts 1976-07-31 and 1976-08-14
+note: NME Singles Breakers: 21-day gap between charts 1976-08-21 and 1976-09-11

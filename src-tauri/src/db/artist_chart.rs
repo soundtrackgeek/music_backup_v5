@@ -622,6 +622,45 @@ mod tests {
     }
 
     #[test]
+    fn uk_published_charts_match_printed_version_tags_and_pick_up_newly_added_tracks() {
+        let conn = artist_chart_connection();
+        conn.execute(
+            "INSERT INTO published_chart_books (id, book, chart, first_week, last_week, weekly_charts, row_count, first_page, last_page) VALUES (91, '1985_uk_singles', 'NME Singles Chart', '1985-01-05', '1985-01-12', 2, 3, '', '')",
+            [],
+        )
+        .unwrap();
+        let chart = |row: i64, week: &str, artist: &str, title: &str| {
+            conn.execute("INSERT INTO published_chart_entries (book_id, source_row, week_ending, position, artist, title, last_week, weeks_on_chart, entry_status, movement, number_one_marker, label, format, catalogue_number, release_type, duration, peak_position, entry_date, peak_date, bpi_award, source_page) VALUES (91, ?1, ?2, 7, ?3, ?4, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')", params![row, week, artist, title]).unwrap();
+        };
+        // The books print the single's version in parentheses; the library has the plain title.
+        chart(1, "1985-01-05", "Alpha", "A3 (Radio Edit)");
+        chart(2, "1985-01-12", "Alpha", "A3 (Radio Edit)");
+        chart(3, "1985-01-12", "Alpha", "A4 (Extended Remix)");
+
+        let mut uk = request("chartedTracks");
+        uk.published_chart_sources = vec!["NME Singles Chart".to_string()];
+        let counted = artist_chart(&conn, uk.clone(), 500).unwrap();
+        // A1 is charted through Norsktoppen already; A3 now counts through the NME chart.
+        assert_eq!(row(&counted, "Alpha").charted_tracks, 2);
+
+        // A track added later (an Inbox import) is matched to the chart without any relinking.
+        conn.execute(
+            "INSERT INTO tracks (
+                import_run_id, album_id, album_unique_id, display_artist,
+                album_artist_display, album, title, canonical_genre, genre_normalized,
+                love, normalized_rating, year, release_year, time_seconds,
+                file_path, filename, row_hash
+            ) SELECT 1, id, album_unique_id, 'Alpha', 'Alpha', album, 'A4', canonical_genre,
+                genre_normalized, '', 80, year, release_year, 200,
+                'D:\\Music', 'A4.mp3', 'A4' FROM albums WHERE id = 'a:2'",
+            [],
+        )
+        .unwrap();
+        let after_import = artist_chart(&conn, uk, 500).unwrap();
+        assert_eq!(row(&after_import, "Alpha").charted_tracks, 3);
+    }
+
+    #[test]
     fn maximum_albums_and_rated_albums_hide_artists_above_the_limit() {
         let conn = artist_chart_connection();
         // Alpha has two albums; the seeded Pet Shop Boys and Zulu have one each.

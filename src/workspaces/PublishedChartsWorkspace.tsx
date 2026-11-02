@@ -18,6 +18,8 @@ import {
 } from "../backend/publishedCharts";
 
 const pageSize = 100;
+const countryOrder = ["US", "UK"];
+const countryLabels: Record<string, string> = { US: "United States", UK: "United Kingdom" };
 const emptyRanking: PublishedSongRanking = { totalSongs: 0, chartWeeks: 0, totalEntries: 0, songs: [] };
 const emptyEntries: PublishedChartEntries = { totalRows: 0, entries: [] };
 
@@ -178,7 +180,7 @@ export function PublishedChartsWorkspace() {
     try {
       unsubscribe = await subscribePublishedChartsImportProgress(setProgress);
       const result = await importPublishedCharts();
-      setImportMessage(`${formatCount(result.rowsImported)} US chart entries ready across ${result.yearsImported} years and ${result.chartSeries} charts.`);
+      setImportMessage(`${formatCount(result.rowsImported)} chart entries ready across ${result.yearsImported} yearly books and ${result.chartSeries} charts.`);
     } catch (cause) { setImportError(String(cause)); }
     finally {
       unsubscribe?.();
@@ -205,9 +207,14 @@ export function PublishedChartsWorkspace() {
     </header>
 
     {catalog?.series.length ? <section className="published-picker" aria-label="Choose published chart range">
-      <label><span>Find a chart</span><input type="search" value={seriesSearch} onChange={(event) => setSeriesSearch(event.target.value)} placeholder="Rock, rap, airplay…" /></label>
+      <label><span>Find a chart</span><input type="search" value={seriesSearch} onChange={(event) => setSeriesSearch(event.target.value)} placeholder="Rock, rap, NME, Melody Maker…" /></label>
       <label><span>Chart</span><select value={chart} onChange={(event) => { setChart(event.target.value); setFromWeek(""); setToWeek(""); setOffset(0); setEntryOffset(0); }}>
-        {visibleSeries.map((item) => <option key={item.chart} value={item.chart}>{item.chart}</option>)}
+        {countryOrder.map((country) => {
+          const group = visibleSeries.filter((item) => (item.country || "US") === country);
+          return group.length ? <optgroup key={country} label={countryLabels[country] ?? country}>
+            {group.map((item) => <option key={item.chart} value={item.chart}>{item.chart}</option>)}
+          </optgroup> : null;
+        })}
       </select></label>
       <label><span>From year</span><select value={fromYear} onChange={(event) => {
         const value = Number(event.target.value); setFromYear(value); if (value > toYear) setToYear(value);
@@ -225,8 +232,8 @@ export function PublishedChartsWorkspace() {
       </select></label>
     </section> : null}
 
-    {isImporting ? <p className="published-progress" role="status">Preparing bundled US charts… {progress ? `${progress.completedYears} of ${progress.totalYears} years · through ${progress.currentYear} · ${formatCount(progress.importedRows)} entries` : "Starting"}</p>
-      : catalog && !catalog.needsImport ? <p className="published-success" role="status">{importMessage || `${catalog.series.length} charts · ${catalog.inventoryYears} years ready`}</p> : null}
+    {isImporting ? <p className="published-progress" role="status">Preparing bundled charts… {progress ? `${progress.completedYears} of ${progress.totalYears} yearly books · through ${progress.currentYear} · ${formatCount(progress.importedRows)} entries` : "Starting"}</p>
+      : catalog && !catalog.needsImport ? <p className="published-success" role="status">{importMessage || `${catalog.series.length} charts · ${catalog.inventoryYears} yearly books ready`}</p> : null}
     {importError ? <p className="published-error" role="alert">{importError}</p> : null}
     {error ? <p className="published-error" role="alert">{error}</p> : null}
 
@@ -244,7 +251,7 @@ export function PublishedChartsWorkspace() {
         {isLoading ? <p className="published-table-message">Calculating artist ranks…</p> : !ranking.songs.length ? <p className="published-table-message">No chart entries in this range.</p> : null}
         {ranking.totalSongs > pageSize ? <div className="published-pager"><button className="secondary-button" type="button" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button><span>Page {Math.floor(offset / pageSize) + 1} of {pageCount}</span><button className="secondary-button" type="button" disabled={Math.floor(offset / pageSize) + 1 >= pageCount} onClick={() => setOffset(offset + pageSize)}>Next</button></div> : null}
       </div> : <p className="published-table-message">{isImporting || catalog?.needsImport ? "Preparing the bundled weekly chart data…" : "Bundled chart data is unavailable in this installation."}</p>}
-    </section> : <section className="published-empty"><h2>Bundled chart data unavailable</h2><p>The US chart collection was not found in this installation. Refresh after updating the app.</p></section>}
+    </section> : <section className="published-empty"><h2>Bundled chart data unavailable</h2><p>The bundled chart collection was not found in this installation. Refresh after updating the app.</p></section>}
 
     {exactWeek && catalog?.importedYears && !catalog.needsImport && !isImporting ? <section className="published-chart-panel" aria-label="Weekly published chart">
       <div className="published-chart-heading"><div><h2>Published positions</h2><p>Week ending {formatWeek(exactWeek)} · {formatCount(entries.totalRows)} entries</p></div></div>
