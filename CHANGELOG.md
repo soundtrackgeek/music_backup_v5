@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.210.3] - 2026-11-02
+
+### Added
+- **Album singles notices new music and corrected links**: an artist is now checked again when you add or remove albums for them, or when you link them to a different MusicBrainz artist, instead of waiting out the 90 days. Artists you link to MusicBrainz for the first time are picked up the next time you start or continue a run. The check record now remembers how many albums the artist had (schema version 69); checks made by earlier versions are credited with today's album counts, so upgrading does not trigger a recheck of everyone.
+- **Recheck every artist**: a third button under **Settings → Providers → Album singles** checks every linked artist once more, even those that are up to date. It can be paused and continued like the other runs, and a continued run only covers the artists it had not reached yet.
+
+### Changed
+- The "artists checked" figure now means artists whose result is up to date, so it drops when new albums or link changes make some artists due again.
+
 ## [0.210.2] - 2026-11-02
 
 ### Changed

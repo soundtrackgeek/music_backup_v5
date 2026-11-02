@@ -2792,12 +2792,16 @@ export async function refreshLastFmArtistImages(limit = 50): Promise<LastFmArtis
   return (commands.refreshLastfmArtistImages(limit)).then((summary) => { invalidateArtwork(); return summary; });
 }
 
-/** Queues the album singles job and returns at once; follow it through the activity feed. `0` means every artist that is due. */
-export async function startTrackSingles(limit: number): Promise<number> {
+/**
+ * Queues the album singles job and returns at once; follow it through the activity feed.
+ * `limit` 0 means every artist that is due. `force` rechecks artists even when their
+ * last check is still current.
+ */
+export async function startTrackSingles(limit: number, force = false): Promise<number> {
   if (!isTauriRuntime()) {
     throw new Error("Finding album singles is available in the desktop app.");
   }
-  return commands.startTrackSingles(limit);
+  return commands.startTrackSingles(limit, force);
 }
 
 export async function getTrackSinglesStatus(): Promise<TrackSinglesStatus> {

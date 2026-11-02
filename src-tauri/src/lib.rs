@@ -530,7 +530,7 @@ async fn refresh_lastfm_artist_images(
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
-async fn start_track_singles(app: AppHandle, limit: u32) -> Result<i64, String> {
+async fn start_track_singles(app: AppHandle, limit: u32, force: bool) -> Result<i64, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let running = jobs::list_for_app(&app)
             .map_err(|error| error.to_string())?
@@ -548,8 +548,16 @@ async fn start_track_singles(app: AppHandle, limit: u32) -> Result<i64, String> 
                     .to_string(),
             );
         }
-        jobs::submit(&app, "trackSingles", serde_json::json!({ "limit": limit }))
-            .map_err(|error| error.to_string())
+        // A forced run rechecks every artist last checked before now. Storing the
+        // cut-off (not a flag) lets a paused or interrupted run resume with only
+        // the artists it has not reached yet.
+        let force_before = force.then(|| chrono::Utc::now().to_rfc3339());
+        jobs::submit(
+            &app,
+            "trackSingles",
+            serde_json::json!({ "limit": limit, "forceBefore": force_before }),
+        )
+        .map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| format!("Album singles task failed: {error}"))?

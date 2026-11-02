@@ -129,7 +129,8 @@ const HANDLERS: &[Registration] = &[
         true,
         |app, p| encode(crate::singles::refresh_track_singles(
             app.clone(),
-            serde_json::from_value(p["limit"].clone())?
+            serde_json::from_value(p["limit"].clone())?,
+            p["forceBefore"].as_str().map(str::to_owned)
         )?)
     ),
     registration!(

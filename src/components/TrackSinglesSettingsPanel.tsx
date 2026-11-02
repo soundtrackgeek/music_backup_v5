@@ -106,11 +106,11 @@ export function TrackSinglesSettingsPanel() {
   const latest = current ?? [...singlesJobs].sort((left, right) => right.id - left.id)[0] ?? null;
   const actions = latest ? jobActions(latest) : [];
 
-  async function start(limit: number) {
+  async function start(limit: number, force = false) {
     setBusy(true);
     setError(null);
     try {
-      await startTrackSingles(limit);
+      await startTrackSingles(limit, force);
     } catch (startError) {
       if (live.current) setError(startError instanceof Error ? startError.message : String(startError));
     } finally {
@@ -205,9 +205,14 @@ export function TrackSinglesSettingsPanel() {
           <Disc3 size={16} />
           <span>Find singles for all artists</span>
         </button>
+        <button className="secondary-button" type="button" disabled={startDisabled} onClick={() => void start(ALL_ARTISTS, true)}>
+          <Disc3 size={16} />
+          <span>Recheck every artist</span>
+        </button>
       </div>
 
       <div className="ai-settings-notes">
+        <span>Artists are checked again automatically when you add or remove albums for them, link them to a different MusicBrainz artist, or after 90 days; new links are picked up the next time you start or continue. &quot;Recheck every artist&quot; ignores all that and checks everyone once more.</span>
         <span>Uses artists linked to MusicBrainz; unlinked artists are skipped. Requests stay under MusicBrainz&apos;s limit of one per second, so a full pass over a large library can take hours. You can pause and continue: every finished artist is saved.</span>
         <span>A single counts when MusicBrainz links it to the album, or when an official single with the same title was first released within about three years of the album.</span>
         <span>Aurora and Tonehavn read the result from the shared catalog and show a 💿 on those tracks.</span>

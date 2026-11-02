@@ -66,9 +66,20 @@ describe("TrackSinglesSettingsPanel", () => {
   it("starts a batch of 25 or every artist without waiting for the job to finish", async () => {
     render(<TrackSinglesSettingsPanel />);
     fireEvent.click(await screen.findByRole("button", { name: /Find singles for 25 artists/ }));
-    await waitFor(() => expect(startTrackSingles).toHaveBeenCalledWith(25));
+    await waitFor(() => expect(startTrackSingles).toHaveBeenCalledWith(25, false));
     fireEvent.click(screen.getByRole("button", { name: "Find singles for all artists" }));
-    await waitFor(() => expect(startTrackSingles).toHaveBeenLastCalledWith(0));
+    await waitFor(() => expect(startTrackSingles).toHaveBeenLastCalledWith(0, false));
+  });
+
+  it("can force a recheck of every artist, which the normal buttons never do", async () => {
+    render(<TrackSinglesSettingsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Recheck every artist" }));
+    await waitFor(() => expect(startTrackSingles).toHaveBeenCalledWith(0, true));
+  });
+
+  it("explains when an artist is checked again on its own", async () => {
+    render(<TrackSinglesSettingsPanel />);
+    expect(await screen.findByText(/checked again automatically when you add or remove albums/)).toBeInTheDocument();
   });
 
   it("shows live progress and lets the job be paused, then continued", async () => {

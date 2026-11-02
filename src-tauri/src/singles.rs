@@ -311,6 +311,45 @@ pub(crate) fn install_schema(conn: &Connection) -> Result<()> {
     .context("Could not create the track singles schema")
 }
 
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info(?1) WHERE name = ?2",
+        params![table, column],
+        |row| row.get(0),
+    )?)
+}
+
+/// Schema step 69: remember how many albums each artist had when it was
+/// checked, so new music makes the artist due again. Existing checks are
+/// credited with today's album count, which assumes they were current.
+pub(crate) fn install_recheck_columns(conn: &Connection) -> Result<()> {
+    if !column_exists(conn, "track_singles_checks", "album_count")? {
+        conn.execute_batch("ALTER TABLE track_singles_checks ADD COLUMN album_count INTEGER")
+            .context("Could not add the album count to the singles checks")?;
+    }
+    let has_albums: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'table' AND name = 'albums'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_albums {
+        let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
+        conn.execute_batch(&format!(
+            "UPDATE track_singles_checks SET album_count = (
+                SELECT COUNT(*) FROM albums
+                WHERE {key_sql} = track_singles_checks.local_artist_key
+                  AND NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL)
+             WHERE album_count IS NULL"
+        ))
+        .context("Could not record the album counts of earlier singles checks")?;
+    }
+    Ok(())
+}
+
+pub(crate) fn recheck_columns_exist(conn: &Connection) -> Result<bool> {
+    column_exists(conn, "track_singles_checks", "album_count")
+}
+
 pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     Ok(conn.query_row(
         "SELECT COUNT(*) = 2 FROM sqlite_master WHERE
@@ -329,6 +368,7 @@ pub(crate) fn save_artist_singles(
     artist_mbid: &str,
     singles: &[TrackSingle],
     checked_at: &str,
+    album_count: i64,
 ) -> Result<()> {
     let tx = conn.transaction()?;
     tx.execute(
@@ -362,17 +402,19 @@ pub(crate) fn save_artist_singles(
         )?;
     }
     tx.execute(
-        "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at)
-         VALUES (?1, ?2, ?3, ?4)
+        "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at, album_count)
+         VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(local_artist_key) DO UPDATE SET
             artist_mbid = excluded.artist_mbid,
             single_count = excluded.single_count,
-            checked_at = excluded.checked_at",
+            checked_at = excluded.checked_at,
+            album_count = excluded.album_count",
         params![
             local_artist_key,
             artist_mbid,
             singles.len() as i64,
-            checked_at
+            checked_at,
+            album_count
         ],
     )?;
     tx.commit()?;
@@ -480,16 +522,55 @@ struct LocalArtist {
     mbid: String,
 }
 
+/// Albums per catalog artist, counted once so a due check stays a single pass.
+/// The filter matches `local_albums`, so a stored count and a fresh count agree.
+fn album_counts_cte() -> String {
+    let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
+    format!(
+        "WITH album_counts AS (
+            SELECT {key_sql} AS artist_key, COUNT(*) AS albums FROM albums
+            WHERE NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL
+            GROUP BY artist_key)"
+    )
+}
+
 const LINKED_ARTISTS_FROM: &str = "FROM musicbrainz_artist_links links
      LEFT JOIN track_singles_checks checks ON checks.local_artist_key = links.local_artist_key
+     LEFT JOIN album_counts ON album_counts.artist_key = links.local_artist_key
      WHERE links.ignored = 0 AND NULLIF(TRIM(COALESCE(links.mbid, '')), '') IS NOT NULL";
 
-fn due_filter() -> String {
+/// An artist is due when it was never checked, the check is stale, its
+/// MusicBrainz link changed since the check, its album count changed (new music
+/// was added or removed), or a forced run started after its last check.
+/// `?1` is the force cut-off (NULL for a normal run).
+fn due_condition() -> String {
     format!(
-        "{LINKED_ARTISTS_FROM}
-           AND (checks.checked_at IS NULL
-                OR checks.checked_at < datetime('now', '-{REFRESH_AFTER_DAYS} days'))"
+        "(checks.checked_at IS NULL
+          OR checks.checked_at < datetime('now', '-{REFRESH_AFTER_DAYS} days')
+          OR TRIM(COALESCE(checks.artist_mbid, '')) <> TRIM(links.mbid)
+          OR checks.album_count IS NOT COALESCE(album_counts.albums, 0)
+          OR (?1 IS NOT NULL AND checks.checked_at < ?1))"
     )
+}
+
+fn count_linked(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row(
+        &format!("{} SELECT COUNT(*) {LINKED_ARTISTS_FROM}", album_counts_cte()),
+        [],
+        |row| row.get(0),
+    )?)
+}
+
+fn count_due(conn: &Connection, force_before: Option<&str>) -> Result<i64> {
+    Ok(conn.query_row(
+        &format!(
+            "{} SELECT COUNT(*) {LINKED_ARTISTS_FROM} AND {}",
+            album_counts_cte(),
+            due_condition()
+        ),
+        [force_before],
+        |row| row.get(0),
+    )?)
 }
 
 /// Where the library stands, read from the catalog so it survives restarts.
@@ -498,7 +579,8 @@ fn due_filter() -> String {
 pub struct TrackSinglesStatus {
     /// Artists linked to MusicBrainz; the only ones that can be checked.
     pub linked_artists: i64,
-    /// Linked artists checked within the last 90 days.
+    /// Linked artists whose result is up to date: checked within 90 days, with
+    /// the same MusicBrainz link and album count as when they were checked.
     pub checked_artists: i64,
     pub due_artists: i64,
     pub confirmed_singles: i64,
@@ -508,8 +590,8 @@ pub struct TrackSinglesStatus {
 
 pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesStatus> {
     let count = |sql: String| -> Result<i64> { Ok(conn.query_row(&sql, [], |row| row.get(0))?) };
-    let linked = count(format!("SELECT COUNT(*) {LINKED_ARTISTS_FROM}"))?;
-    let due = count(format!("SELECT COUNT(*) {}", due_filter()))?;
+    let linked = count_linked(conn)?;
+    let due = count_due(conn, None)?;
     let by_confidence = |confidence: &str| {
         count(format!(
             "SELECT COUNT(*) FROM track_singles WHERE confidence = '{confidence}'"
@@ -529,16 +611,21 @@ pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesSta
     })
 }
 
-/// Linked artists never checked, or checked before `REFRESH_AFTER_DAYS`.
-fn due_artists(conn: &Connection, limit: u32) -> Result<(Vec<LocalArtist>, i64)> {
-    let due = due_filter();
-    let remaining: i64 = conn.query_row(&format!("SELECT COUNT(*) {due}"), [], |row| row.get(0))?;
+/// Linked artists that are due (see [`due_condition`]), and how many are due in all.
+fn due_artists(
+    conn: &Connection,
+    limit: u32,
+    force_before: Option<&str>,
+) -> Result<(Vec<LocalArtist>, i64)> {
+    let remaining = count_due(conn, force_before)?;
     let mut statement = conn.prepare(&format!(
-        "SELECT links.local_artist_key, links.display_artist, links.mbid {due}
-         ORDER BY links.local_artist_key LIMIT ?1"
+        "{} SELECT links.local_artist_key, links.display_artist, links.mbid {LINKED_ARTISTS_FROM} AND {}
+         ORDER BY links.local_artist_key LIMIT ?2",
+        album_counts_cte(),
+        due_condition()
     ))?;
     let artists = statement
-        .query_map([limit], |row| {
+        .query_map(params![force_before, limit], |row| {
             Ok(LocalArtist {
                 local_artist_key: row.get(0)?,
                 display_artist: row.get(1)?,
@@ -669,15 +756,17 @@ fn progress_message(done: i64, total: i64, found: u32, failed: u32, current: Opt
 pub fn refresh_track_singles(
     app: tauri::AppHandle,
     limit: u32,
+    force_before: Option<String>,
 ) -> Result<TrackSinglesRefreshSummary> {
     // Never hold a catalog connection across network waits: each database step
     // below opens a connection, finishes in milliseconds and drops it, so the
     // app's own writes and other readers are not held up during a long run.
+    let force_before = force_before.as_deref();
     let (artists, remaining_before, linked, checked_before) = {
         let (conn, _) = crate::db::open_read(&app)?;
-        let (artists, remaining) = due_artists(&conn, effective_limit(limit))?;
-        let status = status_for_connection(&conn)?;
-        (artists, remaining, status.linked_artists, status.checked_artists)
+        let (artists, remaining) = due_artists(&conn, effective_limit(limit), force_before)?;
+        let linked = count_linked(&conn)?;
+        (artists, remaining, linked, linked - remaining)
     };
     let requested = artists.len() as u32;
     let started = std::time::Instant::now();
@@ -706,12 +795,13 @@ pub fn refresh_track_singles(
         let albums = crate::db::open_read(&app).and_then(|(conn, _)| local_albums(&conn, &artist));
         let outcome = albums.and_then(|albums| {
             let singles = fetch_artist_singles(&artist.mbid)?;
-            Ok(singles_for_artist(&singles, &albums, |group| {
+            let rows = singles_for_artist(&singles, &albums, |group| {
                 fetch_single_from_links(group).unwrap_or_default()
-            }))
+            });
+            Ok((rows, albums.len() as i64))
         });
         match outcome {
-            Ok(rows) => {
+            Ok((rows, album_count)) => {
                 found += rows
                     .iter()
                     .filter(|row| row.confidence == Confidence::Confirmed)
@@ -724,6 +814,7 @@ pub fn refresh_track_singles(
                     &artist.mbid,
                     &rows,
                     &chrono::Utc::now().to_rfc3339(),
+                    album_count,
                 )?;
                 drop(conn);
                 checked += 1;
@@ -860,6 +951,7 @@ mod tests {
     fn schema_round_trip_keys_rows_like_the_lastfm_cache() {
         let mut conn = Connection::open_in_memory().unwrap();
         install_schema(&conn).unwrap();
+        install_recheck_columns(&conn).unwrap();
         assert!(schema_exists(&conn).unwrap());
         let rows = [TrackSingle {
             track_title: "  Take A Chance ".into(),
@@ -876,6 +968,7 @@ mod tests {
             "mbid",
             &rows,
             "2026-11-02",
+            1,
         )
         .unwrap();
         save_artist_singles(
@@ -885,6 +978,7 @@ mod tests {
             "mbid",
             &rows,
             "2026-11-03",
+            1,
         )
         .unwrap();
         let (artist, track, confidence): (String, String, String) = conn
@@ -906,19 +1000,60 @@ mod tests {
         assert_eq!(checks, 1);
     }
 
-    fn linked_catalog() -> Connection {
+    fn in_memory() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
+        conn.create_scalar_function(
+            "unicode_lower",
+            1,
+            rusqlite::functions::FunctionFlags::SQLITE_UTF8
+                | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+            |context| context.get::<String>(0).map(|value| value.to_lowercase()),
+        )
+        .unwrap();
+        conn
+    }
+
+    /// Three linked artists with 2 / 1 / 0 albums, one unlinked and one ignored.
+    fn linked_catalog() -> Connection {
+        let conn = in_memory();
         conn.execute_batch(
             "CREATE TABLE musicbrainz_artist_links (
                 local_artist_key TEXT PRIMARY KEY, display_artist TEXT NOT NULL, mbid TEXT,
                 ignored INTEGER NOT NULL DEFAULT 0);
              INSERT INTO musicbrainz_artist_links VALUES
                 ('a', 'A', 'mbid-a', 0), ('b', 'B', 'mbid-b', 0), ('c', 'C', 'mbid-c', 0),
-                ('d', 'D', NULL, 0), ('e', 'E', 'mbid-e', 1);",
+                ('d', 'D', NULL, 0), ('e', 'E', 'mbid-e', 1);
+             CREATE TABLE albums (
+                id TEXT PRIMARY KEY, album TEXT, album_artist_display TEXT, artist_identity_key TEXT,
+                year INTEGER, release_year INTEGER);
+             INSERT INTO albums VALUES
+                ('a1', 'One', 'A', NULL, 1990, 1990), ('a2', 'Two', 'A', NULL, 1992, 1992),
+                ('b1', 'Solo', 'B', NULL, 1990, 1990), ('x', '  ', 'A', NULL, NULL, NULL);",
         )
         .unwrap();
         install_schema(&conn).unwrap();
+        install_recheck_columns(&conn).unwrap();
         conn
+    }
+
+    fn one_single() -> [TrackSingle; 1] {
+        [TrackSingle {
+            track_title: "Song".into(),
+            single_mbid: "s".into(),
+            single_title: "Song".into(),
+            single_year: Some(1991),
+            confidence: Confidence::Confirmed,
+            source: Source::TitleMatch,
+        }]
+    }
+
+    fn due_keys(conn: &Connection, force_before: Option<&str>) -> Vec<String> {
+        due_artists(conn, u32::MAX, force_before)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|artist| artist.local_artist_key)
+            .collect()
     }
 
     #[test]
@@ -931,34 +1066,111 @@ mod tests {
         );
         assert_eq!(empty.last_checked_at, None);
 
-        let rows = [TrackSingle {
-            track_title: "Song".into(),
-            single_mbid: "s".into(),
-            single_title: "Song".into(),
-            single_year: Some(1991),
-            confidence: Confidence::Confirmed,
-            source: Source::TitleMatch,
-        }];
-        save_artist_singles(&mut conn, "a", "A", "mbid-a", &rows, "2099-01-01T00:00:00Z").unwrap();
-        conn.execute(
-            "INSERT INTO track_singles_checks VALUES ('b', 'mbid-b', 0, '2000-01-01T00:00:00Z')",
-            [],
-        )
-        .unwrap();
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &one_single(), "2099-01-01T00:00:00Z", 2)
+            .unwrap();
+        // "b" was checked long ago, so it is due again; "c" never was.
+        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2000-01-01T00:00:00Z", 1).unwrap();
         let status = status_for_connection(&conn).unwrap();
-        // "a" is fresh, "b" was checked long ago so it is due again, "c" never was.
         assert_eq!(
             (status.linked_artists, status.checked_artists, status.due_artists),
             (3, 1, 2)
         );
         assert_eq!((status.confirmed_singles, status.possible_singles), (1, 0));
         assert_eq!(status.last_checked_at.as_deref(), Some("2099-01-01T00:00:00Z"));
-        let (due, remaining) = due_artists(&conn, u32::MAX).unwrap();
+        let (_, remaining) = due_artists(&conn, u32::MAX, None).unwrap();
         assert_eq!(remaining, 2);
-        assert_eq!(
-            due.iter().map(|artist| artist.local_artist_key.as_str()).collect::<Vec<_>>(),
-            ["b", "c"]
-        );
+        assert_eq!(due_keys(&conn, None), ["b", "c"]);
+    }
+
+    #[test]
+    fn new_music_makes_a_checked_artist_due_again() {
+        let mut conn = linked_catalog();
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-01T00:00:00Z", 2).unwrap();
+        assert!(!due_keys(&conn, None).contains(&"a".to_string()));
+
+        conn.execute(
+            "INSERT INTO albums VALUES ('a3', 'Three', 'A', NULL, 1995, 1995)",
+            [],
+        )
+        .unwrap();
+        assert!(due_keys(&conn, None).contains(&"a".to_string()), "a new album");
+
+        // Checking again records the new count, so the artist settles.
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-02T00:00:00Z", 3).unwrap();
+        assert!(!due_keys(&conn, None).contains(&"a".to_string()));
+
+        conn.execute("DELETE FROM albums WHERE id = 'a1'", []).unwrap();
+        assert!(due_keys(&conn, None).contains(&"a".to_string()), "a removed album");
+    }
+
+    #[test]
+    fn a_changed_musicbrainz_link_makes_the_artist_due_again() {
+        let mut conn = linked_catalog();
+        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2099-01-01T00:00:00Z", 1).unwrap();
+        assert!(!due_keys(&conn, None).contains(&"b".to_string()));
+        conn.execute(
+            "UPDATE musicbrainz_artist_links SET mbid = 'mbid-corrected' WHERE local_artist_key = 'b'",
+            [],
+        )
+        .unwrap();
+        assert!(due_keys(&conn, None).contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn a_newly_linked_artist_is_due_without_any_other_change() {
+        let mut conn = linked_catalog();
+        for key in ["a", "b", "c"] {
+            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2099-01-01T00:00:00Z", if key == "a" { 2 } else if key == "b" { 1 } else { 0 })
+                .unwrap();
+        }
+        assert!(due_keys(&conn, None).is_empty());
+        conn.execute("UPDATE musicbrainz_artist_links SET mbid = 'mbid-d' WHERE local_artist_key = 'd'", [])
+            .unwrap();
+        assert_eq!(due_keys(&conn, None), ["d"]);
+    }
+
+    #[test]
+    fn a_forced_run_rechecks_everyone_once_and_can_resume() {
+        let mut conn = linked_catalog();
+        for (key, albums) in [("a", 2), ("b", 1), ("c", 0)] {
+            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2026-11-02T10:00:00+00:00", albums)
+                .unwrap();
+        }
+        assert!(due_keys(&conn, None).is_empty());
+        let cutoff = "2026-11-02T12:00:00+00:00";
+        assert_eq!(due_keys(&conn, Some(cutoff)), ["a", "b", "c"]);
+        // After "a" is rechecked at 13:00 a resumed forced run carries on with the rest.
+        save_artist_singles(&mut conn, "a", "a", "mbid-a", &[], "2026-11-02T13:00:00+00:00", 2).unwrap();
+        assert_eq!(due_keys(&conn, Some(cutoff)), ["b", "c"]);
+        assert_eq!(due_artists(&conn, u32::MAX, Some(cutoff)).unwrap().1, 2);
+    }
+
+    #[test]
+    fn step_69_adds_the_column_and_credits_earlier_checks_with_todays_albums() {
+        let conn = in_memory();
+        conn.execute_batch(
+            "CREATE TABLE albums (
+                id TEXT PRIMARY KEY, album TEXT, album_artist_display TEXT, artist_identity_key TEXT,
+                year INTEGER, release_year INTEGER);
+             INSERT INTO albums VALUES ('a1', 'One', 'A', NULL, 1990, 1990), ('a2', 'Two', 'A', NULL, 1992, 1992);",
+        )
+        .unwrap();
+        install_schema(&conn).unwrap();
+        // A check written by 0.210.0 to 0.210.2, before the column existed.
+        conn.execute(
+            "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at)
+             VALUES ('a', 'mbid-a', 3, '2026-11-02T10:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        assert!(!recheck_columns_exist(&conn).unwrap());
+        install_recheck_columns(&conn).unwrap();
+        install_recheck_columns(&conn).unwrap();
+        assert!(recheck_columns_exist(&conn).unwrap());
+        let credited: i64 = conn
+            .query_row("SELECT album_count FROM track_singles_checks WHERE local_artist_key = 'a'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(credited, 2);
     }
 
     #[test]
