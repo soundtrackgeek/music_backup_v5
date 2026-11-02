@@ -5,6 +5,8 @@ import { isTauriRuntime, refreshTrackSingles } from "../backend";
 import type { TrackSinglesRefreshSummary } from "../types";
 
 const BATCH_SIZE = 25;
+/** The backend reads 0 as "every artist that is due". */
+const ALL_ARTISTS = 0;
 
 /** Finds official singles for album tracks so Aurora and Tonehavn can show a 💿. */
 export function TrackSinglesSettingsPanel() {
@@ -13,11 +15,11 @@ export function TrackSinglesSettingsPanel() {
   const [summary, setSummary] = useState<TrackSinglesRefreshSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function run() {
+  async function run(limit: number) {
     setBusy(true);
     setError(null);
     try {
-      setSummary(await refreshTrackSingles(BATCH_SIZE));
+      setSummary(await refreshTrackSingles(limit));
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : String(actionError));
     } finally {
@@ -35,13 +37,17 @@ export function TrackSinglesSettingsPanel() {
         <Disc3 size={18} />
       </div>
       <div className="lastfm-settings-actions">
-        <button className="secondary-button" type="button" disabled={!desktopRuntime || busy} onClick={() => void run()}>
+        <button className="secondary-button" type="button" disabled={!desktopRuntime || busy} onClick={() => void run(BATCH_SIZE)}>
           <Disc3 size={16} />
           <span>{busy ? "Finding singles" : `Find singles for ${BATCH_SIZE} artists`}</span>
         </button>
+        <button className="secondary-button" type="button" disabled={!desktopRuntime || busy} onClick={() => void run(ALL_ARTISTS)}>
+          <Disc3 size={16} />
+          <span>Find singles for all artists</span>
+        </button>
       </div>
       <div className="ai-settings-notes">
-        <span>Uses artists linked to MusicBrainz; unlinked artists are skipped. Requests are rate limited, so work runs in small batches you can repeat.</span>
+        <span>Uses artists linked to MusicBrainz; unlinked artists are skipped. Requests stay under MusicBrainz's limit of one per second, so a full pass over a large library can take hours. Progress shows under Jobs; you can cancel and resume later, because each finished artist is saved.</span>
         <span>A single counts when MusicBrainz links it to the album, or when an official single with the same title was first released within about three years of the album.</span>
         <span>Aurora and Tonehavn read the result from the shared catalog and show a 💿 on those tracks.</span>
       </div>

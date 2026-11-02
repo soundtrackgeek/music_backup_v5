@@ -10,6 +10,10 @@
 //! Confidence is explicit. `confirmed` rows are shown to users; `possible`
 //! rows (a title match outside the album's release window) are kept for review
 //! but readers must not badge them.
+//!
+//! The refresh job is long-running, so it touches the catalog only in short
+//! bursts (one read per artist, one small write per artist) and never while
+//! waiting on MusicBrainz.
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
@@ -43,8 +47,18 @@ const EXCLUDED_SECONDARY_TYPES: &[&str] = &[
 ];
 /// Words that only describe a version of a song, never a different song.
 const VERSION_WORDS: &[&str] = &[
-    "version", "edit", "mix", "remaster", "remastered", "mono", "stereo", "single", "radio",
-    "album", "extended", "original",
+    "version",
+    "edit",
+    "mix",
+    "remaster",
+    "remastered",
+    "mono",
+    "stereo",
+    "single",
+    "radio",
+    "album",
+    "extended",
+    "original",
 ];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,9 +167,10 @@ fn strip_version_suffix(title: &str) -> String {
 }
 
 fn is_excluded(single: &SingleRelease) -> bool {
-    single.secondary_types.iter().any(|kind| {
-        EXCLUDED_SECONDARY_TYPES.contains(&kind.trim().to_lowercase().as_str())
-    })
+    single
+        .secondary_types
+        .iter()
+        .any(|kind| EXCLUDED_SECONDARY_TYPES.contains(&kind.trim().to_lowercase().as_str()))
 }
 
 fn within_release_window(album_year: Option<i32>, single_year: Option<i32>) -> bool {
@@ -353,7 +368,12 @@ pub(crate) fn save_artist_singles(
             artist_mbid = excluded.artist_mbid,
             single_count = excluded.single_count,
             checked_at = excluded.checked_at",
-        params![local_artist_key, artist_mbid, singles.len() as i64, checked_at],
+        params![
+            local_artist_key,
+            artist_mbid,
+            singles.len() as i64,
+            checked_at
+        ],
     )?;
     tx.commit()?;
     Ok(())
@@ -574,14 +594,30 @@ fn singles_for_artist(
     merge(groups)
 }
 
-/// Background job body: refresh up to `limit` artists whose singles are unknown or stale.
+/// `0` means every due artist; any other value is a batch size.
+fn effective_limit(limit: u32) -> u32 {
+    if limit == 0 {
+        u32::MAX
+    } else {
+        limit
+    }
+}
+
+/// Background job body: refresh up to `limit` artists (`0` = all) whose singles
+/// are unknown or stale. Each artist is saved as it finishes, so cancelling or
+/// restarting loses nothing and the next run resumes with the artists left.
 #[cfg(not(test))]
 pub fn refresh_track_singles(
     app: tauri::AppHandle,
     limit: u32,
 ) -> Result<TrackSinglesRefreshSummary> {
-    let (mut conn, _) = crate::db::open(&app)?;
-    let (artists, remaining_before) = due_artists(&conn, limit)?;
+    // Never hold a catalog connection across network waits: each database step
+    // below opens a connection, finishes in milliseconds and drops it, so the
+    // app's own writes and other readers are not held up during a long run.
+    let (artists, remaining_before) = {
+        let (conn, _) = crate::db::open_read(&app)?;
+        due_artists(&conn, effective_limit(limit))?
+    };
     let requested = artists.len() as u32;
     let (mut checked, mut found, mut failed) = (0u32, 0u32, 0u32);
     for artist in artists {
@@ -591,8 +627,9 @@ pub fn refresh_track_singles(
             i64::from(requested),
             &format!("Finding singles for {}", artist.display_artist),
         );
-        let outcome = fetch_artist_singles(&artist.mbid).and_then(|singles| {
-            let albums = local_albums(&conn, &artist)?;
+        let albums = crate::db::open_read(&app).and_then(|(conn, _)| local_albums(&conn, &artist));
+        let outcome = albums.and_then(|albums| {
+            let singles = fetch_artist_singles(&artist.mbid)?;
             Ok(singles_for_artist(&singles, &albums, |group| {
                 fetch_single_from_links(group).unwrap_or_default()
             }))
@@ -603,6 +640,7 @@ pub fn refresh_track_singles(
                     .iter()
                     .filter(|row| row.confidence == Confidence::Confirmed)
                     .count() as u32;
+                let (mut conn, _) = crate::db::open(&app)?;
                 save_artist_singles(
                     &mut conn,
                     &artist.local_artist_key,
@@ -611,6 +649,7 @@ pub fn refresh_track_singles(
                     &rows,
                     &chrono::Utc::now().to_rfc3339(),
                 )?;
+                drop(conn);
                 checked += 1;
             }
             // Leave the artist unchecked so the next run retries it.
@@ -656,7 +695,10 @@ mod tests {
     fn title_key_drops_version_decorations_only() {
         assert_eq!(title_key("Take A Chance (Single Version)"), "take a chance");
         assert_eq!(title_key("Heroes - 2017 Remaster"), "heroes");
-        assert_eq!(title_key("Love (Is a Battlefield)"), "love is a battlefield");
+        assert_eq!(
+            title_key("Love (Is a Battlefield)"),
+            "love is a battlefield"
+        );
         assert_eq!(title_key("Rock Me [Radio Edit] (Remastered)"), "rock me");
         // "Remix" is a different recording, not a decoration.
         assert_eq!(title_key("Rock Me (Remix)"), "rock me remix");
@@ -695,7 +737,10 @@ mod tests {
     fn earliest_in_window_single_wins() {
         let matches = match_by_title(
             &album(1991, &["Take A Chance"]),
-            &[single("late", "Take A Chance", 1993), single("early", "Take A Chance", 1991)],
+            &[
+                single("late", "Take A Chance", 1993),
+                single("early", "Take A Chance", 1991),
+            ],
         );
         assert_eq!(matches[0].single_mbid, "early");
     }
@@ -735,8 +780,24 @@ mod tests {
             confidence: Confidence::Confirmed,
             source: Source::TitleMatch,
         }];
-        save_artist_singles(&mut conn, "bob seger", " Bob Seger ", "mbid", &rows, "2026-11-02").unwrap();
-        save_artist_singles(&mut conn, "bob seger", " Bob Seger ", "mbid", &rows, "2026-11-03").unwrap();
+        save_artist_singles(
+            &mut conn,
+            "bob seger",
+            " Bob Seger ",
+            "mbid",
+            &rows,
+            "2026-11-02",
+        )
+        .unwrap();
+        save_artist_singles(
+            &mut conn,
+            "bob seger",
+            " Bob Seger ",
+            "mbid",
+            &rows,
+            "2026-11-03",
+        )
+        .unwrap();
         let (artist, track, confidence): (String, String, String) = conn
             .query_row(
                 "SELECT artist_key, track_key, confidence FROM track_singles",
@@ -744,11 +805,22 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .unwrap();
-        assert_eq!((artist.as_str(), track.as_str(), confidence.as_str()), ("bob seger", "take a chance", "confirmed"));
+        assert_eq!(
+            (artist.as_str(), track.as_str(), confidence.as_str()),
+            ("bob seger", "take a chance", "confirmed")
+        );
         let checks: i64 = conn
-            .query_row("SELECT COUNT(*) FROM track_singles_checks", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM track_singles_checks", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(checks, 1);
+    }
+
+    #[test]
+    fn zero_means_every_due_artist() {
+        assert_eq!(effective_limit(0), u32::MAX);
+        assert_eq!(effective_limit(25), 25);
     }
 
     #[test]

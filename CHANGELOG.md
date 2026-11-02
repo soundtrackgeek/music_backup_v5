@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.210.1] - 2026-11-02
+
+### Added
+- **Find singles for all artists**: a second button under **Settings → Providers → Album singles** checks every artist that is due in one background job, instead of 25 per click. Progress shows under Jobs, and you can cancel and resume later because each artist is saved as soon as it finishes. Requests stay under MusicBrainz's limit of one per second, so a large library can take hours.
+
+### Changed
+- **Album singles no longer hold the catalog during the run**: the job now opens the catalog only for a quick read and a small write per artist, and never while it waits for MusicBrainz, so imports, edits and other background work are not held up by a long run.
+
 ## [0.210.0] - 2026-11-02
 
 ### Added
