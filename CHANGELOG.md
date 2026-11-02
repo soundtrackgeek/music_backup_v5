@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.211.0] - 2026-11-02
+
+### Added
+- **Album singles now covers artists matched by name**: until now only the 814 artists you had linked to MusicBrainz could be checked. The shared MusicBrainz artist cache (`MusicBrainz\musicbrainz_cache.db`) already knows a MusicBrainz id for almost every artist in the library, but nobody had confirmed those name matches, so they are checked **after** the artists you linked and held to a stricter standard. Their singles are shown only when one of your albums is in that MusicBrainz artist's discography (same title, year within one), a MusicBrainz `single from` link ties a single to one of your albums, or at least two of your tracks match singles. Otherwise the result is stored as **possible** and never displayed, so a different band with the same name cannot put a 💿 on your tracks. The panel shows how many artists are matched by name only.
+- Artists you linked, unlinked or ignored always keep your decision (a name match never replaces a link or revives an unlinked artist), placeholders such as "Various Artists" and MusicBrainz's special "Various Artists" and "[unknown]" entries are skipped, and name variants that share one MusicBrainz id are fetched once. Confirming a name match later by linking the artist checks that artist again.
+- Schema version 70: the cache's name matches are copied into the catalog (refreshed whenever the cache file changes) and each check records whether it was made on a verified link or a name match.
+
+### Changed
+- The panel counts "artists checked" over every artist that can be checked, not only linked ones. A first full pass over the name-matched artists is one request per distinct MusicBrainz id (about 14,000 for a library like yours), so it takes hours; it can be paused and continued as before.
+
 ## [0.210.3] - 2026-11-02
 
 ### Added

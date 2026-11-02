@@ -148,16 +148,19 @@ export function TrackSinglesSettingsPanel() {
 
       <p className="track-singles-status">
         {status
-          ? `${status.checkedArtists.toLocaleString()} of ${status.linkedArtists.toLocaleString()} linked artists checked · ${status.confirmedSingles.toLocaleString()} confirmed singles`
+          ? `${status.checkedArtists.toLocaleString()} of ${status.checkableArtists.toLocaleString()} artists checked · ${status.confirmedSingles.toLocaleString()} confirmed singles`
           : "Reading album singles coverage…"}
       </p>
       {status ? (
         <p className="track-singles-status track-singles-status--detail">
           {status.dueArtists > 0
             ? `${status.dueArtists.toLocaleString()} artists still to check`
-            : status.linkedArtists > 0
-              ? "Every linked artist is up to date"
+            : status.checkableArtists > 0
+              ? "Every artist is up to date"
               : "No artists are linked to MusicBrainz yet"}
+          {status.nameMatchedArtists > 0
+            ? ` · ${status.nameMatchedArtists.toLocaleString()} matched by name only`
+            : ""}
           {status.possibleSingles > 0 ? ` · ${status.possibleSingles.toLocaleString()} possible matches saved but not shown` : ""}
           {status.lastCheckedAt ? ` · last check ${new Date(status.lastCheckedAt).toLocaleString()}` : ""}
         </p>
@@ -213,7 +216,7 @@ export function TrackSinglesSettingsPanel() {
 
       <div className="ai-settings-notes">
         <span>Artists are checked again automatically when you add or remove albums for them, link them to a different MusicBrainz artist, or after 90 days; new links are picked up the next time you start or continue. &quot;Recheck every artist&quot; ignores all that and checks everyone once more.</span>
-        <span>Uses artists linked to MusicBrainz; unlinked artists are skipped. Requests stay under MusicBrainz&apos;s limit of one per second, so a full pass over a large library can take hours. You can pause and continue: every finished artist is saved.</span>
+        <span>Artists you linked to MusicBrainz are checked first. Artists matched by name only are checked afterwards, and their singles are shown only when one of your albums is in that MusicBrainz artist&apos;s discography (or two of your tracks match singles); otherwise the result is kept but hidden. Requests stay under MusicBrainz&apos;s limit of one per second, so a full pass over a large library can take hours. You can pause and continue: every finished artist is saved.</span>
         <span>A single counts when MusicBrainz links it to the album, or when an official single with the same title was first released within about three years of the album.</span>
         <span>Aurora and Tonehavn read the result from the shared catalog and show a 💿 on those tracks.</span>
       </div>

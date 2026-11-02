@@ -30,7 +30,8 @@ vi.mock("../backend/activity", async () => {
 });
 
 const status = {
-  linkedArtists: 3000,
+  checkableArtists: 3000,
+  nameMatchedArtists: 2400,
   checkedArtists: 1234,
   dueArtists: 1766,
   confirmedSingles: 5200,
@@ -57,7 +58,7 @@ describe("TrackSinglesSettingsPanel", () => {
 
   it("shows how far the library has come even when nothing is running", async () => {
     render(<TrackSinglesSettingsPanel />);
-    expect(await screen.findByText("1,234 of 3,000 linked artists checked · 5,200 confirmed singles")).toBeInTheDocument();
+    expect(await screen.findByText("1,234 of 3,000 artists checked · 5,200 confirmed singles")).toBeInTheDocument();
     expect(screen.getByText(/1,766 artists still to check/)).toBeInTheDocument();
     expect(screen.getByText(/40 possible matches saved but not shown/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Album singles job")).not.toBeInTheDocument();

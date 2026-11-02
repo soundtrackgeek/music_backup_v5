@@ -11,12 +11,18 @@
 //! rows (a title match outside the album's release window) are kept for review
 //! but readers must not badge them.
 //!
+//! Two kinds of artist are checked. `verified` artists are the ones you linked
+//! to MusicBrainz. `name` artists only have a MusicBrainz id because the shared
+//! artist-name cache matched their name, which nobody confirmed, so their
+//! results are shown only when your own albums back the match (see
+//! [`gate_name_match`]); otherwise they are stored as `possible`.
+//!
 //! The refresh job is long-running, so it touches the catalog only in short
 //! bursts (one read per artist, one small write per artist) and never while
 //! waiting on MusicBrainz.
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -31,6 +37,30 @@ const WINDOW_YEARS_BEFORE: i32 = 1;
 const WINDOW_YEARS_AFTER: i32 = 3;
 /// Per-artist ceiling on relationship lookups; each is one rate-limited request.
 const MAX_RELATIONSHIP_LOOKUPS: usize = 25;
+/// Without an album of yours matching the artist's discography, a name match
+/// needs this many independent confirmed singles before it is believed.
+const MIN_CONFIRMED_WITHOUT_ALBUM_EVIDENCE: usize = 2;
+/// A name-matched artist with more singles than this is a catch-all entry
+/// (compilations, "various"), not a band.
+const MAX_SINGLES_FOR_NAME_MATCH: usize = 1000;
+/// MusicBrainz's special entries for "Various Artists" and "[unknown]".
+const SPECIAL_ARTIST_MBIDS: &[&str] = &[
+    "89ad4ac3-39f7-470e-963a-56509c546377",
+    "125ec42a-7229-4250-afc5-e057484327fe",
+];
+/// Catalog artist keys that are placeholders, never a real act.
+const PLACEHOLDER_ARTIST_KEYS: &[&str] = &[
+    "various artists",
+    "various",
+    "va",
+    "v.a.",
+    "unknown artist",
+    "unknown",
+    "[unknown]",
+    "<unknown>",
+    "soundtrack",
+    "ost",
+];
 /// Secondary types that mean the group is not the song's official single.
 const EXCLUDED_SECONDARY_TYPES: &[&str] = &[
     "live",
@@ -350,6 +380,103 @@ pub(crate) fn recheck_columns_exist(conn: &Connection) -> Result<bool> {
     column_exists(conn, "track_singles_checks", "album_count")
 }
 
+/// Schema step 70: the artist-name cache's matches (copied into the catalog so
+/// the due query stays one SQL statement) and the basis each check was made on.
+/// Earlier checks all came from linked artists, which `COALESCE` reads as `verified`.
+pub(crate) fn install_name_matches(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS track_singles_name_matches (
+            name_key TEXT PRIMARY KEY,
+            mbid TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS track_singles_name_matches_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            stamp TEXT NOT NULL
+        );",
+    )
+    .context("Could not create the singles name-match tables")?;
+    if !column_exists(conn, "track_singles_checks", "basis")? {
+        conn.execute_batch("ALTER TABLE track_singles_checks ADD COLUMN basis TEXT")
+            .context("Could not add the basis to the singles checks")?;
+    }
+    Ok(())
+}
+
+pub(crate) fn name_matches_exist(conn: &Connection) -> Result<bool> {
+    Ok(column_exists(conn, "track_singles_checks", "basis")?
+        && conn.query_row(
+            "SELECT COUNT(*) = 2 FROM sqlite_master WHERE type = 'table'
+             AND name IN ('track_singles_name_matches', 'track_singles_name_matches_state')",
+            [],
+            |row| row.get(0),
+        )?)
+}
+
+/// Replaces the stored name matches with the cache's `artist_name -> mbid` rows.
+pub(crate) fn sync_name_matches(conn: &mut Connection, cache: &Connection, stamp: &str) -> Result<usize> {
+    let rows = cache
+        .prepare(
+            "SELECT lower(trim(name)), trim(mbid) FROM artist_cache
+             WHERE NULLIF(TRIM(COALESCE(mbid, '')), '') IS NOT NULL
+               AND NULLIF(TRIM(COALESCE(name, '')), '') IS NOT NULL",
+        )?
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM track_singles_name_matches", [])?;
+    {
+        let mut insert = tx.prepare(
+            "INSERT OR IGNORE INTO track_singles_name_matches (name_key, mbid) VALUES (?1, ?2)",
+        )?;
+        for (name, mbid) in &rows {
+            insert.execute(params![name, mbid])?;
+        }
+    }
+    tx.execute(
+        "INSERT INTO track_singles_name_matches_state (id, stamp) VALUES (1, ?1)
+         ON CONFLICT(id) DO UPDATE SET stamp = excluded.stamp",
+        [stamp],
+    )?;
+    tx.commit()?;
+    Ok(rows.len())
+}
+
+fn name_matches_stamp(conn: &Connection) -> Option<String> {
+    conn.query_row(
+        "SELECT stamp FROM track_singles_name_matches_state WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )
+    .ok()
+}
+
+/// Copies the artist-name cache into the catalog when the cache file changed.
+/// A missing or unreadable cache is not an error: only verified artists are checked then.
+#[cfg(not(test))]
+pub(crate) fn ensure_name_matches(app: &tauri::AppHandle) -> Result<()> {
+    let path = crate::db::settings_for_app(app)?.musicbrainz_cache_path;
+    let Ok(metadata) = std::fs::metadata(&path) else {
+        return Ok(());
+    };
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |elapsed| elapsed.as_secs());
+    let stamp = format!("{}:{modified}", metadata.len());
+    {
+        let (conn, _) = crate::db::open_read(app)?;
+        if name_matches_stamp(&conn).as_deref() == Some(stamp.as_str()) {
+            return Ok(());
+        }
+    }
+    let cache = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .context("Could not open the MusicBrainz artist cache")?;
+    let (mut conn, _) = crate::db::open(app)?;
+    sync_name_matches(&mut conn, &cache, &stamp)?;
+    Ok(())
+}
+
 pub(crate) fn schema_exists(conn: &Connection) -> Result<bool> {
     Ok(conn.query_row(
         "SELECT COUNT(*) = 2 FROM sqlite_master WHERE
@@ -369,6 +496,7 @@ pub(crate) fn save_artist_singles(
     singles: &[TrackSingle],
     checked_at: &str,
     album_count: i64,
+    basis: &str,
 ) -> Result<()> {
     let tx = conn.transaction()?;
     tx.execute(
@@ -402,19 +530,21 @@ pub(crate) fn save_artist_singles(
         )?;
     }
     tx.execute(
-        "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at, album_count)
-         VALUES (?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at, album_count, basis)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(local_artist_key) DO UPDATE SET
             artist_mbid = excluded.artist_mbid,
             single_count = excluded.single_count,
             checked_at = excluded.checked_at,
-            album_count = excluded.album_count",
+            album_count = excluded.album_count,
+            basis = excluded.basis",
         params![
             local_artist_key,
             artist_mbid,
             singles.len() as i64,
             checked_at,
-            album_count
+            album_count,
+            basis
         ],
     )?;
     tx.commit()?;
@@ -520,42 +650,89 @@ struct LocalArtist {
     local_artist_key: String,
     display_artist: String,
     mbid: String,
+    /// `verified` (you linked it) or `name` (only the artist-name cache matched).
+    basis: String,
 }
 
-/// Albums per catalog artist, counted once so a due check stays a single pass.
-/// The filter matches `local_albums`, so a stored count and a fresh count agree.
-fn album_counts_cte() -> String {
+fn sql_list(items: &[&str]) -> String {
+    items
+        .iter()
+        .map(|item| format!("'{}'", item.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Albums per catalog artist and the artists worth checking, built once per
+/// statement so a due check stays a single pass. The album filter matches
+/// `local_albums`, so a stored count and a fresh count agree.
+///
+/// Candidates are the artists you linked, plus artists whose name the cache
+/// matched, unless you linked, unlinked or ignored them (your decision wins) or
+/// the name is a placeholder such as "Various Artists".
+fn candidates_cte() -> String {
     let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
+    let placeholders = sql_list(PLACEHOLDER_ARTIST_KEYS);
+    let special = sql_list(SPECIAL_ARTIST_MBIDS);
     format!(
         "WITH album_counts AS (
-            SELECT {key_sql} AS artist_key, COUNT(*) AS albums FROM albums
+            SELECT {key_sql} AS artist_key, MIN(album_artist_display) AS display, COUNT(*) AS albums
+            FROM albums
             WHERE NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL
-            GROUP BY artist_key)"
+            GROUP BY artist_key),
+         candidates AS (
+            SELECT links.local_artist_key AS artist_key, links.display_artist AS display,
+                   TRIM(links.mbid) AS mbid, 'verified' AS basis
+            FROM musicbrainz_artist_links links
+            WHERE links.ignored = 0 AND NULLIF(TRIM(COALESCE(links.mbid, '')), '') IS NOT NULL
+            UNION ALL
+            SELECT album_counts.artist_key, album_counts.display, matches.mbid, 'name'
+            FROM album_counts
+            JOIN track_singles_name_matches matches ON matches.name_key = album_counts.artist_key
+            WHERE album_counts.artist_key <> ''
+              AND album_counts.artist_key NOT IN ({placeholders})
+              AND matches.mbid NOT IN ({special})
+              AND NOT EXISTS (SELECT 1 FROM musicbrainz_artist_links links
+                              WHERE links.local_artist_key = album_counts.artist_key)
+              AND NOT EXISTS (SELECT 1 FROM musicbrainz_artist_link_tombstones gone
+                              WHERE gone.local_artist_key = album_counts.artist_key))"
     )
 }
 
-const LINKED_ARTISTS_FROM: &str = "FROM musicbrainz_artist_links links
-     LEFT JOIN track_singles_checks checks ON checks.local_artist_key = links.local_artist_key
-     LEFT JOIN album_counts ON album_counts.artist_key = links.local_artist_key
-     WHERE links.ignored = 0 AND NULLIF(TRIM(COALESCE(links.mbid, '')), '') IS NOT NULL";
+const CANDIDATES_FROM: &str = "FROM candidates cand
+     LEFT JOIN track_singles_checks checks ON checks.local_artist_key = cand.artist_key
+     LEFT JOIN album_counts ON album_counts.artist_key = cand.artist_key
+     WHERE 1 = 1";
 
 /// An artist is due when it was never checked, the check is stale, its
-/// MusicBrainz link changed since the check, its album count changed (new music
-/// was added or removed), or a forced run started after its last check.
+/// MusicBrainz id or the basis for it changed since the check (for example a
+/// name match you later confirmed), its album count changed (new music was
+/// added or removed), or a forced run started after its last check.
 /// `?1` is the force cut-off (NULL for a normal run).
 fn due_condition() -> String {
     format!(
         "(checks.checked_at IS NULL
           OR checks.checked_at < datetime('now', '-{REFRESH_AFTER_DAYS} days')
-          OR TRIM(COALESCE(checks.artist_mbid, '')) <> TRIM(links.mbid)
+          OR TRIM(COALESCE(checks.artist_mbid, '')) <> cand.mbid
+          OR COALESCE(checks.basis, 'verified') <> cand.basis
           OR checks.album_count IS NOT COALESCE(album_counts.albums, 0)
           OR (?1 IS NOT NULL AND checks.checked_at < ?1))"
     )
 }
 
-fn count_linked(conn: &Connection) -> Result<i64> {
+fn count_candidates(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row(
-        &format!("{} SELECT COUNT(*) {LINKED_ARTISTS_FROM}", album_counts_cte()),
+        &format!("{} SELECT COUNT(*) {CANDIDATES_FROM}", candidates_cte()),
+        [],
+        |row| row.get(0),
+    )?)
+}
+
+fn count_name_matched(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row(
+        &format!(
+            "{} SELECT COUNT(*) {CANDIDATES_FROM} AND cand.basis = 'name'",
+            candidates_cte()
+        ),
         [],
         |row| row.get(0),
     )?)
@@ -564,8 +741,8 @@ fn count_linked(conn: &Connection) -> Result<i64> {
 fn count_due(conn: &Connection, force_before: Option<&str>) -> Result<i64> {
     Ok(conn.query_row(
         &format!(
-            "{} SELECT COUNT(*) {LINKED_ARTISTS_FROM} AND {}",
-            album_counts_cte(),
+            "{} SELECT COUNT(*) {CANDIDATES_FROM} AND {}",
+            candidates_cte(),
             due_condition()
         ),
         [force_before],
@@ -577,10 +754,12 @@ fn count_due(conn: &Connection, force_before: Option<&str>) -> Result<i64> {
 #[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackSinglesStatus {
-    /// Artists linked to MusicBrainz; the only ones that can be checked.
-    pub linked_artists: i64,
-    /// Linked artists whose result is up to date: checked within 90 days, with
-    /// the same MusicBrainz link and album count as when they were checked.
+    /// Artists that can be checked: linked to MusicBrainz, or matched by name.
+    pub checkable_artists: i64,
+    /// How many of those only have a name match (no link you confirmed).
+    pub name_matched_artists: i64,
+    /// Checkable artists whose result is up to date: checked within 90 days, with
+    /// the same MusicBrainz id, basis and album count as when they were checked.
     pub checked_artists: i64,
     pub due_artists: i64,
     pub confirmed_singles: i64,
@@ -590,7 +769,7 @@ pub struct TrackSinglesStatus {
 
 pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesStatus> {
     let count = |sql: String| -> Result<i64> { Ok(conn.query_row(&sql, [], |row| row.get(0))?) };
-    let linked = count_linked(conn)?;
+    let checkable = count_candidates(conn)?;
     let due = count_due(conn, None)?;
     let by_confidence = |confidence: &str| {
         count(format!(
@@ -598,8 +777,9 @@ pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesSta
         ))
     };
     Ok(TrackSinglesStatus {
-        linked_artists: linked,
-        checked_artists: linked - due,
+        checkable_artists: checkable,
+        name_matched_artists: count_name_matched(conn)?,
+        checked_artists: checkable - due,
         due_artists: due,
         confirmed_singles: by_confidence("confirmed")?,
         possible_singles: by_confidence("possible")?,
@@ -611,7 +791,8 @@ pub(crate) fn status_for_connection(conn: &Connection) -> Result<TrackSinglesSta
     })
 }
 
-/// Linked artists that are due (see [`due_condition`]), and how many are due in all.
+/// Artists that are due (see [`due_condition`]), verified ones first, and how
+/// many are due in all.
 fn due_artists(
     conn: &Connection,
     limit: u32,
@@ -619,9 +800,9 @@ fn due_artists(
 ) -> Result<(Vec<LocalArtist>, i64)> {
     let remaining = count_due(conn, force_before)?;
     let mut statement = conn.prepare(&format!(
-        "{} SELECT links.local_artist_key, links.display_artist, links.mbid {LINKED_ARTISTS_FROM} AND {}
-         ORDER BY links.local_artist_key LIMIT ?2",
-        album_counts_cte(),
+        "{} SELECT cand.artist_key, cand.display, cand.mbid, cand.basis {CANDIDATES_FROM} AND {}
+         ORDER BY (cand.basis = 'name'), cand.artist_key LIMIT ?2",
+        candidates_cte(),
         due_condition()
     ))?;
     let artists = statement
@@ -630,6 +811,7 @@ fn due_artists(
                 local_artist_key: row.get(0)?,
                 display_artist: row.get(1)?,
                 mbid: row.get(2)?,
+                basis: row.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -724,6 +906,63 @@ fn singles_for_artist(
     merge(groups)
 }
 
+/// True when one of your albums is also in the artist's MusicBrainz discography
+/// (same title, and the same year give or take one when both are known).
+fn albums_overlap(local: &[AlbumContext], remote: &[(String, Option<i32>)]) -> bool {
+    local.iter().any(|album| {
+        let wanted = crate::identity::loose_key(&album.title);
+        !wanted.is_empty()
+            && remote.iter().any(|(title, year)| {
+                crate::identity::loose_key(title) == wanted
+                    && match (album.year, year) {
+                        (Some(left), Some(right)) => (left - right).abs() <= 1,
+                        _ => true,
+                    }
+            })
+    })
+}
+
+/// Albums and EPs the artist-name cache holds for this MusicBrainz id. Reading
+/// fails soft: no cache just means no album evidence.
+fn cached_discography(cache_path: &str, artist_mbid: &str) -> Vec<(String, Option<i32>)> {
+    let read = || -> Result<Vec<(String, Option<i32>)>> {
+        let cache = Connection::open_with_flags(cache_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let rows = cache
+            .prepare(
+                "SELECT title, year FROM release_groups
+                 WHERE artist_mbid = ?1 AND type IN ('Album', 'EP')",
+            )?
+            .query_map([artist_mbid], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    };
+    read().unwrap_or_default()
+}
+
+/// A name-matched artist may be the wrong act with the same name. Its singles
+/// are believed only when something independent agrees: one of your albums is
+/// in its discography, a `single from` link tied a single to one of your
+/// albums, or at least two different tracks matched. Otherwise every row is
+/// kept as `possible`, which readers never show.
+pub(crate) fn gate_name_match(rows: Vec<TrackSingle>, album_evidence: bool) -> Vec<TrackSingle> {
+    let confirmed = rows
+        .iter()
+        .filter(|row| row.confidence == Confidence::Confirmed)
+        .count();
+    let linked = rows
+        .iter()
+        .any(|row| row.confidence == Confidence::Confirmed && row.source == Source::Relationship);
+    if album_evidence || linked || confirmed >= MIN_CONFIRMED_WITHOUT_ALBUM_EVIDENCE {
+        return rows;
+    }
+    rows.into_iter()
+        .map(|row| TrackSingle {
+            confidence: Confidence::Possible,
+            ..row
+        })
+        .collect()
+}
+
 /// `0` means every due artist; any other value is a batch size.
 fn effective_limit(limit: u32) -> u32 {
     if limit == 0 {
@@ -762,16 +1001,23 @@ pub fn refresh_track_singles(
     // below opens a connection, finishes in milliseconds and drops it, so the
     // app's own writes and other readers are not held up during a long run.
     let force_before = force_before.as_deref();
-    let (artists, remaining_before, linked, checked_before) = {
+    // The cache copy is best effort: without it only verified artists are checked.
+    let _ = ensure_name_matches(&app);
+    let cache_path = crate::db::settings_for_app(&app)
+        .map(|settings| settings.musicbrainz_cache_path)
+        .unwrap_or_default();
+    let (artists, remaining_before, total, checked_before) = {
         let (conn, _) = crate::db::open_read(&app)?;
         let (artists, remaining) = due_artists(&conn, effective_limit(limit), force_before)?;
-        let linked = count_linked(&conn)?;
-        (artists, remaining, linked, linked - remaining)
+        let total = count_candidates(&conn)?;
+        (artists, remaining, total, total - remaining)
     };
     let requested = artists.len() as u32;
     let started = std::time::Instant::now();
     let (mut checked, mut found, mut failed, mut consecutive) = (0u32, 0u32, 0u32, 0u32);
     let mut paused = false;
+    // Name variants ("the who", "who") often share one MusicBrainz id.
+    let mut fetched: HashMap<String, Vec<SingleRelease>> = HashMap::new();
     for artist in artists {
         // Cancel ends the job here; a pause request just stops after the last saved artist.
         crate::jobs::checkpoint()?;
@@ -788,16 +1034,31 @@ pub fn refresh_track_singles(
         });
         crate::jobs::progress_with_eta(
             done,
-            linked,
-            &progress_message(done, linked, found, failed, Some(&artist.display_artist)),
+            total,
+            &progress_message(done, total, found, failed, Some(&artist.display_artist)),
             eta,
         );
+        let by_name = artist.basis == "name";
         let albums = crate::db::open_read(&app).and_then(|(conn, _)| local_albums(&conn, &artist));
         let outcome = albums.and_then(|albums| {
-            let singles = fetch_artist_singles(&artist.mbid)?;
-            let rows = singles_for_artist(&singles, &albums, |group| {
-                fetch_single_from_links(group).unwrap_or_default()
-            });
+            if !fetched.contains_key(&artist.mbid) {
+                fetched.insert(artist.mbid.clone(), fetch_artist_singles(&artist.mbid)?);
+            }
+            let singles = &fetched[&artist.mbid];
+            let rows = if by_name && singles.len() > MAX_SINGLES_FOR_NAME_MATCH {
+                Vec::new()
+            } else {
+                singles_for_artist(singles, &albums, |group| {
+                    fetch_single_from_links(group).unwrap_or_default()
+                })
+            };
+            let rows = if by_name {
+                let evidence =
+                    albums_overlap(&albums, &cached_discography(&cache_path, &artist.mbid));
+                gate_name_match(rows, evidence)
+            } else {
+                rows
+            };
             Ok((rows, albums.len() as i64))
         });
         match outcome {
@@ -815,6 +1076,7 @@ pub fn refresh_track_singles(
                     &rows,
                     &chrono::Utc::now().to_rfc3339(),
                     album_count,
+                    &artist.basis,
                 )?;
                 drop(conn);
                 checked += 1;
@@ -834,11 +1096,11 @@ pub fn refresh_track_singles(
     }
     let remaining = remaining_before - i64::from(checked);
     let done = checked_before + i64::from(checked);
-    let mut message = progress_message(done, linked, found, failed, None);
+    let mut message = progress_message(done, total, found, failed, None);
     if paused {
         message.push_str(" · paused");
     }
-    crate::jobs::progress_with_eta(done, linked, &message, None);
+    crate::jobs::progress_with_eta(done, total, &message, None);
     Ok(TrackSinglesRefreshSummary {
         requested,
         artists_checked: checked,
@@ -952,6 +1214,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         install_schema(&conn).unwrap();
         install_recheck_columns(&conn).unwrap();
+        install_name_matches(&conn).unwrap();
         assert!(schema_exists(&conn).unwrap());
         let rows = [TrackSingle {
             track_title: "  Take A Chance ".into(),
@@ -968,8 +1231,7 @@ mod tests {
             "mbid",
             &rows,
             "2026-11-02",
-            1,
-        )
+            1, "verified")
         .unwrap();
         save_artist_singles(
             &mut conn,
@@ -978,8 +1240,7 @@ mod tests {
             "mbid",
             &rows,
             "2026-11-03",
-            1,
-        )
+            1, "verified")
         .unwrap();
         let (artist, track, confidence): (String, String, String) = conn
             .query_row(
@@ -1023,6 +1284,7 @@ mod tests {
              INSERT INTO musicbrainz_artist_links VALUES
                 ('a', 'A', 'mbid-a', 0), ('b', 'B', 'mbid-b', 0), ('c', 'C', 'mbid-c', 0),
                 ('d', 'D', NULL, 0), ('e', 'E', 'mbid-e', 1);
+             CREATE TABLE musicbrainz_artist_link_tombstones (local_artist_key TEXT PRIMARY KEY);
              CREATE TABLE albums (
                 id TEXT PRIMARY KEY, album TEXT, album_artist_display TEXT, artist_identity_key TEXT,
                 year INTEGER, release_year INTEGER);
@@ -1033,6 +1295,7 @@ mod tests {
         .unwrap();
         install_schema(&conn).unwrap();
         install_recheck_columns(&conn).unwrap();
+        install_name_matches(&conn).unwrap();
         conn
     }
 
@@ -1061,18 +1324,18 @@ mod tests {
         let mut conn = linked_catalog();
         let empty = status_for_connection(&conn).unwrap();
         assert_eq!(
-            (empty.linked_artists, empty.checked_artists, empty.due_artists),
+            (empty.checkable_artists, empty.checked_artists, empty.due_artists),
             (3, 0, 3)
         );
         assert_eq!(empty.last_checked_at, None);
 
-        save_artist_singles(&mut conn, "a", "A", "mbid-a", &one_single(), "2099-01-01T00:00:00Z", 2)
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &one_single(), "2099-01-01T00:00:00Z", 2, "verified")
             .unwrap();
         // "b" was checked long ago, so it is due again; "c" never was.
-        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2000-01-01T00:00:00Z", 1).unwrap();
+        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2000-01-01T00:00:00Z", 1, "verified").unwrap();
         let status = status_for_connection(&conn).unwrap();
         assert_eq!(
-            (status.linked_artists, status.checked_artists, status.due_artists),
+            (status.checkable_artists, status.checked_artists, status.due_artists),
             (3, 1, 2)
         );
         assert_eq!((status.confirmed_singles, status.possible_singles), (1, 0));
@@ -1085,7 +1348,7 @@ mod tests {
     #[test]
     fn new_music_makes_a_checked_artist_due_again() {
         let mut conn = linked_catalog();
-        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-01T00:00:00Z", 2).unwrap();
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-01T00:00:00Z", 2, "verified").unwrap();
         assert!(!due_keys(&conn, None).contains(&"a".to_string()));
 
         conn.execute(
@@ -1096,7 +1359,7 @@ mod tests {
         assert!(due_keys(&conn, None).contains(&"a".to_string()), "a new album");
 
         // Checking again records the new count, so the artist settles.
-        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-02T00:00:00Z", 3).unwrap();
+        save_artist_singles(&mut conn, "a", "A", "mbid-a", &[], "2099-01-02T00:00:00Z", 3, "verified").unwrap();
         assert!(!due_keys(&conn, None).contains(&"a".to_string()));
 
         conn.execute("DELETE FROM albums WHERE id = 'a1'", []).unwrap();
@@ -1106,7 +1369,7 @@ mod tests {
     #[test]
     fn a_changed_musicbrainz_link_makes_the_artist_due_again() {
         let mut conn = linked_catalog();
-        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2099-01-01T00:00:00Z", 1).unwrap();
+        save_artist_singles(&mut conn, "b", "B", "mbid-b", &[], "2099-01-01T00:00:00Z", 1, "verified").unwrap();
         assert!(!due_keys(&conn, None).contains(&"b".to_string()));
         conn.execute(
             "UPDATE musicbrainz_artist_links SET mbid = 'mbid-corrected' WHERE local_artist_key = 'b'",
@@ -1120,7 +1383,7 @@ mod tests {
     fn a_newly_linked_artist_is_due_without_any_other_change() {
         let mut conn = linked_catalog();
         for key in ["a", "b", "c"] {
-            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2099-01-01T00:00:00Z", if key == "a" { 2 } else if key == "b" { 1 } else { 0 })
+            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2099-01-01T00:00:00Z", if key == "a" { 2 } else if key == "b" { 1 } else { 0 }, "verified")
                 .unwrap();
         }
         assert!(due_keys(&conn, None).is_empty());
@@ -1133,14 +1396,14 @@ mod tests {
     fn a_forced_run_rechecks_everyone_once_and_can_resume() {
         let mut conn = linked_catalog();
         for (key, albums) in [("a", 2), ("b", 1), ("c", 0)] {
-            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2026-11-02T10:00:00+00:00", albums)
+            save_artist_singles(&mut conn, key, key, &format!("mbid-{key}"), &[], "2026-11-02T10:00:00+00:00", albums, "verified")
                 .unwrap();
         }
         assert!(due_keys(&conn, None).is_empty());
         let cutoff = "2026-11-02T12:00:00+00:00";
         assert_eq!(due_keys(&conn, Some(cutoff)), ["a", "b", "c"]);
         // After "a" is rechecked at 13:00 a resumed forced run carries on with the rest.
-        save_artist_singles(&mut conn, "a", "a", "mbid-a", &[], "2026-11-02T13:00:00+00:00", 2).unwrap();
+        save_artist_singles(&mut conn, "a", "a", "mbid-a", &[], "2026-11-02T13:00:00+00:00", 2, "verified").unwrap();
         assert_eq!(due_keys(&conn, Some(cutoff)), ["b", "c"]);
         assert_eq!(due_artists(&conn, u32::MAX, Some(cutoff)).unwrap().1, 2);
     }
@@ -1205,5 +1468,153 @@ mod tests {
             Vec::new()
         });
         assert_eq!(calls, MAX_RELATIONSHIP_LOOKUPS);
+    }
+
+    fn confirmed(track: &str, source: Source) -> TrackSingle {
+        TrackSingle {
+            track_title: track.into(),
+            single_mbid: format!("s-{track}"),
+            single_title: track.into(),
+            single_year: Some(1991),
+            confidence: Confidence::Confirmed,
+            source,
+        }
+    }
+
+    fn name_match(conn: &Connection, key: &str, mbid: &str) {
+        conn.execute(
+            "INSERT INTO track_singles_name_matches (name_key, mbid) VALUES (?1, ?2)",
+            [key, mbid],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_single_confirmed_track_is_not_believed_for_a_name_match_alone() {
+        let rows = vec![confirmed("Song", Source::TitleMatch)];
+        let gated = gate_name_match(rows, false);
+        assert!(gated.iter().all(|row| row.confidence == Confidence::Possible));
+    }
+
+    #[test]
+    fn name_matches_are_believed_with_album_link_or_two_tracks() {
+        let one = || vec![confirmed("Song", Source::TitleMatch)];
+        assert_eq!(gate_name_match(one(), true)[0].confidence, Confidence::Confirmed);
+        let linked = vec![confirmed("Song", Source::Relationship)];
+        assert_eq!(gate_name_match(linked, false)[0].confidence, Confidence::Confirmed);
+        let two = vec![confirmed("One", Source::TitleMatch), confirmed("Two", Source::TitleMatch)];
+        assert!(gate_name_match(two, false)
+            .iter()
+            .all(|row| row.confidence == Confidence::Confirmed));
+        assert!(gate_name_match(Vec::new(), false).is_empty());
+    }
+
+    #[test]
+    fn albums_overlap_needs_the_same_title_and_a_near_year() {
+        let local = [album(1991, &[])];
+        let remote = |title: &str, year| vec![(title.to_string(), year)];
+        assert!(albums_overlap(&local, &remote("THE FIRE INSIDE", Some(1992))));
+        assert!(albums_overlap(&local, &remote("The Fire Inside", None)));
+        assert!(!albums_overlap(&local, &remote("The Fire Inside", Some(2005))));
+        assert!(!albums_overlap(&local, &remote("Other", Some(1991))));
+        assert!(!albums_overlap(&local, &[]));
+    }
+
+    #[test]
+    fn name_matched_artists_are_candidates_unless_you_decided_otherwise() {
+        let mut conn = linked_catalog();
+        conn.execute_batch(
+            "INSERT INTO albums VALUES
+                ('n1', 'Alpha', 'Nina', NULL, 2000, 2000),
+                ('n2', 'Beta', 'Various Artists', NULL, 2001, 2001),
+                ('n3', 'Gamma', 'Tombed', NULL, 2002, 2002),
+                ('n4', 'Delta', 'Special', NULL, 2003, 2003);
+             INSERT INTO musicbrainz_artist_link_tombstones VALUES ('tombed');",
+        )
+        .unwrap();
+        name_match(&conn, "nina", "mbid-nina");
+        name_match(&conn, "various artists", "mbid-va");
+        name_match(&conn, "tombed", "mbid-tombed");
+        name_match(&conn, "special", SPECIAL_ARTIST_MBIDS[0]);
+        // "a" is already linked, so its name match must not replace the link.
+        name_match(&conn, "a", "mbid-wrong");
+        // "e" was ignored by the user, "d" is a link with no mbid.
+        name_match(&conn, "e", "mbid-ignored");
+        name_match(&conn, "d", "mbid-unresolved");
+        assert_eq!(due_keys(&conn, None), ["a", "b", "c", "nina"]);
+        let status = status_for_connection(&conn).unwrap();
+        assert_eq!((status.checkable_artists, status.name_matched_artists), (4, 1));
+        let (artists, _) = due_artists(&conn, u32::MAX, None).unwrap();
+        let basis: Vec<_> = artists
+            .iter()
+            .map(|artist| (artist.local_artist_key.as_str(), artist.mbid.as_str(), artist.basis.as_str()))
+            .collect();
+        assert_eq!(basis[0], ("a", "mbid-a", "verified"));
+        assert_eq!(basis[3], ("nina", "mbid-nina", "name"));
+    }
+
+    #[test]
+    fn confirming_a_name_match_checks_the_artist_again() {
+        let mut conn = linked_catalog();
+        conn.execute_batch("INSERT INTO albums VALUES ('n1', 'Alpha', 'Nina', NULL, 2000, 2000)")
+            .unwrap();
+        name_match(&conn, "nina", "mbid-nina");
+        save_artist_singles(&mut conn, "nina", "Nina", "mbid-nina", &[], "2099-01-01T00:00:00Z", 1, "name")
+            .unwrap();
+        assert!(!due_keys(&conn, None).contains(&"nina".to_string()));
+        // The user links the same MusicBrainz artist: same id, new basis.
+        conn.execute(
+            "INSERT INTO musicbrainz_artist_links VALUES ('nina', 'Nina', 'mbid-nina', 0)",
+            [],
+        )
+        .unwrap();
+        assert!(due_keys(&conn, None).contains(&"nina".to_string()));
+    }
+
+    #[test]
+    fn name_matches_are_copied_from_the_cache_and_replaced_on_change() {
+        let mut conn = linked_catalog();
+        let cache = Connection::open_in_memory().unwrap();
+        cache
+            .execute_batch(
+                "CREATE TABLE artist_cache (name TEXT, mbid TEXT, cached_at TEXT);
+                 INSERT INTO artist_cache VALUES
+                    (' Nina ', 'mbid-nina', ''), ('empty', '  ', ''), ('', 'mbid-x', ''),
+                    ('dup', 'mbid-1', ''), ('dup', 'mbid-2', '');",
+            )
+            .unwrap();
+        assert_eq!(sync_name_matches(&mut conn, &cache, "1:1").unwrap(), 3);
+        assert_eq!(name_matches_stamp(&conn).as_deref(), Some("1:1"));
+        let stored: i64 = conn
+            .query_row("SELECT COUNT(*) FROM track_singles_name_matches WHERE name_key IN ('nina', 'dup')", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 2);
+        cache.execute("DELETE FROM artist_cache", []).unwrap();
+        sync_name_matches(&mut conn, &cache, "2:2").unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM track_singles_name_matches", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!((left, name_matches_stamp(&conn).as_deref()), (0, Some("2:2")));
+    }
+
+    #[test]
+    fn step_70_is_idempotent_and_keeps_earlier_checks_verified() {
+        let conn = in_memory();
+        install_schema(&conn).unwrap();
+        install_recheck_columns(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at, album_count)
+             VALUES ('a', 'mbid-a', 0, '2026-11-02T10:00:00+00:00', 1)",
+            [],
+        )
+        .unwrap();
+        assert!(!name_matches_exist(&conn).unwrap());
+        install_name_matches(&conn).unwrap();
+        install_name_matches(&conn).unwrap();
+        assert!(name_matches_exist(&conn).unwrap());
+        let basis: Option<String> = conn
+            .query_row("SELECT basis FROM track_singles_checks", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(basis, None, "NULL reads as verified in the due query");
     }
 }

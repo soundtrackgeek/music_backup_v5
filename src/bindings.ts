@@ -4965,11 +4965,13 @@ export type TrackDebutTimelineYear = {
 
 /**  Where the library stands, read from the catalog so it survives restarts. */
 export type TrackSinglesStatus = {
-	/**  Artists linked to MusicBrainz; the only ones that can be checked. */
-	linkedArtists: number,
+	/**  Artists that can be checked: linked to MusicBrainz, or matched by name. */
+	checkableArtists: number,
+	/**  How many of those only have a name match (no link you confirmed). */
+	nameMatchedArtists: number,
 	/**
-	 *  Linked artists whose result is up to date: checked within 90 days, with
-	 *  the same MusicBrainz link and album count as when they were checked.
+	 *  Checkable artists whose result is up to date: checked within 90 days, with
+	 *  the same MusicBrainz id, basis and album count as when they were checked.
 	 */
 	checkedArtists: number,
 	dueArtists: number,

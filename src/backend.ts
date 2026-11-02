@@ -2807,7 +2807,8 @@ export async function startTrackSingles(limit: number, force = false): Promise<n
 export async function getTrackSinglesStatus(): Promise<TrackSinglesStatus> {
   if (!isTauriRuntime()) {
     return {
-      linkedArtists: 0,
+      checkableArtists: 0,
+      nameMatchedArtists: 0,
       checkedArtists: 0,
       dueArtists: 0,
       confirmedSingles: 0,

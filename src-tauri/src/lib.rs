@@ -548,6 +548,8 @@ async fn start_track_singles(app: AppHandle, limit: u32, force: bool) -> Result<
                     .to_string(),
             );
         }
+        // Copy the artist-name cache first so the run knows its artists up front.
+        let _ = singles::ensure_name_matches(&app);
         // A forced run rechecks every artist last checked before now. Storing the
         // cut-off (not a flag) lets a paused or interrupted run resume with only
         // the artists it has not reached yet.
@@ -568,6 +570,8 @@ async fn start_track_singles(app: AppHandle, limit: u32, force: bool) -> Result<
 #[specta::specta]
 async fn get_track_singles_status(app: AppHandle) -> Result<singles::TrackSinglesStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        // Cheap when the cache file is unchanged; a failure only hides name matches.
+        let _ = singles::ensure_name_matches(&app);
         let (conn, _) = db::open_read(&app).map_err(|error| error.to_string())?;
         singles::status_for_connection(&conn).map_err(|error| error.to_string())
     })
