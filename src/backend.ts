@@ -176,6 +176,7 @@ import type {
   DiscogsCredentialStatus,
   SaveDiscogsCredentialsRequest,
   LastFmArtistImageRefreshSummary,
+  TrackSinglesRefreshSummary,
   LastFmAlbumPopularity,
   LastFmRelatedAlbums,
   LastFmArtistPopularity,
@@ -2789,6 +2790,20 @@ export async function refreshLastFmArtistImages(limit = 50): Promise<LastFmArtis
     } satisfies LastFmArtistImageRefreshSummary;
   }
   return (commands.refreshLastfmArtistImages(limit)).then((summary) => { invalidateArtwork(); return summary; });
+}
+
+export async function refreshTrackSingles(limit = 25): Promise<TrackSinglesRefreshSummary> {
+  if (!isTauriRuntime()) {
+    return {
+      requested: 0,
+      artistsChecked: 0,
+      singlesFound: 0,
+      failed: 0,
+      remaining: 0,
+      message: "Finding album singles is available in the desktop app.",
+    } satisfies TrackSinglesRefreshSummary;
+  }
+  return commands.refreshTrackSingles(limit);
 }
 
 export async function getLastFmArtistPopularity(

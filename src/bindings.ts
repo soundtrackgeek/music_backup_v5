@@ -41,6 +41,7 @@ export const commands = {
 	sonicSavePlaylist: (seedKey: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_playlist", { seedKey, name }),
 	acknowledgeCatalogRevision: (revision: string) => __TAURI_INVOKE<void>("acknowledge_catalog_revision", { revision }),
 	refreshLastfmArtistImages: (limit: number) => __TAURI_INVOKE<LastFmArtistImageRefreshSummary>("refresh_lastfm_artist_images", { limit }),
+	refreshTrackSingles: (limit: number) => __TAURI_INVOKE<TrackSinglesRefreshSummary>("refresh_track_singles", { limit }),
 	searchWishListMusicbrainz: (input: WishListMusicBrainzSearchRequest) => __TAURI_INVOKE<WishListMusicBrainzSearchResponse>("search_wish_list_musicbrainz", { input }),
 	addWishListMusicbrainzCandidate: (input: AddWishListMusicBrainzCandidateRequest) => __TAURI_INVOKE<AddWishListMusicBrainzCandidateResponse>("add_wish_list_musicbrainz_candidate", { input }),
 	importMusicbrainzOriginCountries: (request: MusicBrainzOriginCountryImportRequest) => __TAURI_INVOKE<MusicBrainzOriginCountryImportSummary>("import_musicbrainz_origin_countries", { request }),
@@ -4959,6 +4960,15 @@ export type TrackDebutTimelineYear = {
 	year: number,
 	trackCount: number,
 	representativeTrack: TrackDebutTimelineTrack | null,
+};
+
+export type TrackSinglesRefreshSummary = {
+	requested: number,
+	artistsChecked: number,
+	singlesFound: number,
+	failed: number,
+	remaining: number,
+	message: string,
 };
 
 export type TrackTimeline = {

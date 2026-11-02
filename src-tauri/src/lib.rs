@@ -33,6 +33,7 @@ mod music_map;
 mod musicbrainz;
 mod musicbrainz_sync;
 mod published_charts;
+mod singles;
 mod sonic;
 mod sonic_queue;
 mod sonic_failures;
@@ -524,6 +525,16 @@ async fn refresh_lastfm_artist_images(
     limit: u32,
 ) -> Result<jobs::JobOutput<lastfm::LastFmArtistImageRefreshSummary>, String> {
     jobs::execute_typed(app,"portraits",serde_json::json!({"limit":limit})).await
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+#[specta::specta]
+async fn refresh_track_singles(
+    app: AppHandle,
+    limit: u32,
+) -> Result<jobs::JobOutput<singles::TrackSinglesRefreshSummary>, String> {
+    jobs::execute_typed(app, "trackSingles", serde_json::json!({"limit":limit})).await
 }
 
 #[cfg(not(test))]

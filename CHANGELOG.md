@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.210.0] - 2026-11-02
+
+### Added
+- **Album singles**: Music Library can now work out which album tracks were officially released as singles, so Aurora and Tonehavn can mark them with a 💿. Use **Settings → Providers → Album singles → Find singles for 25 artists** (repeat it to work through the library; each batch skips artists checked in the last 90 days). For every artist linked to MusicBrainz it reads the artist's Single release groups, and for albums whose MusicBrainz release group is already cached it also reads MusicBrainz's own `single from` links. A link is trusted outright. A title match counts as **confirmed** only when the single was first released from one year before to three years after the album, so a later greatest-hits single does not mark the original album; other title matches are saved as **possible** and are never shown. Live, remix, demo, DJ-mix and compilation groups are ignored, and version tags such as "(Single Version)" or "- 2011 Remaster" do not stop a match. Results go to the new `track_singles` catalog table (schema version 68), keyed by `lower(trim(album_artist_display))` and `lower(trim(title))` like the Last.fm popularity cache. Discogs is not used yet. The Music Library album page does not show the 💿 yet.
+
 ## [0.209.2] - 2026-10-31
 
 ### Added

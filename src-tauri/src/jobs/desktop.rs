@@ -122,6 +122,17 @@ const HANDLERS: &[Registration] = &[
         )?)
     ),
     registration!(
+        "trackSingles",
+        "Find album singles",
+        false,
+        true,
+        true,
+        |app, p| encode(crate::singles::refresh_track_singles(
+            app.clone(),
+            serde_json::from_value(p["limit"].clone())?
+        )?)
+    ),
+    registration!(
         "portraits",
         "Last.fm portraits",
         false,

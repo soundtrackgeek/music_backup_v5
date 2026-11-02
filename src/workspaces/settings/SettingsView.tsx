@@ -3,6 +3,7 @@ import { RotateCcw } from "lucide-react";
 import { AiSettingsPanel } from "../../components/AiSettingsPanel";
 import { DiscogsSettingsPanel } from "../../components/DiscogsSettingsPanel";
 import { LastFmSettingsPanel } from "../../components/LastFmSettingsPanel";
+import { TrackSinglesSettingsPanel } from "../../components/TrackSinglesSettingsPanel";
 import { FanartSettingsPanel } from "../../components/FanartSettingsPanel";
 import { DeemixSettingsPanel } from "../../components/DeemixSettingsPanel";
 import { SoulseekSettingsPanel } from "../../components/SoulseekSettingsPanel";
@@ -43,6 +44,7 @@ export function SettingsView({ model }: { model: AppModel }) {
         <SettingsSection id="providers">
           <DiscogsSettingsPanel />
           <LastFmSettingsPanel />
+          <TrackSinglesSettingsPanel />
           <FanartSettingsPanel />
           <DeemixSettingsPanel
             downloadPath={settings.deemixDownloadPath}
