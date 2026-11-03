@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
-pub(super) const LATEST_SCHEMA_VERSION: i32 = 70;
+pub(super) const LATEST_SCHEMA_VERSION: i32 = 71;
 
 type StepFn = fn(&Connection) -> Result<()>;
 type VerifyFn = fn(&Connection) -> Result<bool>;
@@ -207,6 +207,12 @@ const MIGRATIONS: &[Migration] = &[
         version: 70,
         description: "album singles for artists matched by name",
         up: crate::singles::install_name_matches,
+        verify: Some(phase_seventy_schema_exists),
+    },
+    Migration {
+        version: 71,
+        description: "recheck album singles that used reissue years",
+        up: crate::singles::install_original_year_recheck,
         verify: Some(phase_seventy_schema_exists),
     },
 ];

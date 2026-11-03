@@ -402,6 +402,30 @@ pub(crate) fn install_name_matches(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Schema step 71: checks made by 0.210.0 to 0.211.0 measured albums by their
+/// reissue year. Artists with an album whose `year` is missing or differs from
+/// its `release_year` are marked due again (the stored album count no longer
+/// matches), so only they are rechecked.
+pub(crate) fn install_original_year_recheck(conn: &Connection) -> Result<()> {
+    let has_albums: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'table' AND name = 'albums'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_albums || !column_exists(conn, "track_singles_checks", "album_count")? {
+        return Ok(());
+    }
+    let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
+    conn.execute_batch(&format!(
+        "UPDATE track_singles_checks SET album_count = NULL
+         WHERE local_artist_key IN (
+            SELECT {key_sql} FROM albums
+            WHERE release_year IS NOT NULL AND (year IS NULL OR year <> release_year))"
+    ))
+    .context("Could not mark singles checks that used reissue years for a recheck")?;
+    Ok(())
+}
+
 pub(crate) fn name_matches_exist(conn: &Connection) -> Result<bool> {
     Ok(column_exists(conn, "track_singles_checks", "basis")?
         && conn.query_row(
@@ -818,10 +842,14 @@ fn due_artists(
     Ok((artists, remaining))
 }
 
+/// The album's own year. Only `year` (the original release) is used, never
+/// `release_year`, which is often a reissue (1983 album, 1999 reissue) and would
+/// push the album far from its singles. Without a `year` the album has no year,
+/// so a title match cannot be confirmed (a `single from` link still can).
 fn local_albums(conn: &Connection, artist: &LocalArtist) -> Result<Vec<AlbumContext>> {
     let key_sql = crate::identity::catalog_artist_key_sql("album_artist_display");
     let mut albums = conn.prepare(&format!(
-        "SELECT id, album, COALESCE(release_year, year) FROM albums
+        "SELECT id, album, year FROM albums
          WHERE {key_sql} = ?1 AND NULLIF(TRIM(COALESCE(album, '')), '') IS NOT NULL"
     ))?;
     let rows = albums
@@ -1616,5 +1644,70 @@ mod tests {
             .query_row("SELECT basis FROM track_singles_checks", [], |row| row.get(0))
             .unwrap();
         assert_eq!(basis, None, "NULL reads as verified in the due query");
+    }
+
+    #[test]
+    fn albums_use_their_original_year_not_a_reissue_year() {
+        let conn = in_memory();
+        conn.execute_batch(
+            "CREATE TABLE albums (
+                id TEXT PRIMARY KEY, album TEXT, album_artist_display TEXT, artist_identity_key TEXT,
+                year INTEGER, release_year INTEGER);
+             CREATE TABLE tracks (id TEXT PRIMARY KEY, album_id TEXT, title TEXT);
+             INSERT INTO albums VALUES
+                ('w', 'I Don''t Speak the Language', 'Matthew Wilder', NULL, 1983, 1999),
+                ('v', 'Only Release Year', 'Matthew Wilder', NULL, NULL, 2001);
+             INSERT INTO tracks VALUES ('t1', 'w', 'Break My Stride'), ('t2', 'w', 'The Kid''s American');",
+        )
+        .unwrap();
+        let artist = LocalArtist {
+            local_artist_key: "matthew wilder".into(),
+            display_artist: "Matthew Wilder".into(),
+            mbid: "mbid".into(),
+            basis: "name".into(),
+        };
+        let mut albums = local_albums(&conn, &artist).unwrap();
+        albums.sort_by(|left, right| left.title.cmp(&right.title));
+        assert_eq!(albums[0].year, Some(1983), "original year wins over the 1999 reissue");
+        assert_eq!(albums[1].year, None, "release year is never used");
+        // With the original year the 1983 single is confirmed, as MusicBrainz lists it.
+        let found = match_by_title(&albums[0], &[single("s1", "Break My Stride", 1983)]);
+        assert_eq!(found[0].confidence, Confidence::Confirmed);
+    }
+
+    #[test]
+    fn step_71_rechecks_artists_whose_album_year_is_missing_or_differs() {
+        let conn = in_memory();
+        conn.execute_batch(
+            "CREATE TABLE albums (
+                id TEXT PRIMARY KEY, album TEXT, album_artist_display TEXT, artist_identity_key TEXT,
+                year INTEGER, release_year INTEGER);
+             INSERT INTO albums VALUES
+                ('r', 'Reissued', 'Reissued Act', NULL, 1983, 1999),
+                ('s', 'Same', 'Steady Act', NULL, 1990, 1990),
+                ('n', 'No Year', 'Unknown Act', NULL, NULL, 2001);",
+        )
+        .unwrap();
+        install_schema(&conn).unwrap();
+        install_recheck_columns(&conn).unwrap();
+        for key in ["reissued act", "steady act", "unknown act"] {
+            conn.execute(
+                "INSERT INTO track_singles_checks (local_artist_key, artist_mbid, single_count, checked_at, album_count)
+                 VALUES (?1, 'mbid', 0, '2099-01-01T00:00:00Z', 1)",
+                [key],
+            )
+            .unwrap();
+        }
+        install_original_year_recheck(&conn).unwrap();
+        install_original_year_recheck(&conn).unwrap();
+        let mut marked: Vec<String> = conn
+            .prepare("SELECT local_artist_key FROM track_singles_checks WHERE album_count IS NULL")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        marked.sort();
+        assert_eq!(marked, ["reissued act", "unknown act"]);
     }
 }

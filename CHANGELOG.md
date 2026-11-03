@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.212.1] - 2026-11-03
+
+### Fixed
+- **Album singles used the reissue year**: an album's age was taken from its Release Year, so a 1983 album with a 1999 reissue looked like a 1999 album. Its 1983 singles then fell outside the window around the album and were saved as "possible", which are never shown (for example "Break My Stride" and "The Kid's American" on Matthew Wilder's *I Don't Speak the Language*). Matching now uses only the album's **Year**, never Release Year; an album with no Year cannot confirm a title match (a MusicBrainz `single from` link still can). About one album in seven in the library has two different years, so this affected many artists.
+- Schema version 71 marks the artists whose albums have a missing Year or a different Release Year for a recheck, so the next **Find singles for all artists** or **Continue** corrects them without a full recheck.
+
 ## [0.212.0] - 2026-11-02
 
 ### Added
