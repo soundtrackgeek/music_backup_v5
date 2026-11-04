@@ -2972,26 +2972,67 @@ fn resolve_destination_mappings(
     Ok(inputs)
 }
 
+/// Folder names compare equal when they differ only by case, by how Windows-illegal
+/// characters were written (`:` as `_`, a space, or nothing), or by repeated spacing.
+/// Older library folders wrote `Tail: Fievel` as `Tail  Fievel`, while Aurora's Inbox
+/// writes `Tail_ Fievel`; both are the same release.
+fn folder_name_match_key(name: &str) -> String {
+    name.chars()
+        .map(|character| {
+            if matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '_'
+            ) {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 fn find_case_insensitive_child(root: &Path, wanted: &str) -> Result<Option<PathBuf>> {
+    let wanted_key = folder_name_match_key(wanted);
+    let mut equivalent: Vec<PathBuf> = Vec::new();
     for entry in fs::read_dir(root)
         .with_context(|| format!("Could not inspect destination root {}", root.display()))?
     {
         let entry = entry?;
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .eq_ignore_ascii_case(wanted)
-        {
-            if !entry.file_type()?.is_dir() {
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        let exact = file_name.eq_ignore_ascii_case(wanted);
+        if !exact && (wanted_key.is_empty() || folder_name_match_key(&file_name) != wanted_key) {
+            continue;
+        }
+        if !entry.file_type()?.is_dir() {
+            if exact {
                 bail!(
                     "The destination name is occupied by a non-folder entry: {}",
                     entry.path().display()
                 );
             }
+            continue;
+        }
+        if exact {
             return Ok(Some(entry.path()));
         }
+        equivalent.push(entry.path());
     }
-    Ok(None)
+    match equivalent.len() {
+        0 | 1 => Ok(equivalent.pop()),
+        _ => bail!(
+            "More than one existing library folder matches {wanted}: {}. Rename or remove the duplicates first",
+            equivalent
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
 }
 
 fn ensure_destination_available(root: &Path, destination: &Path) -> Result<()> {
@@ -5849,6 +5890,49 @@ mod tests {
             .expect_err("case collision");
 
         assert!(error.to_string().contains("case-insensitive"));
+    }
+
+    #[test]
+    fn destination_mapping_replaces_folders_that_differ_only_by_illegal_character_spelling() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        let selected = temp.path().join("inbox");
+        fs::create_dir_all(root.join("James Horner - An American Tail  Fievel Goes West (1991)"))
+            .expect("existing");
+        fs::create_dir_all(root.join("Lorne Balfe - Terminator Genisys (2015)")).expect("other");
+        let first = selected.join("James Horner - An American Tail_ Fievel Goes West (1991)");
+        let second = selected.join("Lorne Balfe - Terminator_ Genisys (2015)");
+        let third = selected.join("Someone - Brand New (2020)");
+        for folder in [&first, &second, &third] {
+            fs::create_dir_all(folder).expect("source");
+        }
+
+        let inputs = resolve_destination_mappings(&selected, &root, vec![first, second, third])
+            .expect("mappings");
+
+        assert!(matches!(inputs[0].action, BatchAlbumAction::Replace));
+        assert_eq!(
+            inputs[0].destination,
+            root.join("James Horner - An American Tail  Fievel Goes West (1991)")
+        );
+        assert!(matches!(inputs[1].action, BatchAlbumAction::Replace));
+        assert!(matches!(inputs[2].action, BatchAlbumAction::Add));
+    }
+
+    #[test]
+    fn destination_mapping_rejects_ambiguous_equivalent_library_folders() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("library");
+        let selected = temp.path().join("inbox");
+        fs::create_dir_all(root.join("A - B  C (2000)")).expect("one");
+        fs::create_dir_all(root.join("A - B_ C (2000)")).expect("two");
+        let source = selected.join("A - B C (2000)");
+        fs::create_dir_all(&source).expect("source");
+
+        let error = resolve_destination_mappings(&selected, &root, vec![source])
+            .expect_err("ambiguous");
+
+        assert!(error.to_string().contains("More than one existing library folder"));
     }
 
     #[test]

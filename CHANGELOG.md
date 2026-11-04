@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.212.2] - 2026-11-04
+
+### Fixed
+- **Aurora could not replace an album whose folder name spells a colon differently**: the Aurora bridge treated an incoming album as a replacement only when a library folder had exactly the same name (ignoring case). Aurora's Inbox writes `An American Tail_ Fievel Goes West` while older library folders say `An American Tail  Fievel Goes West`, so the album was previewed as an addition and then refused with "The selected albums are already represented in the catalog". Folder names that differ only by Windows-illegal characters (`: " / \ | ? * < >`), underscores, repeated spaces or case are now the same release and are previewed as a replacement of the existing folder. An exact name still wins, and two different library folders that both match stop the preview with a clear message instead of guessing.
+
 ## [0.212.1] - 2026-11-03
 
 ### Fixed
