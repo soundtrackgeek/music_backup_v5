@@ -322,10 +322,7 @@ fn create_removal_backup(
     if !db_path.exists() {
         return Ok(None);
     }
-    let directory = db_path
-        .parent()
-        .ok_or_else(|| anyhow!("Database path has no parent"))?
-        .join("backups");
+    let directory = crate::db::backup_directory_for_db_path(db_path)?;
     fs::create_dir_all(&directory)?;
     let sequence = BACKUP_FILENAME_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let path = directory.join(format!(

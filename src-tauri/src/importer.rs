@@ -5363,10 +5363,7 @@ fn create_backup(
         return Ok(None);
     }
 
-    let backup_dir = db_path
-        .parent()
-        .ok_or_else(|| anyhow!("Database path has no parent directory"))?
-        .join("backups");
+    let backup_dir = crate::db::backup_directory_for_db_path(db_path)?;
     fs::create_dir_all(&backup_dir).context("Could not create backup directory")?;
 
     let backup_path = copy_database_to_unique_backup(db_path, &backup_dir)?;

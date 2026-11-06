@@ -189,6 +189,11 @@ Music Library must be running; missed backups catch up after sleep or restart.
 Retention removes only this computer's validated automatic archives after a
 new backup succeeds. Manual and other computers' backups remain available.
 
+Music Library 0.213.0 saves its database backups (the safety copies made before imports,
+album removals, restores and Music Tools fixes) to **OneDrive\_musicbackup**, so OneDrive keeps
+them off this computer. Backups already in the old `%APPDATA%\com.local.musiclibrary\backups`
+folder stay listed and restorable. Without a OneDrive folder the old location is used.
+
 Music Library also provides **Tools → Audio analysis → Backup and cross-PC reuse**.
 Backups default to **OneDrive\\_musicbackup\\sonic-analysis**. Save a checksummed
 archive of completed features, merge it on another computer, then run **Verify

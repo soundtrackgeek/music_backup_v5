@@ -29,23 +29,25 @@ pub fn restore_database_backup_for_app(
 }
 
 pub fn list_database_backups(conn: &Connection, db_path: &Path) -> Result<Vec<DatabaseBackup>> {
-    let backup_dir = backup_directory_for_db_path(db_path)?;
-    if !backup_dir.exists() {
-        return Ok(Vec::new());
-    }
-
     let metadata_by_path = database_backup_metadata(conn)?;
-    let mut backups = fs::read_dir(&backup_dir)
-        .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| sqlite_file_path(&entry.path()))
-        .map(|entry| {
-            let path = entry.path();
-            let key = backup_path_key(&path);
-            let metadata = metadata_by_path.get(&key);
-            database_backup_from_file(&path, metadata)
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let mut backups = Vec::new();
+    for backup_dir in backup_directories_for_db_path(db_path)? {
+        if !backup_dir.exists() {
+            continue;
+        }
+        let listed = fs::read_dir(&backup_dir)
+            .with_context(|| format!("Could not read backup directory {}", backup_dir.display()))?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| sqlite_file_path(&entry.path()))
+            .map(|entry| {
+                let path = entry.path();
+                let key = backup_path_key(&path);
+                let metadata = metadata_by_path.get(&key);
+                database_backup_from_file(&path, metadata)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        backups.extend(listed);
+    }
 
     backups.sort_by(|left, right| right.created_at.cmp(&left.created_at));
     Ok(backups)
@@ -154,11 +156,63 @@ fn restore_database_backup_exclusive(
     })
 }
 
-pub(super) fn backup_directory_for_db_path(db_path: &Path) -> Result<PathBuf> {
+/// Folder created inside the user's OneDrive so new backups are synced off this machine.
+const ONEDRIVE_BACKUP_FOLDER: &str = "_musicbackup";
+
+/// The folder next to the database that held every backup before backups moved to OneDrive.
+fn legacy_backup_directory(db_path: &Path) -> Result<PathBuf> {
     Ok(db_path
         .parent()
         .ok_or_else(|| anyhow!("Database path has no parent directory"))?
         .join("backups"))
+}
+
+/// First existing OneDrive root among `roots`, with the backup folder appended.
+fn onedrive_backup_directory_in(roots: &[PathBuf]) -> Option<PathBuf> {
+    roots
+        .iter()
+        .find(|root| root.is_dir())
+        .map(|root| root.join(ONEDRIVE_BACKUP_FOLDER))
+}
+
+#[cfg(not(test))]
+fn onedrive_backup_directory() -> Option<PathBuf> {
+    let mut roots = Vec::new();
+    for variable in ["OneDrive", "OneDriveConsumer"] {
+        if let Some(value) = std::env::var_os(variable).filter(|value| !value.is_empty()) {
+            roots.push(PathBuf::from(value));
+        }
+    }
+    if let Some(profile) = std::env::var_os("USERPROFILE") {
+        roots.push(PathBuf::from(profile).join("OneDrive"));
+    }
+    onedrive_backup_directory_in(&roots)
+}
+
+// Tests keep backups beside the temporary database and never touch the real OneDrive.
+#[cfg(test)]
+fn onedrive_backup_directory() -> Option<PathBuf> {
+    None
+}
+
+/// Where new backups are written: `<OneDrive>\_musicbackup`, or the old
+/// `backups` folder beside the database when OneDrive is not available.
+pub(crate) fn backup_directory_for_db_path(db_path: &Path) -> Result<PathBuf> {
+    match onedrive_backup_directory() {
+        Some(directory) => Ok(directory),
+        None => legacy_backup_directory(db_path),
+    }
+}
+
+/// Every folder that may hold restorable backups, current folder first. The old
+/// folder stays listed so backups made before the move to OneDrive still restore.
+pub(crate) fn backup_directories_for_db_path(db_path: &Path) -> Result<Vec<PathBuf>> {
+    let mut directories = vec![backup_directory_for_db_path(db_path)?];
+    let legacy = legacy_backup_directory(db_path)?;
+    if !directories.contains(&legacy) {
+        directories.push(legacy);
+    }
+    Ok(directories)
 }
 
 fn database_backup_metadata(conn: &Connection) -> Result<HashMap<String, BackupMetadata>> {
@@ -275,15 +329,23 @@ fn resolve_database_backup_path(db_path: &Path, backup_path: &str) -> Result<Pat
         bail!("Choose a database backup before restoring");
     }
 
-    let backup_dir = backup_directory_for_db_path(db_path)?;
-    fs::create_dir_all(&backup_dir)
-        .with_context(|| format!("Could not create backup directory {}", backup_dir.display()))?;
-    let backup_dir = backup_dir.canonicalize().with_context(|| {
-        format!(
-            "Could not resolve backup directory {}",
-            backup_dir.display()
-        )
-    })?;
+    let mut backup_dirs = Vec::new();
+    for (index, directory) in backup_directories_for_db_path(db_path)?
+        .into_iter()
+        .enumerate()
+    {
+        if index == 0 {
+            fs::create_dir_all(&directory).with_context(|| {
+                format!("Could not create backup directory {}", directory.display())
+            })?;
+        }
+        if let Ok(canonical) = directory.canonicalize() {
+            backup_dirs.push(canonical);
+        } else if index == 0 {
+            bail!("Could not resolve backup directory {}", directory.display());
+        }
+    }
+    let backup_dir = backup_dirs[0].clone();
 
     let provided = PathBuf::from(trimmed);
     let candidate = if provided.is_absolute() {
@@ -302,7 +364,7 @@ fn resolve_database_backup_path(db_path: &Path, backup_path: &str) -> Result<Pat
     let candidate = candidate
         .canonicalize()
         .with_context(|| format!("Could not resolve database backup {}", candidate.display()))?;
-    if !candidate.starts_with(&backup_dir) {
+    if !backup_dirs.iter().any(|dir| candidate.starts_with(dir)) {
         bail!("Database backup must be inside the app backup directory");
     }
 
@@ -496,5 +558,27 @@ mod tests {
 
         drop(restored_conn);
         fs::remove_dir_all(temp_dir).expect("remove temp dir");
+    }
+
+    #[test]
+    fn onedrive_backup_directory_uses_first_existing_root() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let missing = temp.path().join("missing");
+        let root = temp.path().join("OneDrive");
+        fs::create_dir(&root).expect("onedrive root");
+
+        assert_eq!(
+            onedrive_backup_directory_in(&[missing.clone(), root.clone()]),
+            Some(root.join("_musicbackup"))
+        );
+        assert_eq!(onedrive_backup_directory_in(&[missing]), None);
+        assert_eq!(onedrive_backup_directory_in(&[]), None);
+    }
+
+    #[test]
+    fn backup_directories_keep_the_legacy_folder_after_the_move() {
+        let db_path = Path::new("C:/data/music-library.sqlite3");
+        let directories = backup_directories_for_db_path(db_path).expect("directories");
+        assert_eq!(directories, vec![Path::new("C:/data").join("backups")]);
     }
 }

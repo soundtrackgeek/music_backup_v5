@@ -108,8 +108,9 @@ mod tools;
 mod tools_fix;
 mod tools_musicbrainz;
 use backups::create_database_file_backup;
+pub(crate) use backups::backup_directory_for_db_path;
 #[cfg(test)]
-use backups::{backup_directory_for_db_path, list_database_backups, restore_database_backup};
+use backups::{list_database_backups, restore_database_backup};
 #[cfg(not(test))]
 pub(crate) use backups::{list_database_backups_for_app, restore_database_backup_for_app};
 pub(crate) use lifecycle::{pool_for_path, CatalogConnection};

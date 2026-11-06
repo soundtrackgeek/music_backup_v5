@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.213.0] - 2026-11-06
+
+### Changed
+- **Database backups now go to OneDrive**: the safety copies made before an import, an album removal or replacement, a restore and the artist-split and Music Tools fixes used to sit in `%APPDATA%\com.local.musiclibrary\backups`, beside the database they protect, so one disk failure took both. They are now written to `OneDrive\_musicbackup` (the folder is created on first use) and OneDrive syncs them off this computer. Backups you already have in the old folder still appear under **Settings > Data & Backups** and can still be restored; new backups are only written to OneDrive, and retention only prunes that folder. If no OneDrive folder is found, the app keeps using the old folder instead of failing the operation.
+
 ## [0.212.2] - 2026-11-04
 
 ### Fixed
