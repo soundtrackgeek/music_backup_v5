@@ -964,6 +964,7 @@ pub(crate) fn prepare_existing_album_deletion_sync(
     } else {
         fast_sync_album_identity_is_supported(&current_album, &desired_album)
     }) || scoped_sync_data_version(conn)? != data_version
+        || !fast_sync_album_tag_edit_is_consistent(&current_album, &desired_album, &tracks)
     {
         fast_supported = false;
     }
@@ -1080,10 +1081,13 @@ pub(crate) fn prepare_existing_file_fast_sync(
         Err(_) => return Ok(Some(fallback_candidate())),
     };
 
-    // An album-artist edit needs a complete file scan, even when the caller
-    // supplies just one changed file (including a one-track album).
+    // An album-artist, year or publisher edit needs a complete file scan, even when
+    // the caller supplies just one changed file (including a one-track album).
     if catalog_tracks.iter().any(|track| {
-        track.0 == target_id && track.4.album_artist_display != scanned.album_artist_display
+        track.0 == target_id
+            && (track.4.album_artist_display != scanned.album_artist_display
+                || track.4.year_raw != scanned.year_raw
+                || track.4.publisher != scanned.publisher)
     }) {
         return Ok(Some(
             prepare_existing_album_fast_sync(conn, &folder)
@@ -1435,16 +1439,13 @@ fn fast_sync_track_changes_are_supported(current: &TrackRow, desired: &TrackRow)
             || (!current.album_unique_id.is_empty()
                 && current.album_unique_id == desired.album_unique_id
                 && !desired.album.is_empty()))
-        && current.publisher == desired.publisher
         && (current.track_number_raw == desired.track_number_raw
             || (current.track_number.is_some() && current.track_number == desired.track_number))
-        && current.year_raw == desired.year_raw
         && current.album_unique_id == desired.album_unique_id
         && current.file_path == desired.file_path
         && current.filename == desired.filename
         && current.album_artist_display == desired.album_artist_display
         && current.track_number == desired.track_number
-        && current.year == desired.year
         && fast_sync_durations_are_equivalent(current.time_seconds, desired.time_seconds)
         && current.album_id == desired.album_id
 }
@@ -1475,6 +1476,11 @@ fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
     desired.genre = scanned.genre.clone();
     desired.canonical_genre = scanned.canonical_genre.clone();
     desired.genre_normalized = scanned.genre_normalized.clone();
+    // The tags on disk are the source of truth for descriptive album tags, so a
+    // year or publisher corrected in the files must reach the catalog.
+    desired.publisher = scanned.publisher.clone();
+    desired.year_raw = scanned.year_raw.clone();
+    desired.year = scanned.year;
     desired.album_rating_raw = scanned.album_rating_raw.clone();
     desired.album_rating = scanned.album_rating;
     desired.love = scanned.love.clone();
@@ -1532,8 +1538,23 @@ fn fast_sync_album_identity_is_supported(current: &ScopedAlbumState, desired: &F
                     .as_deref()
                     .is_some_and(|album| !album.is_empty())))
         && current.previous.album_artist_display == desired.album_artist_display
-        && current.previous.publisher == desired.publisher
-        && current.previous.year == desired.year
+}
+
+/// A changed album year or publisher is only an album-wide tag edit when every
+/// track carries the new value. A partly edited album waits for a reviewed import
+/// instead of letting the first track decide the album's value.
+fn fast_sync_album_tag_edit_is_consistent(
+    current: &ScopedAlbumState,
+    desired: &FinalAlbum,
+    tracks: &[ScopedTrackUpdate],
+) -> bool {
+    let year_agrees = current.previous.year == desired.year
+        || tracks.iter().all(|track| track.desired.year == desired.year);
+    let publisher_agrees = current.previous.publisher == desired.publisher
+        || tracks.iter().all(|track| {
+            empty_to_none(&track.desired.publisher) == desired.publisher.as_deref()
+        });
+    year_agrees && publisher_agrees
 }
 
 fn scoped_album_changed(current: &ScopedAlbumState, desired: &FinalAlbum) -> bool {
@@ -1687,6 +1708,7 @@ pub(crate) fn apply_existing_album_fast_sync(
                 || track.current.title != track.desired.title
                 || track.current.display_artist != track.desired.display_artist
                 || track.current.album_artist_display != track.desired.album_artist_display
+                || track.current.publisher != track.desired.publisher
         })
     {
         refresh_scoped_search_indexes(&tx, candidate.album_id(), &prepared.tracks)?;
@@ -6232,6 +6254,120 @@ mod tests {
     }
 
     #[test]
+    fn fast_sync_applies_year_and_publisher_edits_followed_by_ratings() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).unwrap();
+        let folder = folder.canonicalize().unwrap();
+        let files = [folder.join("01.mp3"), folder.join("02.mp3")];
+        for (index, path) in files.iter().enumerate() {
+            write_fast_sync_mp3(path, &format!("Track {index}"), None, "", 2008);
+            let mut tag = Tag::read_from_path(path).unwrap();
+            tag.set_track(index as u32 + 1);
+            tag.write_to_path(path, Version::Id3v24).unwrap();
+        }
+        let initial = scanned_fast_sync_tracks(&folder, "fast-album");
+        let (mut conn, old_run, _, _) = fast_sync_database(&initial[0]);
+        seed_fast_sync_track(&conn, old_run, 3, &initial[1]);
+        conn.execute("DELETE FROM albums WHERE id=?1", [&initial[0].album_id])
+            .unwrap();
+        seed_fast_sync_album(&conn, old_run, &initial);
+        db::rebuild_search_indexes(&conn).unwrap();
+        let album_id = initial[0].album_id.clone();
+
+        let edit = |path: &Path, rating: Option<u8>| {
+            let mut tag = Tag::read_from_path(path).unwrap();
+            tag.set_year(2012);
+            tag.set_text("TPUB", "New Label");
+            if let Some(rating) = rating {
+                tag.add_frame(Popularimeter {
+                    user: "MusicBee".to_owned(),
+                    rating,
+                    counter: 0,
+                });
+            }
+            tag.write_to_path(path, Version::Id3v24).unwrap();
+        };
+
+        // A year edited on only one file is not an album-wide edit yet.
+        edit(&files[0], Some(255));
+        for candidate in [
+            prepare_existing_album_fast_sync(&conn, &folder).unwrap(),
+            prepare_existing_file_fast_sync(&conn, &folder, &files[0])
+                .unwrap()
+                .unwrap(),
+        ] {
+            assert_eq!(
+                apply_existing_album_fast_sync(&mut conn, &candidate).unwrap(),
+                ExistingAlbumFastSyncOutcome::Fallback
+            );
+        }
+        let year: i32 = conn
+            .query_row("SELECT year FROM albums WHERE id=?1", [&album_id], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(year, 2008, "a partial edit leaves the catalog untouched");
+
+        // Once every file carries the corrected tags, the rating import is no longer blocked.
+        edit(&files[1], None);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &files[0])
+            .unwrap()
+            .unwrap();
+        let receipt = crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate)
+            .expect("year and publisher edits followed by a rating must synchronize");
+        let receipt = serde_json::to_value(receipt).unwrap();
+        assert_eq!(receipt["status"], "updated");
+        assert_eq!(receipt["changedTracks"], 2);
+        assert_eq!(receipt["changedAlbums"], 1);
+
+        let album: (i32, String, f64) = conn
+            .query_row(
+                "SELECT year, publisher, rating_completeness FROM albums WHERE id=?1",
+                [&album_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(album, (2012, "New Label".into(), 0.5));
+        let tracks: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tracks WHERE album_id=?1 AND year=2012 AND publisher='New Label'",
+                [&album_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tracks, 2);
+        let raw: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM raw_tracks WHERE year_value='2012' AND publisher='New Label'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(raw, 2);
+        let rated: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tracks WHERE album_id=?1 AND normalized_rating=100",
+                [&album_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rated, 1);
+        for table in ["track_search_fts", "album_search_fts"] {
+            let sql = format!(
+                "SELECT COUNT(*) FROM {table} WHERE {table} MATCH 'publisher : new' AND album_id=?1"
+            );
+            let count: i64 = conn.query_row(&sql, [&album_id], |r| r.get(0)).unwrap();
+            assert_eq!(count, if table == "track_search_fts" { 2 } else { 1 }, "{table}");
+        }
+        let repeated = prepare_existing_album_fast_sync(&conn, &folder).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &repeated).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
+    }
+
+    #[test]
     fn fast_sync_imports_title_edits_then_ratings_without_rewriting_mp3() {
         for exact_file in [false, true] {
             let temp = tempfile::tempdir().unwrap();
@@ -7143,7 +7279,8 @@ mod tests {
 
         write_fast_sync_mp3(&mp3, "Changed Title", None, "", 2008);
         let mut tags = Tag::read_from_path(&mp3).unwrap();
-        tags.set_text("TPUB", "Different Publisher");
+        // Renumbering reorders the album, so it still waits for a reviewed import.
+        tags.set_track(2);
         tags.write_to_path(&mp3, Version::Id3v24).unwrap();
         let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
             .expect("prepare unsupported sync")

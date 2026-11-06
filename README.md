@@ -1,5 +1,9 @@
 # Music Library
 
+## Tag edits and ratings sync together (0.213.1)
+
+The tags in your MP3 files are the source of truth. If you correct an album's **Year** or **Publisher** (for example to match RYM) and then rate its tracks in Aurora, Music Library now imports both in one automatic sync: the album, its tracks and the search indexes take the new year or publisher, and the ratings count straight away (for example in the Charts **100% rated** column). Before, such an album stayed at **Pending tag import** in Aurora until a reviewed import. The edit must be on every track of the album; a partly edited album, a changed track or disc number, or an album without an Album Unique Id still goes through a reviewed import.
+
 ## Faster Aurora imports (0.202.0)
 
 Adding albums from Aurora no longer rewrites the whole catalog. When an import only adds new albums, Music Library inserts just those albums, tracks and search entries, keeps every existing id, and rechecks chart links only if a new album or track could appear on a chart. Replacements, edits and removals still use the complete, verified snapshot replacement. When a new track does appear on a chart, only the chart links that actually change are written (0.202.1). Previews of pure additions stage only the new albums instead of copying the whole library (0.203.0). Smart playlists refresh in the background after an Aurora import, whether or not the desktop app is open (0.203.1). Smart playlists refresh in the background after the import instead of holding Aurora's dialog open, and the bridge reports named catalog steps for Aurora to display.

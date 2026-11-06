@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.213.1] - 2026-11-06
+
+### Fixed
+- **A corrected year or publisher no longer blocks Aurora's rating import**: when you changed an album's Year or Publisher tag (for example to match RYM) and then rated its tracks, Music Library refused the automatic sync with "requires reviewed reconciliation". Aurora kept showing **Pending tag import** and retrying, so the ratings never reached the library and the album stayed out of the Charts "100% rated" count (Bootstraps showed 2 of 3 albums). The tags in the files are now the source of truth: a Year or Publisher edit is written to the album, its tracks and the raw rows, the search indexes are refreshed, and the change appears in the library update history in the same sync as the ratings.
+- A Year or Publisher change is applied only when every track in the album carries the new value; an album edited on just some of its files still waits for a reviewed import instead of letting the first track decide. A single-file sync whose Year or Publisher differs from the catalog now reads the whole album folder first. Albums that were stored without an Album Unique Id (their id contains the year) and track or disc renumbering still use the reviewed import.
+- Albums already stuck as **Pending tag import** stay paused: Aurora stops its automatic retries after three refused attempts. After updating Music Library, make any new tag edit on one of the album's tracks in Aurora (for example change a rating and change it back) and the folder is queued again and syncs.
+
 ## [0.213.0] - 2026-11-06
 
 ### Changed
