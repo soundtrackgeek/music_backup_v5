@@ -173,6 +173,19 @@ export function ArtistChartPanel({
             value={request.excludedYearTo}
             onChange={(excludedYearTo) => onChange({ excludedYearTo })}
           />
+          <label
+            className="toggle-row"
+            title="Show artists with an album or track in these years, but count all their albums and tracks"
+          >
+            <input
+              type="checkbox"
+              checked={request.yearsPickArtists}
+              onChange={(event) =>
+                onChange({ yearsPickArtists: event.target.checked })
+              }
+            />
+            <span>Use years to pick artists, count their whole career</span>
+          </label>
         </div>
 
         <ChartAdvancedControls

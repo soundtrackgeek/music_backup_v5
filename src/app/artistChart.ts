@@ -54,6 +54,7 @@ export function createArtistChartRequest(): ArtistChartRequest {
     minCompleteAlbums: null,
     maxCompleteAlbums: null,
     includeVariousArtists: false,
+    yearsPickArtists: false,
     limit: 100,
     offset: 0,
   };
@@ -88,6 +89,7 @@ export function countArtistChartFilters(request: ArtistChartRequest) {
     request.maxCompleteAlbums != null,
     request.ratedThresholdPercent != null,
     request.includeVariousArtists,
+    request.yearsPickArtists,
     !sameSources(request.albumChartSources, defaults.albumChartSources),
     !sameSources(request.singleChartSources, defaults.singleChartSources),
   ].filter(Boolean).length;

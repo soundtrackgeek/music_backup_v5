@@ -148,6 +148,15 @@ describe("ArtistChartPanel", () => {
     );
   });
 
+  it("lets the years pick artists while counting their whole career", () => {
+    const props = renderPanel();
+
+    fireEvent.click(
+      screen.getByLabelText("Use years to pick artists, count their whole career"),
+    );
+    expect(props.onChange).toHaveBeenCalledWith({ yearsPickArtists: true });
+  });
+
   it("explains an empty chart", () => {
     renderPanel({ response: { ...response, rows: [], total: 0 } });
     expect(screen.getByText("No ranked artists.")).toBeTruthy();
@@ -165,6 +174,7 @@ describe("countArtistChartFilters", () => {
     request.includeVariousArtists = true;
     request.maxAlbums = 3;
     request.maxCompleteAlbums = 0;
-    expect(countArtistChartFilters(request)).toBe(6);
+    request.yearsPickArtists = true;
+    expect(countArtistChartFilters(request)).toBe(7);
   });
 });

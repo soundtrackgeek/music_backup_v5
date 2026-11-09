@@ -915,6 +915,12 @@ export type ArtistChartRequest = {
 	/**  Hide artists with more rated albums than this. */
 	maxCompleteAlbums?: number | null,
 	includeVariousArtists?: boolean,
+	/**
+	 *  When true, the year range and the excluded years only pick which artists
+	 *  appear (an album or track in those years). Their counts then cover their
+	 *  whole career, so a rated album from another decade still counts.
+	 */
+	yearsPickArtists?: boolean,
 	limit?: number,
 	offset?: number,
 };

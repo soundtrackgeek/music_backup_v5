@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.214.0] - 2026-11-09
+
+### Added
+- **Artist charts can use the years to pick artists and still count their whole career**: in **Charts > Artists**, **Year from/to** and **Exclude years** limit which albums and tracks are counted, so with 1980–1989 Johnny Cash showed 11 albums and no fully rated ones, because his rated albums are from earlier decades. The new **Use years to pick artists, count their whole career** checkbox under the year fields uses the years only to choose artists (those with an album or track in the range). Albums, tracks, rated albums, average score and the other columns then cover every album and track, so 1980–1989 with **Maximum rated albums** 0 now lists artists active in the 1980s who have no fully rated album at all. The option is off by default, is saved with the chart, and has no effect when no years are set.
+
 ## [0.213.1] - 2026-11-06
 
 ### Fixed

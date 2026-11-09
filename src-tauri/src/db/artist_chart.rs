@@ -68,6 +68,11 @@ pub struct ArtistChartRequest {
     pub max_complete_albums: Option<i64>,
     #[serde(default)]
     pub include_various_artists: bool,
+    /// When true, the year range and the excluded years only pick which artists
+    /// appear (an album or track in those years). Their counts then cover their
+    /// whole career, so a rated album from another decade still counts.
+    #[serde(default)]
+    pub years_pick_artists: bool,
     #[serde(default = "default_artist_chart_limit")]
     pub limit: u32,
     #[serde(default)]
@@ -92,6 +97,7 @@ impl Default for ArtistChartRequest {
             min_complete_albums: None,
             max_complete_albums: None,
             include_various_artists: false,
+            years_pick_artists: false,
             limit: default_artist_chart_limit(),
             offset: 0,
         }
@@ -179,23 +185,36 @@ pub(crate) fn artist_chart(
     let limit = request.limit.clamp(1, max_limit);
     let offset = request.offset;
 
-    let (album_where, mut album_values) =
-        build_where_clause(false, "", &request.filters);
-    let (track_where, track_values) = build_where_clause(true, "", &request.filters);
+    // With `years_pick_artists`, the years only choose the artists (the `active`
+    // flag below); the counts are built without them, so they cover the whole career.
+    let years_pick_artists = request.years_pick_artists
+        && (request.filters.year_from.is_some()
+            || request.filters.year_to.is_some()
+            || request.excluded_year_from.is_some()
+            || request.excluded_year_to.is_some());
+    let mut stats_filters = request.filters.clone();
+    let (stats_excluded_from, stats_excluded_to) = if years_pick_artists {
+        stats_filters.year_from = None;
+        stats_filters.year_to = None;
+        (None, None)
+    } else {
+        (request.excluded_year_from, request.excluded_year_to)
+    };
+    let (album_where, mut album_values) = build_where_clause(false, "", &stats_filters);
+    let (track_where, mut track_values) = build_where_clause(true, "", &stats_filters);
     let album_where = with_year_exclusion(
         album_where,
         &mut album_values,
         "a.year",
-        request.excluded_year_from,
-        request.excluded_year_to,
+        stats_excluded_from,
+        stats_excluded_to,
     );
-    let mut track_values = track_values;
     let track_where = with_year_exclusion(
         track_where,
         &mut track_values,
         "t.year",
-        request.excluded_year_from,
-        request.excluded_year_to,
+        stats_excluded_from,
+        stats_excluded_to,
     );
 
     // Inlined (not bound) so the SELECT-list placeholder order stays unchanged; the
@@ -242,6 +261,34 @@ pub(crate) fn artist_chart(
         track_charted
     };
     let track_select_values: Vec<Value> = published_ids.map(Value::Text).into_iter().collect();
+    // 1 when the album or track falls in the chosen years. The aggregation already
+    // reads every row, so this costs no extra pass. Years are i32s, never user text,
+    // so they are inlined to keep the placeholder order unchanged.
+    let in_years = |field: &str| -> String {
+        if !years_pick_artists {
+            return "1".to_string();
+        }
+        let mut parts = Vec::new();
+        if let Some(from) = request.filters.year_from {
+            parts.push(format!("{field} >= {from}"));
+        }
+        if let Some(to) = request.filters.year_to {
+            parts.push(format!("{field} <= {to}"));
+        }
+        let mut excluded = Vec::new();
+        if let Some(from) = request.excluded_year_from {
+            excluded.push(format!("{field} >= {from}"));
+        }
+        if let Some(to) = request.excluded_year_to {
+            excluded.push(format!("{field} <= {to}"));
+        }
+        if !excluded.is_empty() {
+            parts.push(format!("NOT COALESCE(({}), 0)", excluded.join(" AND ")));
+        }
+        format!("CASE WHEN {} THEN 1 ELSE 0 END", parts.join(" AND "))
+    };
+    let album_active = in_years("a.year");
+    let track_active = in_years("t.year");
     let album_from = browse_from_clause(false);
     // Same joins as the track browse query, but artist origin and info follow the
     // track's Artist so the artist-info filters judge the credited artist.
@@ -258,7 +305,8 @@ pub(crate) fn artist_chart(
                 COUNT(*) AS album_count,
                 SUM(CASE WHEN a.rating_completeness >= {rated_threshold:.9} THEN 1 ELSE 0 END) AS complete_albums,
                 SUM(CASE WHEN {album_charted} THEN 1 ELSE 0 END) AS charted_albums,
-                AVG(a.album_score) AS average_album_score
+                AVG(a.album_score) AS average_album_score,
+                MAX({album_active}) AS active
             {album_from} {album_where}
             GROUP BY artist_key
         ),
@@ -269,7 +317,8 @@ pub(crate) fn artist_chart(
                 COUNT(*) AS track_count,
                 SUM(CASE WHEN t.normalized_rating >= 100 THEN 1 ELSE 0 END) AS five_star_tracks,
                 SUM(CASE WHEN t.love = 'L' THEN 1 ELSE 0 END) AS loved_tracks,
-                SUM(CASE WHEN {track_charted} THEN 1 ELSE 0 END) AS charted_tracks
+                SUM(CASE WHEN {track_charted} THEN 1 ELSE 0 END) AS charted_tracks,
+                MAX({track_active}) AS active
             {track_from} {track_where}
             GROUP BY artist_key
         ),
@@ -284,7 +333,8 @@ pub(crate) fn artist_chart(
                 COALESCE(al.charted_albums, 0) AS charted_albums,
                 COALESCE(tr.charted_tracks, 0) AS charted_tracks,
                 COALESCE(al.complete_albums, 0) AS complete_albums,
-                al.average_album_score AS average_album_score
+                al.average_album_score AS average_album_score,
+                MAX(COALESCE(al.active, 0), COALESCE(tr.active, 0)) AS active
             FROM (
                 SELECT artist_key FROM album_stats
                 UNION
@@ -297,6 +347,9 @@ pub(crate) fn artist_chart(
 
     let mut outer_conditions = Vec::new();
     let mut outer_values: Vec<Value> = Vec::new();
+    if years_pick_artists {
+        outer_conditions.push("active = 1".to_string());
+    }
     let search = request.search_text.trim();
     if !search.is_empty() {
         outer_conditions.push("artist_name LIKE ? ESCAPE '\\'".to_string());
@@ -727,6 +780,43 @@ mod tests {
         let outside = artist_chart(&conn, excluded, 500).unwrap();
         assert_eq!(row(&outside, "Alpha").album_count, 1);
         assert_eq!(row(&outside, "Alpha").track_count, 2);
+    }
+
+    #[test]
+    fn years_can_pick_artists_while_counts_cover_the_whole_career() {
+        let conn = artist_chart_connection();
+        // Alpha's 1990 album is half rated; the fully rated one is from 1980.
+        let mut by_album = request("albums");
+        by_album.filters.year_from = Some(1985);
+        by_album.filters.year_to = Some(1995);
+        by_album.max_complete_albums = Some(0);
+        let by_album = artist_chart(&conn, by_album, 500).unwrap();
+        assert_eq!(row(&by_album, "Alpha").album_count, 1);
+
+        let mut career = request("albums");
+        career.filters.year_from = Some(1985);
+        career.filters.year_to = Some(1995);
+        career.years_pick_artists = true;
+        let whole = artist_chart(&conn, career.clone(), 500).unwrap();
+        // Zulu has no album or track in the range; Pet Shop Boys (1987) does.
+        assert_eq!(names(&whole), vec!["Alpha", "Pet Shop Boys"]);
+        assert_eq!(row(&whole, "Alpha").album_count, 2);
+        assert_eq!(row(&whole, "Alpha").track_count, 3);
+        assert_eq!(row(&whole, "Alpha").complete_albums, 1);
+        assert_eq!(whole.total, 2);
+
+        // The 1980 rated album now counts, so "no rated albums" leaves Alpha out.
+        career.max_complete_albums = Some(0);
+        assert!(artist_chart(&conn, career, 500).unwrap().rows.is_empty());
+
+        // Excluded years pick artists the same way: Alpha still has its 1980 album.
+        let mut outside = request("albums");
+        outside.excluded_year_from = Some(1985);
+        outside.excluded_year_to = Some(2010);
+        outside.years_pick_artists = true;
+        let outside = artist_chart(&conn, outside, 500).unwrap();
+        assert!(!names(&outside).contains(&"Zulu"));
+        assert_eq!(row(&outside, "Alpha").album_count, 2);
     }
 
     #[test]
