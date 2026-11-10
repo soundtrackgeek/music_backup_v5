@@ -1024,7 +1024,11 @@ fn preview_album_removal(
     let database_path = app_data_dir.join("music-library.sqlite3");
     let mut conn = open_database(&database_path)?;
     cleanup_abandoned_bridge_plans(&conn, app_data_dir)?;
-    let (source, library_roots) = resolve_catalog_album_folder(&conn, request.album_id.trim())?;
+    let ResolvedAlbumFolder {
+        folder: source,
+        library_roots,
+        missing_track_count,
+    } = resolve_catalog_album_folder(&conn, request.album_id.trim())?;
     let inbox = if remove_album {
         let root = PathBuf::from(REMOVED_ALBUMS_ROOT);
         validate_album_removal_paths(&source, &root)?;
@@ -1111,7 +1115,8 @@ fn preview_album_removal(
         .ok_or_else(|| anyhow!("The move-back snapshot contains no album"))?;
     if preview.added_tracks != 0
         || preview.changed_tracks != 0
-        || preview.removed_tracks != metadata.track_count as i64
+        || metadata.existing_track_count != metadata.track_count + missing_track_count
+        || preview.removed_tracks != metadata.existing_track_count as i64
         || preview.added_albums != 0
         || preview.changed_albums != 0
         || preview.removed_albums != 1
@@ -1273,10 +1278,42 @@ fn preview_scoped_album_removal(
     }))
 }
 
-fn resolve_catalog_album_folder(
-    conn: &Connection,
-    album_id: &str,
-) -> Result<(PathBuf, Vec<PathBuf>)> {
+/// A catalog album folder resolved for a move or removal.
+struct ResolvedAlbumFolder {
+    folder: PathBuf,
+    library_roots: Vec<PathBuf>,
+    /// Catalog tracks whose MP3 is gone from a still-readable folder of the album.
+    missing_track_count: usize,
+}
+
+/// Catalog rows of the album whose MP3 is verifiably gone: the folder that held it is
+/// still readable and the file itself does not exist. An unreadable or vanished folder
+/// is not proof of deletion, so its rows stay and the exact-identity check refuses them.
+fn missing_album_track_paths(conn: &Connection, album_id: &str) -> Result<Vec<String>> {
+    let rows = conn
+        .prepare(
+            "SELECT COALESCE(file_path, ''), COALESCE(filename, '')
+             FROM tracks WHERE album_id = ?1 ORDER BY file_path, filename",
+        )?
+        .query_map([album_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut missing = Vec::new();
+    for (directory, filename) in rows {
+        if directory.is_empty() || filename.is_empty() {
+            continue;
+        }
+        let path = Path::new(&directory).join(&filename);
+        if path.try_exists()? || fs::read_dir(&directory).is_err() {
+            continue;
+        }
+        missing.push(display_path(&path));
+    }
+    Ok(missing)
+}
+
+fn resolve_catalog_album_folder(conn: &Connection, album_id: &str) -> Result<ResolvedAlbumFolder> {
     let file_paths = conn
         .prepare("SELECT DISTINCT file_path FROM tracks WHERE album_id = ?1 ORDER BY file_path")?
         .query_map([album_id], |row| row.get::<_, String>(0))?
@@ -1306,11 +1343,19 @@ fn resolve_catalog_album_folder(
         album_folder = Some(candidate);
     }
     let folder = album_folder.expect("nonempty catalog paths produce an album folder");
-    let verified = importer::prepare_existing_album_fast_sync(conn, &folder)?;
+    // Tracks deleted from disk outside Music Library leave catalog rows behind. The
+    // deletion-aware check verifies each one (inside this folder, an MP3, absent, with a
+    // consistent catalog row), so the move still removes exactly this album.
+    let missing = missing_album_track_paths(conn, album_id)?;
+    let verified = importer::prepare_existing_album_deletion_sync(conn, &folder, &missing)?;
     if verified.album_id() != album_id {
         bail!("The selected catalog album does not exactly match its physical folder");
     }
-    Ok((folder, library_roots))
+    Ok(ResolvedAlbumFolder {
+        folder,
+        library_roots,
+        missing_track_count: missing.len(),
+    })
 }
 
 fn catalog_album_top_level_folder(directory: &Path, root: &Path) -> Result<PathBuf> {
@@ -2498,7 +2543,8 @@ fn validate_plan_session_binding(
             BatchAlbumAction::Replace => {
                 album.track_count as i64 - album.existing_track_count as i64
             }
-            BatchAlbumAction::Remove => -(album.track_count as i64),
+            // A move-back also drops catalog rows for tracks already deleted from disk.
+            BatchAlbumAction::Remove => -(album.existing_track_count as i64),
         })
         .sum::<i64>();
     if state.added_tracks - state.removed_tracks != expected_track_delta
@@ -4173,6 +4219,38 @@ fn set_hidden(_path: &Path, _hidden: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn move_back_lists_only_tracks_verifiably_gone_from_a_readable_folder() {
+        let temp = tempfile::tempdir().unwrap();
+        let album = temp.path().join("Voices Carry");
+        fs::create_dir_all(&album).unwrap();
+        fs::write(album.join("01.mp3"), b"present").unwrap();
+        let vanished_folder = temp.path().join("Gone Disc");
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE tracks (album_id TEXT, file_path TEXT, filename TEXT)")
+            .unwrap();
+        let album_dir = display_path(&album);
+        let vanished_dir = display_path(&vanished_folder);
+        for (album_id, directory, filename) in [
+            ("a1", album_dir.as_str(), "01.mp3"),
+            ("a1", album_dir.as_str(), "09.mp3"),
+            // A folder that cannot be read is no proof that its tracks were deleted.
+            ("a1", vanished_dir.as_str(), "01.mp3"),
+            ("a2", album_dir.as_str(), "10.mp3"),
+        ] {
+            conn.execute(
+                "INSERT INTO tracks VALUES (?1, ?2, ?3)",
+                rusqlite::params![album_id, directory, filename],
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            missing_album_track_paths(&conn, "a1").unwrap(),
+            vec![display_path(&album.join("09.mp3"))]
+        );
+    }
 
     #[test]
     fn preview_retries_busy_snapshot_from_a_fresh_transaction() {

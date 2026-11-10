@@ -1,5 +1,9 @@
 # Music Library
 
+## Move albums with missing tracks back to the Inbox (0.215.1)
+
+If a track was deleted from an album's folder outside Music Library, Aurora's **Move to Inbox** used to fail because the catalog still listed it. Music Library now verifies that the file is really gone and drops it from the catalog as part of the move, so the album can be moved back and added again.
+
 ## Interrupted Aurora syncs are retried (0.214.1)
 
 If an album's MP3s or the catalog change while Music Library syncs Aurora's tag edits (for example because you rated the next track), the sync is now reported as **interrupted** instead of "requires reviewed reconciliation". Aurora 0.56.4 and later retry it automatically, so those edits no longer wait for a reviewed import. Edits that really need one, such as renumbered tracks, still report the old message.

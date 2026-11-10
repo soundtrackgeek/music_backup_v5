@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.1] - 2026-11-10
+
+### Fixed
+- **Move to Inbox** (and **Remove album**) from Aurora now works for an album whose catalog still lists a track that was deleted from disk. Before, the move stopped with "does not have the exact MP3 identity set". Music Library now checks each missing track (its folder is readable, the MP3 is gone, the catalog row is consistent) and removes it from the catalog together with the rest of the album. A track in a folder that cannot be read is still treated as unknown, so the move stays refused.
+
 ## [0.215.0] - 2026-11-10
 
 ### Added
