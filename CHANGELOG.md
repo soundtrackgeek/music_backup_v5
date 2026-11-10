@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.214.1] - 2026-11-10
+
+### Fixed
+- **An Aurora sync interrupted by a change no longer looks like an edit that needs review**: when an album's MP3s or the catalog changed while Music Library synced Aurora's tag edits (for example because the next rating was saved), the sync was refused with the same "requires reviewed reconciliation" message as a change it cannot apply. Aurora treated it as permanent and stopped retrying the folder, which left 108 folders and 277 edits waiting. Music Library now reports "background sync was interrupted", which Aurora 0.56.4 retries automatically; edits that need a reviewed import still report the old message.
+
 ## [0.214.0] - 2026-11-09
 
 ### Added

@@ -424,7 +424,10 @@ pub(crate) enum ExistingAlbumFastSyncOutcome {
         changed_albums: i64,
     },
     Unchanged,
+    /// The change needs a reviewed import; an automatic sync cannot apply it.
     Fallback,
+    /// The album's MP3s or the catalog changed during the sync; retrying is safe.
+    Interrupted,
 }
 
 struct ImportWorkflowGuard;
@@ -1589,7 +1592,7 @@ pub(crate) fn apply_existing_album_fast_sync(
     if scoped_sync_data_version(conn)? != prepared.data_version
         || !prepared.source_guard.is_unchanged()
     {
-        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+        return Ok(ExistingAlbumFastSyncOutcome::Interrupted);
     }
     if prepared.changed_tracks == 0
         && prepared.changed_albums == 0
@@ -1607,7 +1610,7 @@ pub(crate) fn apply_existing_album_fast_sync(
         || !scoped_album_catalog_is_unchanged(&tx, candidate, prepared)?
     {
         drop(tx);
-        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+        return Ok(ExistingAlbumFastSyncOutcome::Interrupted);
     }
 
     let started_at = Utc::now().to_rfc3339();
@@ -1751,7 +1754,7 @@ pub(crate) fn apply_existing_album_fast_sync(
         || !prepared.source_guard.is_unchanged()
     {
         drop(tx);
-        return Ok(ExistingAlbumFastSyncOutcome::Fallback);
+        return Ok(ExistingAlbumFastSyncOutcome::Interrupted);
     }
     tx.commit()
         .context("Could not commit the atomic Aurora album metadata sync")?;
@@ -7267,6 +7270,38 @@ mod tests {
     }
 
     #[test]
+    fn background_bridge_reports_a_file_changed_mid_sync_as_retryable() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let initial = scanned_fast_sync_track(&folder, "fast-album");
+        let (mut conn, _, _, _) = fast_sync_database(&initial);
+
+        write_fast_sync_mp3(&mp3, "Changed Title", None, "", 2008);
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare supported sync")
+            .expect("cataloged target candidate");
+        assert!(candidate.prepared.is_some(), "a title edit is supported");
+        // Aurora saves the next rating in the same album while Music Library syncs.
+        write_fast_sync_mp3(&mp3, "Changed Title Again", None, "", 2008);
+
+        let before = conn.total_changes();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("guarded apply"),
+            ExistingAlbumFastSyncOutcome::Interrupted
+        );
+        let error = crate::aurora_bridge::sync_existing_folder(&mut conn, &candidate)
+            .expect_err("a changed album must not be committed");
+        let message = error.to_string();
+        assert!(message.contains("background sync was interrupted"));
+        assert!(!message.contains("requires reviewed reconciliation"));
+        assert_eq!(conn.total_changes(), before, "no catalog writes");
+    }
+
+    #[test]
     fn background_bridge_refuses_unsupported_file_and_folder_edits_without_staging() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
@@ -7388,7 +7423,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_file_fast_sync_falls_back_when_target_tags_change_after_prepare() {
+    fn existing_file_fast_sync_is_interrupted_when_target_tags_change_after_prepare() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
         fs::create_dir(&folder).expect("album folder");
@@ -7406,8 +7441,8 @@ mod tests {
 
         assert_eq!(
             apply_existing_album_fast_sync(&mut conn, &candidate)
-                .expect("mutation routes to safe fallback"),
-            ExistingAlbumFastSyncOutcome::Fallback
+                .expect("mutation stops the sync safely"),
+            ExistingAlbumFastSyncOutcome::Interrupted
         );
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM import_runs", [], |row| row

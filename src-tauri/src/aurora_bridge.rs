@@ -1816,6 +1816,9 @@ pub(crate) fn sync_existing_folder(
             importer::ExistingAlbumFastSyncOutcome::Fallback => {
                 bail!("Aurora background sync requires reviewed reconciliation: the selected album could not be safely updated with an album-sized metadata sync. The file edits are retained; review a Music Library import before retrying catalog sync");
             }
+            importer::ExistingAlbumFastSyncOutcome::Interrupted => {
+                bail!("Aurora background sync was interrupted: the album's MP3s or the Music Library catalog changed while it synchronized. The file edits are retained; retry the catalog sync");
+            }
         };
     Ok(SyncedFolderReceipt {
         folder_path: display_path(candidate.folder()),

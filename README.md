@@ -1,5 +1,9 @@
 # Music Library
 
+## Interrupted Aurora syncs are retried (0.214.1)
+
+If an album's MP3s or the catalog change while Music Library syncs Aurora's tag edits (for example because you rated the next track), the sync is now reported as **interrupted** instead of "requires reviewed reconciliation". Aurora 0.56.4 and later retry it automatically, so those edits no longer wait for a reviewed import. Edits that really need one, such as renumbered tracks, still report the old message.
+
 ## Tag edits and ratings sync together (0.213.1)
 
 The tags in your MP3 files are the source of truth. If you correct an album's **Year** or **Publisher** (for example to match RYM) and then rate its tracks in Aurora, Music Library now imports both in one automatic sync: the album, its tracks and the search indexes take the new year or publisher, and the ratings count straight away (for example in the Charts **100% rated** column). Before, such an album stayed at **Pending tag import** in Aurora until a reviewed import. The edit must be on every track of the album; a partly edited album, a changed track or disc number, or an album without an Album Unique Id still goes through a reviewed import.
