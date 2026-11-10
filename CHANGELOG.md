@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.2] - 2026-11-10
+
+### Fixed
+- **Move to Inbox from Aurora is fast again**: the preview wrote the whole catalog to a snapshot and compared every row just to remove one album. On a large library that took over two minutes and then hit Aurora's five-minute limit ("Music Library took too long to complete previewMoveToInbox"). Move to Inbox now uses the same album-sized plan as **Remove album**: it records only the selected album's catalog rows, rechecks them under the write lock when you apply, and deletes just that album. Other albums can change in between without invalidating the move. Tracks already deleted from disk are still verified and removed with the album, and the recovery backup, file verification and atomic commit are unchanged.
+
 ## [0.215.1] - 2026-11-10
 
 ### Fixed

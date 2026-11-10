@@ -1027,7 +1027,6 @@ fn preview_album_removal(
     let ResolvedAlbumFolder {
         folder: source,
         library_roots,
-        missing_track_count,
     } = resolve_catalog_album_folder(&conn, request.album_id.trim())?;
     let inbox = if remove_album {
         let root = PathBuf::from(REMOVED_ALBUMS_ROOT);
@@ -1064,139 +1063,21 @@ fn preview_album_removal(
     let destination = inbox.join(folder_name);
     ensure_destination_available(&inbox, &destination)?;
 
-    if remove_album {
-        return preview_scoped_album_removal(
-            &mut conn,
-            app_data_dir,
-            request.album_id.trim(),
-            &source,
-            &inbox,
-            &destination,
-        );
-    }
-
-    let plan_id = new_plan_id(&source, "move-to-inbox");
-    let plan_directory = plan_directory(app_data_dir, &plan_id)?;
-    fs::create_dir_all(&plan_directory)?;
-    let snapshot_path = app_data_dir
-        .join("album-folder-imports")
-        .join(format!("album-folder-batch-{plan_id}.tsv"));
-    let inputs = vec![BatchAlbumInput {
-        source: source.clone(),
-        destination: destination.clone(),
-        action: BatchAlbumAction::Remove,
-    }];
-    let snapshot = match folder_sync::build_batch_snapshot(
-        &conn,
+    // Both moves remove exactly one album, so both use the album-sized plan. Staging and
+    // comparing the complete catalog took minutes on a large library.
+    preview_scoped_album_removal(
+        &mut conn,
+        app_data_dir,
+        request.album_id.trim(),
         &source,
-        &inputs,
-        &snapshot_path,
-        &std::sync::atomic::AtomicBool::new(false),
-        &mut |_, _, _| {},
-    ) {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            remove_snapshot_artifacts(&snapshot_path);
-            let _ = fs::remove_dir_all(&plan_directory);
-            return Err(error);
-        }
-    };
-    let preview = match importer::prepare_bridge_import_preview(&mut conn, &snapshot_path) {
-        Ok(preview) => preview,
-        Err(error) => {
-            remove_snapshot_artifacts(&snapshot_path);
-            let _ = fs::remove_dir_all(&plan_directory);
-            return Err(error);
-        }
-    };
-    let metadata = snapshot
-        .albums
-        .first()
-        .ok_or_else(|| anyhow!("The move-back snapshot contains no album"))?;
-    if preview.added_tracks != 0
-        || preview.changed_tracks != 0
-        || metadata.existing_track_count != metadata.track_count + missing_track_count
-        || preview.removed_tracks != metadata.existing_track_count as i64
-        || preview.added_albums != 0
-        || preview.changed_albums != 0
-        || preview.removed_albums != 1
-    {
-        let _ = importer::discard_bridge_import_preview(&conn, preview.session_id);
-        remove_snapshot_artifacts(&snapshot_path);
-        let _ = fs::remove_dir_all(&plan_directory);
-        bail!("The prepared move-back delta did not exactly remove the selected album");
-    }
-    let inventory = inventory_folder(&source)?;
-    let album = StoredAlbum {
-        source_path: metadata.source_path.clone(),
-        destination_path: metadata.destination_path.clone(),
-        artist: metadata.artist.clone(),
-        album: metadata.album.clone(),
-        year: metadata.year.clone(),
-        track_count: metadata.track_count,
-        action: BatchAlbumAction::Remove,
-        existing_track_count: metadata.existing_track_count,
-        matched_track_count: metadata.matched_track_count,
-        existing_rated_track_count: metadata.existing_rated_track_count,
-        existing_loved_track_count: metadata.existing_loved_track_count,
-        inventory,
-        existing_inventory: None,
-    };
-    let plan = StoredPlan {
-        format_version: PLAN_FORMAT_VERSION,
-        removal_scope: None,
-        plan_id: plan_id.clone(),
-        session_id: preview.session_id,
-        source_path: display_path(&source),
-        category: "inbox".to_owned(),
-        expected_changed_albums: None,
-        category_label: "Aurora Inbox".to_owned(),
-        destination_root: display_path(&inbox),
-        snapshot_path: display_path(&snapshot_path),
-        destination_roots: Default::default(),
-        operation: if remove_album {
+        &inbox,
+        &destination,
+        if remove_album {
             PlanOperation::RemoveAlbum
         } else {
             PlanOperation::MoveToInbox
         },
-        albums: vec![album],
-    };
-    atomic_write_json(&plan_directory.join("plan.json"), &plan)?;
-    let album = &plan.albums[0];
-    Ok(json!({
-        "planId": plan.plan_id,
-        "sessionId": plan.session_id,
-        "sourcePath": plan.source_path,
-        "category": {
-            "id": plan.category,
-            "label": plan.category_label,
-            "destinationRoot": plan.destination_root,
-        },
-        "albumCount": 1,
-        "trackCount": album.track_count,
-        "delta": {
-            "addedTracks": 0,
-            "changedTracks": 0,
-            "removedTracks": preview.removed_tracks,
-            "addedAlbums": 0,
-            "changedAlbums": 0,
-            "removedAlbums": 1,
-        },
-        "albums": [{
-            "sourcePath": album.source_path,
-            "destinationPath": album.destination_path,
-            "artist": album.artist,
-            "album": album.album,
-            "year": album.year,
-            "trackCount": album.track_count,
-            "action": album.action,
-            "existingTrackCount": album.existing_track_count,
-            "matchedTrackCount": album.matched_track_count,
-            "existingRatedTrackCount": album.existing_rated_track_count,
-            "existingLovedTrackCount": album.existing_loved_track_count,
-        }],
-        "canApply": preview.status == "ready" && !preview.source_changed,
-    }))
+    )
 }
 
 fn preview_scoped_album_removal(
@@ -1206,8 +1087,16 @@ fn preview_scoped_album_removal(
     source: &Path,
     root: &Path,
     destination: &Path,
+    operation: PlanOperation,
 ) -> Result<Value> {
-    let plan_id = new_plan_id(source, "remove-album");
+    let plan_id = new_plan_id(
+        source,
+        if operation == PlanOperation::RemoveAlbum {
+            "remove-album"
+        } else {
+            "move-to-inbox"
+        },
+    );
     let directory = plan_directory(app_data_dir, &plan_id)?;
     fs::create_dir_all(&directory)?;
     let marker = directory.join("album-removal.json");
@@ -1253,7 +1142,7 @@ fn preview_scoped_album_removal(
         destination_root: display_path(root),
         snapshot_path: display_path(&marker),
         destination_roots: Default::default(),
-        operation: PlanOperation::RemoveAlbum,
+        operation,
         removal_scope: Some(scope),
         albums: vec![album],
     };
@@ -1282,8 +1171,6 @@ fn preview_scoped_album_removal(
 struct ResolvedAlbumFolder {
     folder: PathBuf,
     library_roots: Vec<PathBuf>,
-    /// Catalog tracks whose MP3 is gone from a still-readable folder of the album.
-    missing_track_count: usize,
 }
 
 /// Catalog rows of the album whose MP3 is verifiably gone: the folder that held it is
@@ -1354,7 +1241,6 @@ fn resolve_catalog_album_folder(conn: &Connection, album_id: &str) -> Result<Res
     Ok(ResolvedAlbumFolder {
         folder,
         library_roots,
-        missing_track_count: missing.len(),
     })
 }
 
@@ -2561,7 +2447,7 @@ fn validate_plan_session_binding(
     if let Some(scope) = &plan.removal_scope {
         let stored: importer::AlbumRemovalScope =
             serde_json::from_slice(&fs::read(&plan.snapshot_path)?)?;
-        if plan.operation != PlanOperation::RemoveAlbum
+        if plan.operation == PlanOperation::Intake
             || plan.albums.len() != 1
             || scope != &stored
             || normalized_path(Path::new(&scope.source_path))
@@ -5925,6 +5811,51 @@ mod tests {
         assert!(
             validate_album_removal_paths(Path::new(r"H:\Album"), Path::new(r"D:\Other")).is_err()
         );
+    }
+
+    #[test]
+    fn move_to_inbox_and_removal_accept_an_album_sized_scope_but_intake_does_not() {
+        let temp = tempdir().expect("tempdir");
+        let inbox = temp.path().join("inbox");
+        let library = temp.path().join("library");
+        fs::create_dir_all(&inbox).expect("inbox");
+        let mut plan = test_plan(&inbox, &library, &["Voices Carry"]);
+        plan.albums[0].action = BatchAlbumAction::Remove;
+        plan.albums[0].existing_track_count = 2;
+        let marker = temp.path().join("album-removal.json");
+        let scope = importer::AlbumRemovalScope {
+            album_id: "album-1".to_owned(),
+            source_path: plan.source_path.clone(),
+            destination_path: plan.albums[0].destination_path.clone(),
+            digest: "digest".to_owned(),
+            track_ids: vec![1, 2],
+            artist: "Artist".to_owned(),
+            album: "Voices Carry".to_owned(),
+            year: "2026".to_owned(),
+            rated_tracks: 0,
+            loved_tracks: 0,
+        };
+        fs::write(&marker, serde_json::to_vec(&scope).unwrap()).expect("marker");
+        plan.snapshot_path = display_path(&marker);
+        plan.removal_scope = Some(scope);
+        let state = importer::BridgeSessionState {
+            status: "removal-ready".to_owned(),
+            source_path: plan.snapshot_path.clone(),
+            import_run_id: None,
+            backup_path: None,
+            added_tracks: 0,
+            changed_tracks: 0,
+            removed_tracks: 2,
+            added_albums: 0,
+            changed_albums: 0,
+            removed_albums: 1,
+        };
+        for operation in [PlanOperation::MoveToInbox, PlanOperation::RemoveAlbum] {
+            plan.operation = operation;
+            validate_plan_session_binding(&plan, &state).expect("album-sized plan");
+        }
+        plan.operation = PlanOperation::Intake;
+        assert!(validate_plan_session_binding(&plan, &state).is_err());
     }
 
     #[test]

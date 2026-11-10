@@ -821,6 +821,7 @@ pub(crate) fn build_snapshot(
     result
 }
 
+#[cfg(test)]
 pub(crate) fn build_batch_snapshot(
     conn: &Connection,
     selected_source: &Path,
