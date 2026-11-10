@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.215.0] - 2026-11-10
+
+### Added
+- **Filter by several artists at once**: the **Album artist** field in **Search**, **Charts** and **Albums** (and **Track artist** / **Display artist** for track views) now takes several names separated by commas, the same way the genre fields do. `Genesis, Phil Collins` gives one combined list or chart with both artists' albums. Each name uses the chosen comparison (**Contains**, **Equals**, **Starts with**); with **Does not contain**, every listed name is left out. Names that contain a comma still work: the whole text is also matched as one name, so `Earth, Wind & Fire` finds the band, and double quotes keep a name together (`"Earth, Wind & Fire", Chicago`).
+
+### Fixed
+- The 0.214.1 release build failed because one importer test still expected the old "needs a reviewed import" outcome when an album's files change during a deletion sync. The test now expects the retryable "interrupted" outcome that 0.214.1 introduced, so this release also ships the 0.214.1 Aurora retry fix.
+
 ## [0.214.1] - 2026-11-10
 
 ### Fixed

@@ -5973,11 +5973,12 @@ mod tests {
         assert!(prepare_existing_album_fast_sync(&conn, &folder).is_err());
         let candidate = prepare_existing_album_deletion_sync(&conn, &folder, &paths).unwrap();
         assert!(candidate.prepared.is_some());
-        // Restoring a file after preparation must cancel the entire transaction.
+        // Restoring a file after preparation must cancel the entire transaction,
+        // reported as a retryable interruption rather than a reviewed-import fallback.
         write_fast_sync_mp3(&bonus, "Bonus", Some(255), "L", 2008);
         assert_eq!(
             apply_existing_album_fast_sync(&mut conn, &candidate).unwrap(),
-            ExistingAlbumFastSyncOutcome::Fallback
+            ExistingAlbumFastSyncOutcome::Interrupted
         );
         assert!(prepare_existing_album_deletion_sync(&conn, &folder, &paths).is_err());
         fs::remove_file(&bonus).unwrap();

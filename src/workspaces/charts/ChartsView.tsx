@@ -710,6 +710,7 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
                       ? "Display artist"
                       : "Album artist"
                   }
+                  placeholder="Genesis, Phil Collins"
                   filter={
                     chartConfig.request.view === "tracks"
                       ? chartConfig.request.filters.displayArtist

@@ -595,13 +595,13 @@ pub(super) fn build_where_clause(
             "t.title",
             &filters.track_title,
         );
-        add_text_condition(
+        add_artist_text_condition(
             &mut conditions,
             &mut values,
             "t.album_artist_display",
             &filters.album_artist,
         );
-        add_text_condition(
+        add_artist_text_condition(
             &mut conditions,
             &mut values,
             "t.display_artist",
@@ -639,13 +639,13 @@ pub(super) fn build_where_clause(
             &filters.track_title,
             "a.id",
         );
-        add_text_condition(
+        add_artist_text_condition(
             &mut conditions,
             &mut values,
             "a.album_artist_display",
             &filters.album_artist,
         );
-        add_exists_text_condition(
+        add_exists_artist_text_condition(
             &mut conditions,
             &mut values,
             "tx.display_artist",
@@ -1186,6 +1186,113 @@ pub(super) fn add_exists_text_condition(
     };
 
     if let Some(condition) = text_condition(field, &inner_filter, values) {
+        let exists_operator = if excludes_match {
+            "NOT EXISTS"
+        } else {
+            "EXISTS"
+        };
+        conditions.push(format!(
+            "{exists_operator} (SELECT 1 FROM tracks tx WHERE tx.album_id = {album_ref} AND {condition})"
+        ));
+    }
+}
+
+/// Artist filters accept several names separated by commas ("Genesis, Phil Collins").
+/// A name in double quotes stays whole, and the full unsplit text is also kept as one
+/// more alternative so names that contain commas ("Earth, Wind & Fire") still match.
+pub(super) fn artist_filter_terms(value: &str) -> Vec<String> {
+    let mut terms = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut used_quotes = false;
+    let mut split_on_comma = false;
+    for character in value.chars() {
+        match character {
+            '"' => {
+                in_quotes = !in_quotes;
+                used_quotes = true;
+            }
+            ',' if !in_quotes => {
+                split_on_comma = true;
+                push_unique_term(&mut terms, &current);
+                current.clear();
+            }
+            _ => current.push(character),
+        }
+    }
+    push_unique_term(&mut terms, &current);
+    if split_on_comma && !used_quotes && terms.len() > 1 {
+        push_unique_term(&mut terms, value);
+    }
+    terms
+}
+
+fn push_unique_term(terms: &mut Vec<String>, term: &str) {
+    let term = term.trim();
+    if !term.is_empty() && !terms.iter().any(|existing| existing.eq_ignore_ascii_case(term)) {
+        terms.push(term.to_string());
+    }
+}
+
+fn artist_text_condition(
+    field: &str,
+    filter: &TextFilter,
+    values: &mut Vec<Value>,
+) -> Option<String> {
+    let terms = artist_filter_terms(&filter.value);
+    let joiner = if filter.operator == "doesNotContain" {
+        " AND "
+    } else {
+        " OR "
+    };
+    let conditions = terms
+        .into_iter()
+        .filter_map(|term| {
+            text_condition(
+                field,
+                &TextFilter {
+                    operator: filter.operator.clone(),
+                    value: term,
+                },
+                values,
+            )
+        })
+        .collect::<Vec<_>>();
+    match conditions.len() {
+        0 => None,
+        1 => conditions.into_iter().next(),
+        _ => Some(format!("({})", conditions.join(joiner))),
+    }
+}
+
+pub(super) fn add_artist_text_condition(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    field: &str,
+    filter: &TextFilter,
+) {
+    if let Some(condition) = artist_text_condition(field, filter, values) {
+        conditions.push(condition);
+    }
+}
+
+pub(super) fn add_exists_artist_text_condition(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    field: &str,
+    filter: &TextFilter,
+    album_ref: &str,
+) {
+    let excludes_match = filter.operator == "doesNotContain";
+    let inner_filter = if excludes_match {
+        TextFilter {
+            operator: "contains".to_string(),
+            value: filter.value.clone(),
+        }
+    } else {
+        filter.clone()
+    };
+    if let Some(condition) = artist_text_condition(field, &inner_filter, values) {
         let exists_operator = if excludes_match {
             "NOT EXISTS"
         } else {
@@ -2444,6 +2551,59 @@ mod tests {
             Some("What Have I Done to Deserve This?")
         );
         assert_eq!(response.rows[0].track_seconds, Some(260));
+    }
+
+    #[test]
+    fn splits_artist_filter_on_commas_but_keeps_quoted_and_whole_names() {
+        assert_eq!(
+            artist_filter_terms("Genesis, Phil Collins"),
+            vec!["Genesis", "Phil Collins", "Genesis, Phil Collins"]
+        );
+        assert_eq!(
+            artist_filter_terms("\"Earth, Wind & Fire\", Chicago"),
+            vec!["Earth, Wind & Fire", "Chicago"]
+        );
+        assert_eq!(artist_filter_terms(" Genesis ,, genesis "), vec!["Genesis"]);
+        assert!(artist_filter_terms(" , ").is_empty());
+    }
+
+    #[test]
+    fn filters_albums_by_several_album_artists() {
+        let conn = seeded_connection();
+        insert_test_album(&conn, "mb:korn", "Korn", "Issues", 1999, 1);
+        insert_test_album(&conn, "mb:dio", "Dio", "Holy Diver", 1983, 1);
+
+        let mut request = BrowseRequest::default();
+        request.filters.album_artist = TextFilter {
+            operator: "equals".to_string(),
+            value: "Korn, Pet Shop Boys".to_string(),
+        };
+        let response = search_library(&conn, request, 50).expect("filter several artists");
+        let artists = response
+            .rows
+            .iter()
+            .filter_map(|row| row.album_artist_display.as_deref())
+            .collect::<Vec<_>>();
+        assert!(artists.contains(&"Korn"));
+        assert!(artists.contains(&"Pet Shop Boys"));
+        assert!(!artists.contains(&"Dio"));
+
+        let mut exclusion = BrowseRequest::default();
+        exclusion.filters.album_artist = TextFilter {
+            operator: "doesNotContain".to_string(),
+            value: "korn, shop".to_string(),
+        };
+        let response = search_library(&conn, exclusion, 50).expect("exclude several artists");
+        assert!(response.rows.iter().all(|row| {
+            !matches!(
+                row.album_artist_display.as_deref(),
+                Some("Korn") | Some("Pet Shop Boys")
+            )
+        }));
+        assert!(response
+            .rows
+            .iter()
+            .any(|row| row.album_artist_display.as_deref() == Some("Dio")));
     }
 
     #[test]

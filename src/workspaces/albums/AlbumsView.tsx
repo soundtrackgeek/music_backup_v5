@@ -228,6 +228,7 @@ export function AlbumsView({
           />
           <TextCriterion
             label="Album artist"
+            placeholder="Genesis, Phil Collins"
             filter={albumFilters.albumArtist}
             onChange={(filter) => updateAlbumFilter("albumArtist", filter)}
           />

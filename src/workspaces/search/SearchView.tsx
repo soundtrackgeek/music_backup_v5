@@ -245,6 +245,7 @@ export function SearchView({
               />
               <TextCriterion
                 label="Album artist"
+                placeholder="Genesis, Phil Collins"
                 filter={currentFilters.albumArtist}
                 onChange={(filter) => updateFilter("albumArtist", filter)}
               />
@@ -541,6 +542,7 @@ export function SearchView({
                 />
                 <TextCriterion
                   label="Album artist"
+                  placeholder="Genesis, Phil Collins"
                   filter={currentFilters.albumArtist}
                   onChange={(filter) => updateFilter("albumArtist", filter)}
                 />
