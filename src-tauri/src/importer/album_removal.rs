@@ -284,16 +284,25 @@ pub(crate) fn apply_album_removal(
     )?;
     progress("statistics", "Updating library totals and rating history.");
     let (track_count, album_count) = insert_rating_snapshot_from_catalog(&tx, run_id)?;
-    progress("charts", "Updating affected chart links.");
-    if album_chart_links {
-        db::reconcile_album_chart_matches(&tx)?;
-    } else if chart_cache_current {
-        db::record_album_chart_match_state(&tx)?;
+    progress(
+        "charts",
+        "Queuing affected chart links to update in the background.",
+    );
+    // Deleting the album already cleared its chart links (ON DELETE SET NULL). Relinking
+    // those entries to another owned copy needs the full-catalog reconciler (25-40 s on a
+    // large library), so a background helper runs it after this commit. The marker is
+    // written before commit: a failed commit only costs one redundant re-match.
+    if album_chart_links || track_chart_links {
+        let app_data_dir = db_path
+            .parent()
+            .ok_or_else(|| anyhow!("The catalog path has no directory"))?;
+        db::defer_chart_rematch(app_data_dir, album_chart_links, track_chart_links)
+            .context("Could not queue the chart re-match for the removed album")?;
     }
     // Unrelated stale chart state remains stale for the existing chart-rebuild flow;
     // removal must neither claim it is current nor rebuild the entire catalog for it.
-    if track_chart_links {
-        db::reconcile_track_chart_matches(&tx)?;
+    if !album_chart_links && chart_cache_current {
+        db::record_album_chart_match_state(&tx)?;
     }
     let completed = Utc::now().to_rfc3339();
     tx.execute("UPDATE import_runs SET status='completed',completed_at=?1,track_rows=?2,album_count=?3,duration_ms=?4,rating_events_count=?5 WHERE id=?6",
@@ -632,16 +641,30 @@ mod tests {
             .unwrap();
         let (session, scope) = preview(&mut f);
         apply_album_removal(&mut f.conn, &f.db, session, &scope, &mut |_, _| {}).unwrap();
-        assert_eq!(
-            f.conn
-                .query_row::<i64, _, _>(
-                    "SELECT matched_track_id FROM vg_lista_single_chart_entries",
-                    [],
-                    |r| r.get(0)
-                )
-                .unwrap(),
-            keep_id
-        );
+        let linked = |conn: &Connection| {
+            conn.query_row::<Option<i64>, _, _>(
+                "SELECT matched_track_id FROM vg_lista_single_chart_entries",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        // The removal commits with the link cleared and leaves the relink to a helper.
+        assert_eq!(linked(&f.conn), None);
+        let app_data = f.db.parent().unwrap().to_path_buf();
+        assert!(db::chart_rematch_pending(&app_data));
+        assert!(db::run_deferred_chart_rematch(&app_data, &mut f.conn).unwrap());
+        assert_eq!(linked(&f.conn), Some(keep_id));
+        assert!(!db::chart_rematch_pending(&app_data));
+        assert!(!db::run_deferred_chart_rematch(&app_data, &mut f.conn).unwrap());
+    }
+
+    #[test]
+    fn removal_without_chart_links_queues_no_rematch() {
+        let mut f = fixture();
+        let (session, scope) = preview(&mut f);
+        apply_album_removal(&mut f.conn, &f.db, session, &scope, &mut |_, _| {}).unwrap();
+        assert!(!db::chart_rematch_pending(f.db.parent().unwrap()));
     }
 
     #[test]

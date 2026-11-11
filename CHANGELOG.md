@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.4] - 2026-11-11
+
+### Changed
+- **Move to Inbox and Remove album finish 25-40 seconds sooner**: when the removed album or its songs were on a chart, the removal re-matched every chart against the whole catalog (over a million tracks) before Aurora could continue. Deleting the album already clears its chart links in the same atomic commit, so the removal now leaves a durable `pending-chart-rematch.json` marker and the detached helper that refreshes smart playlists runs the complete re-match afterwards (before the playlist refresh, since playlists can filter by chart rank). Entries then relink to another owned copy as before. The helper holds the bridge workflow lock while it writes; an Aurora request that arrives meanwhile waits for it (up to four minutes) instead of reporting that another intake is running. If the helper stops early, the next successful Aurora operation starts it again.
+
 ## [0.215.3] - 2026-11-11
 
 ### Fixed

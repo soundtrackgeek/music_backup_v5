@@ -1,5 +1,9 @@
 # Music Library
 
+## Chart links update in the background after a removal (0.215.4)
+
+When Aurora moves an album to the Inbox or removes it, Music Library no longer re-matches every chart against the whole catalog before it finishes. That step took 25-40 seconds of each move on a large library. The removed album's chart links are cleared in the same atomic commit, and a background helper then re-matches the affected charts, so an entry can link to another copy of the album or song you still own. If Aurora starts its next operation while the helper runs, the operation waits for it instead of failing. Smart playlists refresh after the charts are updated.
+
 ## Aurora previews no longer wait on old plans (0.215.3)
 
 Every Aurora preview first tries to finish leftover follow-up work (quality scan, cover archive) from earlier adds, moves and removals. Plans that could never finish, such as an album whose files changed afterwards or an album with no cover anywhere, were retried on every preview and cost about two minutes each time. Each plan is now finished once: albums without a cover are reported as a warning, changed albums are marked as abandoned, and later previews skip them. A Move to Inbox preview now takes a second or two. The first preview after updating clears the old backlog one last time.

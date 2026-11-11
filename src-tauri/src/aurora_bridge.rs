@@ -373,12 +373,15 @@ struct StagingOwner {
 
 const MAINTENANCE_FLAG: &str = "--aurora-maintenance";
 
-/// Starts a detached helper that refreshes the smart playlists an Aurora import deferred.
-/// They search the whole catalog, so refreshing them inside the import kept Aurora waiting
-/// for minutes; this way they refresh whether or not the desktop app is open. Best effort:
-/// the marker stays pending if the helper cannot start, and the desktop app picks it up.
+/// Starts a detached helper for the work an Aurora operation deferred: the chart re-match
+/// after an album removal, and the smart playlist refresh after an import. Both search the
+/// whole catalog, so running them inside the operation kept Aurora waiting; this way they
+/// run whether or not the desktop app is open. Best effort: each marker stays pending if
+/// the helper cannot start, and the next bridge operation (or the desktop app, for smart
+/// playlists) starts it again.
 fn start_deferred_maintenance(app_data_dir: &Path) {
-    if !db::smart_playlist_refresh_pending(app_data_dir) {
+    if !db::smart_playlist_refresh_pending(app_data_dir) && !db::chart_rematch_pending(app_data_dir)
+    {
         return;
     }
     let Ok(executable) = std::env::current_exe() else {
@@ -408,6 +411,10 @@ fn run_deferred_maintenance() -> Result<()> {
     let database = app_data_dir.join("music-library.sqlite3");
     let pool = db::pool_for_path(&database)?;
     let outcome = (|| -> Result<()> {
+        // Smart playlists can filter by chart rank, so relink charts first.
+        if let Err(error) = run_deferred_chart_rematch(&app_data_dir, &database) {
+            eprintln!("Deferred chart re-match failed: {error:#}");
+        }
         // A newer import can rewrite the marker while a refresh runs; refresh again for it.
         for _ in 0..3 {
             if !db::smart_playlist_refresh_pending(&app_data_dir) {
@@ -427,6 +434,52 @@ fn run_deferred_maintenance() -> Result<()> {
         eprintln!("Could not optimize/checkpoint the catalog after maintenance: {error:#}");
     }
     outcome
+}
+
+/// How long a bridge request waits for a running background chart re-match (25-40 s on a
+/// large catalog) before it reports the workflow as busy.
+const CHART_REMATCH_WAIT: Duration = Duration::from_secs(4 * 60);
+
+/// Runs a deferred chart re-match while holding both its own lock and the bridge workflow
+/// lock, so it never writes during an Aurora operation. Bridge requests that find the
+/// workflow lock held by this helper wait for it (`BridgeProcessLock::acquire`) instead
+/// of failing; they never take the chart lock, so the two cannot wait on each other.
+fn run_deferred_chart_rematch(app_data_dir: &Path, database: &Path) -> Result<()> {
+    if !db::chart_rematch_pending(app_data_dir) {
+        return Ok(());
+    }
+    let Some(_chart_lock) = db::MaintenanceLock::try_acquire(app_data_dir, db::CHART_REMATCH_LOCK)?
+    else {
+        // Another helper is already re-matching; it rereads the marker when it finishes.
+        return Ok(());
+    };
+    // Declared after the chart lock so it is released first: a waiting request then
+    // never sees the workflow lock held without the chart lock.
+    let deadline = std::time::Instant::now() + Duration::from_secs(60 * 60);
+    let _bridge_lock = loop {
+        match BridgeProcessLock::try_acquire(app_data_dir) {
+            Ok(lock) => break lock,
+            Err(_) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            Err(error) => return Err(error),
+        }
+    };
+    let mut conn = open_database(database)?;
+    // A removal that commits while this runs rewrites the marker; run again for it.
+    for _ in 0..3 {
+        if !db::run_deferred_chart_rematch(app_data_dir, &mut conn)? {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn chart_rematch_running(app_data_dir: &Path) -> bool {
+    matches!(
+        db::MaintenanceLock::try_acquire(app_data_dir, db::CHART_REMATCH_LOCK),
+        Ok(None)
+    )
 }
 
 pub(crate) fn run_from_process_args() -> bool {
@@ -582,7 +635,12 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
     }
     // After the catalog is checkpointed, hand the deferred smart playlist refresh to a
     // detached helper so this process can finish and Aurora can continue.
-    if result.is_ok() && matches!(request.operation.as_str(), "applyBatch" | "repairBatch") {
+    // A pending chart re-match whose helper did not finish is restarted by the next
+    // successful operation.
+    if result.is_ok()
+        && (matches!(request.operation.as_str(), "applyBatch" | "repairBatch")
+            || db::chart_rematch_pending(&app_data_dir))
+    {
         start_deferred_maintenance(&app_data_dir);
     }
     result
@@ -595,7 +653,25 @@ struct BridgeProcessLock {
 }
 
 impl BridgeProcessLock {
+    /// Waits while the background chart re-match holds the lock, and otherwise fails at
+    /// once as before, because then another Aurora operation is running.
     fn acquire(app_data_dir: &Path) -> Result<Self> {
+        let started = std::time::Instant::now();
+        loop {
+            match Self::try_acquire(app_data_dir) {
+                Ok(lock) => return Ok(lock),
+                Err(_)
+                    if started.elapsed() < CHART_REMATCH_WAIT
+                        && chart_rematch_running(app_data_dir) =>
+                {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    fn try_acquire(app_data_dir: &Path) -> Result<Self> {
         let bridge_dir = app_data_dir.join(BRIDGE_DIRECTORY);
         fs::create_dir_all(&bridge_dir)?;
         let path = bridge_dir.join("workflow.lock");
@@ -3773,8 +3849,7 @@ fn cleanup_abandoned_bridge_plans(conn: &Connection, app_data_dir: &Path) -> Res
         if state.status == "completed" {
             if plan.operation == PlanOperation::Intake
                 && entry.path().join("postcommit-quality.json").is_file()
-                && load_postcommit_state(&entry.path())
-                    .is_ok_and(|state| !state.finished())
+                && load_postcommit_state(&entry.path()).is_ok_and(|state| !state.finished())
             {
                 validate_plan_session_binding(&plan, &state)?;
                 if let Some(import_run_id) = state.import_run_id {
@@ -4137,6 +4212,31 @@ fn set_hidden(_path: &Path, _hidden: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridge_requests_wait_for_a_running_chart_rematch_but_not_for_other_work() {
+        let directory = tempfile::tempdir().unwrap();
+        let app_data = directory.path().to_path_buf();
+        // Another Aurora operation still makes a request fail at once.
+        let held = BridgeProcessLock::try_acquire(&app_data).unwrap();
+        assert!(BridgeProcessLock::acquire(&app_data).is_err());
+        drop(held);
+        // The chart helper holds both locks; a request waits until it is done.
+        let chart = db::MaintenanceLock::try_acquire(&app_data, db::CHART_REMATCH_LOCK)
+            .unwrap()
+            .unwrap();
+        let workflow = BridgeProcessLock::try_acquire(&app_data).unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(600));
+            drop(workflow);
+            drop(chart);
+        });
+        let started = std::time::Instant::now();
+        let lock = BridgeProcessLock::acquire(&app_data).expect("waits for the chart re-match");
+        assert!(started.elapsed() >= Duration::from_millis(500));
+        release.join().unwrap();
+        drop(lock);
+    }
 
     #[test]
     fn move_back_lists_only_tracks_verifiably_gone_from_a_readable_folder() {
@@ -5874,9 +5974,7 @@ mod tests {
         lap("cleanup abandoned plans");
         let resolved = resolve_catalog_album_folder(&conn, &album_id).unwrap();
         lap("resolve album folder");
-        let destination = inbox
-            .path()
-            .join(resolved.folder.file_name().unwrap());
+        let destination = inbox.path().join(resolved.folder.file_name().unwrap());
         let plan_dir = directory.join("bench-plan");
         let _ = fs::remove_dir_all(&plan_dir);
         let (session, scope) = importer::prepare_album_removal(

@@ -652,20 +652,21 @@ pub(crate) fn smart_playlist_refresh_pending(app_data_dir: &Path) -> bool {
     pending_smart_refresh_path(app_data_dir).is_file()
 }
 
-/// Held while one process refreshes the deferred smart playlists, so the desktop app and
-/// the helper an Aurora import starts never evaluate every playlist twice at once. It is
-/// deliberately not the intake lock: a refresh must never block the next album intake.
-struct SmartRefreshLock {
+/// Held while one process runs a piece of deferred maintenance (named by its lock file),
+/// so the desktop app and the helper an Aurora import starts never run it twice at once.
+/// The smart playlist refresh lock is deliberately not the intake lock: a refresh must
+/// never block the next album intake.
+pub(crate) struct MaintenanceLock {
     _file: fs::File,
     #[cfg(not(windows))]
     path: PathBuf,
 }
 
-impl SmartRefreshLock {
-    fn try_acquire(app_data_dir: &Path) -> Result<Option<Self>> {
-        let path = app_data_dir
-            .join("aurora-bridge")
-            .join("smart-playlist-refresh.lock");
+const SMART_REFRESH_LOCK: &str = "smart-playlist-refresh.lock";
+
+impl MaintenanceLock {
+    pub(crate) fn try_acquire(app_data_dir: &Path, name: &str) -> Result<Option<Self>> {
+        let path = app_data_dir.join("aurora-bridge").join(name);
         if let Some(directory) = path.parent() {
             fs::create_dir_all(directory)?;
         }
@@ -706,7 +707,7 @@ impl SmartRefreshLock {
 }
 
 #[cfg(not(windows))]
-impl Drop for SmartRefreshLock {
+impl Drop for MaintenanceLock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
@@ -724,7 +725,7 @@ pub(crate) fn run_deferred_smart_playlist_refresh(
     if !path.is_file() {
         return Ok(None);
     }
-    let Some(_lock) = SmartRefreshLock::try_acquire(app_data_dir)? else {
+    let Some(_lock) = MaintenanceLock::try_acquire(app_data_dir, SMART_REFRESH_LOCK)? else {
         return Ok(None);
     };
     let marker = match fs::read(&path) {
@@ -1418,12 +1419,14 @@ mod tests {
 
         // Another process already refreshing keeps the marker for itself to finish.
         defer_smart_playlist_refresh(directory.path(), 6).unwrap();
-        let held = SmartRefreshLock::try_acquire(directory.path())
+        let held = MaintenanceLock::try_acquire(directory.path(), SMART_REFRESH_LOCK)
             .unwrap()
             .expect("lock is free");
-        assert!(SmartRefreshLock::try_acquire(directory.path())
-            .unwrap()
-            .is_none());
+        assert!(
+            MaintenanceLock::try_acquire(directory.path(), SMART_REFRESH_LOCK)
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(
             run_deferred_smart_playlist_refresh(directory.path(), &conn).unwrap(),
             None

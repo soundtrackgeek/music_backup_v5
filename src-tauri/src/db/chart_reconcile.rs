@@ -1010,6 +1010,100 @@ pub(super) fn reconcile_weekly_album_summaries(
     Ok(())
 }
 
+const PENDING_CHART_REMATCH_FILE: &str = "pending-chart-rematch.json";
+pub(crate) const CHART_REMATCH_LOCK: &str = "chart-rematch.lock";
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingChartRematch {
+    albums: bool,
+    tracks: bool,
+    queued_at: String,
+}
+
+fn pending_chart_rematch_path(app_data_dir: &Path) -> PathBuf {
+    app_data_dir
+        .join("aurora-bridge")
+        .join(PENDING_CHART_REMATCH_FILE)
+}
+
+/// Re-matching charts against the whole catalog took 25-40 seconds of an album removal.
+/// Removal clears the removed album's links itself (ON DELETE SET NULL), so the catalog
+/// stays consistent; this durable marker asks a background helper to run the complete
+/// reconciler afterwards, which relinks entries to another owned copy. A newer request
+/// merges into an existing marker so neither side is lost.
+pub(crate) fn defer_chart_rematch(app_data_dir: &Path, albums: bool, tracks: bool) -> Result<()> {
+    if !albums && !tracks {
+        return Ok(());
+    }
+    let path = pending_chart_rematch_path(app_data_dir);
+    let directory = path
+        .parent()
+        .ok_or_else(|| anyhow!("The chart re-match marker has no directory"))?;
+    fs::create_dir_all(directory)?;
+    // An unreadable marker still asks for a complete re-match.
+    let previous = match fs::read(&path) {
+        Ok(bytes) => Some(
+            serde_json::from_slice::<PendingChartRematch>(&bytes).unwrap_or(PendingChartRematch {
+                albums: true,
+                tracks: true,
+                queued_at: String::new(),
+            }),
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let pending = PendingChartRematch {
+        albums: albums || previous.as_ref().is_some_and(|p| p.albums),
+        tracks: tracks || previous.as_ref().is_some_and(|p| p.tracks),
+        queued_at: Utc::now().to_rfc3339(),
+    };
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, serde_json::to_vec(&pending)?)?;
+    fs::rename(&temporary, &path)?;
+    Ok(())
+}
+
+pub(crate) fn chart_rematch_pending(app_data_dir: &Path) -> bool {
+    pending_chart_rematch_path(app_data_dir).is_file()
+}
+
+/// Runs the re-match recorded by `defer_chart_rematch` in one transaction. The caller
+/// holds the chart re-match lock. Returns false when nothing was pending. The marker is
+/// removed only if no newer removal rewrote it meanwhile, so that removal is re-matched
+/// again.
+pub(crate) fn run_deferred_chart_rematch(
+    app_data_dir: &Path,
+    conn: &mut Connection,
+) -> Result<bool> {
+    let path = pending_chart_rematch_path(app_data_dir);
+    let marker = match fs::read(&path) {
+        Ok(marker) => marker,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let pending =
+        serde_json::from_slice::<PendingChartRematch>(&marker).unwrap_or(PendingChartRematch {
+            albums: true,
+            tracks: true,
+            queued_at: String::new(),
+        });
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    if pending.albums {
+        reconcile_album_chart_matches(&tx)
+            .context("Could not relink album charts after an album removal")?;
+    }
+    if pending.tracks {
+        reconcile_track_chart_matches(&tx)
+            .context("Could not relink singles charts after an album removal")?;
+    }
+    tx.commit()?;
+    if fs::read(&path).ok().as_deref() == Some(marker.as_slice()) {
+        fs::remove_file(&path)?;
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
