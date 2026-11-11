@@ -266,6 +266,16 @@ impl ExistingAlbumScan {
             .collect()
     }
 
+    /// Uses the catalog's spelling for one scanned folder (see
+    /// `importer::catalog_drive_letter_spelling`), so exact catalog lookups match.
+    pub(crate) fn respell_file_path(&mut self, scanned: &str, catalog: &str) {
+        for track in &mut self.scan.tracks {
+            if track.file_path == scanned {
+                track.file_path = catalog.to_owned();
+            }
+        }
+    }
+
     pub(crate) fn records(&self, album_unique_id: Option<&str>) -> Vec<[String; 17]> {
         let album_rating = calculated_album_rating(&self.scan.tracks);
         self.scan
@@ -283,6 +293,11 @@ impl ExistingTrackScan {
 
     pub(crate) fn identity(&self) -> (String, String) {
         (self.track.file_path.clone(), self.track.filename.clone())
+    }
+
+    /// Uses the catalog's spelling of the track's folder, so exact catalog lookups match.
+    pub(crate) fn respell_file_path(&mut self, catalog: &str) {
+        self.track.file_path = catalog.to_owned();
     }
 
     pub(crate) fn record(

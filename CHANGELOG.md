@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.5] - 2026-11-11
+
+### Fixed
+- Aurora tag edits for albums whose catalog folder starts with a lowercase drive letter (`d:\MUSIC\...`) now sync. One import stored seven albums that way, and Music Library compared paths exactly, so it reported their MP3s as "not represented in the active Music Library catalog" and the edits waited forever. Album and single-file syncs now use the catalog's spelling when a folder differs only in drive-letter case, as Windows does. The catalog folder is left as it is.
+
 ## [0.215.4] - 2026-11-11
 
 ### Changed

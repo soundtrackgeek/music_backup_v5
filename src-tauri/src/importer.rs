@@ -728,7 +728,17 @@ pub(crate) fn prepare_existing_album_deletion_sync(
     folder: &Path,
     deleted_paths: &[String],
 ) -> Result<ExistingAlbumSyncCandidate> {
-    let scan = crate::folder_sync::scan_existing_album(folder)?;
+    let mut scan = crate::folder_sync::scan_existing_album(folder)?;
+    let scanned_folders = scan
+        .track_identities()
+        .into_iter()
+        .map(|(file_path, _)| file_path)
+        .collect::<HashSet<_>>();
+    for scanned in scanned_folders {
+        if let Some(catalog) = catalog_drive_letter_spelling(conn, &scanned)? {
+            scan.respell_file_path(&scanned, &catalog);
+        }
+    }
     let folder = scan.folder().to_path_buf();
     let track_count = scan.track_count();
     let data_version = scoped_sync_data_version(conn)?;
@@ -1014,6 +1024,8 @@ pub(crate) fn prepare_existing_file_fast_sync(
         return Ok(None);
     };
     let target_file_path = display_scoped_path(target_parent);
+    let target_file_path =
+        catalog_drive_letter_spelling(conn, &target_file_path)?.unwrap_or(target_file_path);
     let data_version = scoped_sync_data_version(conn)?;
     let matches = conn
         .prepare(
@@ -1066,10 +1078,13 @@ pub(crate) fn prepare_existing_file_fast_sync(
         track_count,
         prepared: None,
     };
-    let scan = match crate::folder_sync::scan_existing_track(target_path) {
+    let mut scan = match crate::folder_sync::scan_existing_track(target_path) {
         Ok(scan) => scan,
         Err(_) => return Ok(Some(fallback_candidate())),
     };
+    if same_except_drive_letter_case(&scan.identity().0, &target_file_path) {
+        scan.respell_file_path(&target_file_path);
+    }
     if scan.identity() != (target_file_path.clone(), target_filename.to_owned()) {
         return Ok(Some(fallback_candidate()));
     }
@@ -2204,6 +2219,46 @@ fn insert_rating_snapshot_from_catalog(
     )
     .context("Could not record the targeted Aurora rating snapshot")?;
     Ok((track_count, album_count))
+}
+
+/// `path` with the other case of its drive letter, when it starts with one.
+fn other_drive_letter_case(path: &str) -> Option<String> {
+    let bytes = path.as_bytes();
+    if bytes.len() < 2 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+        return None;
+    }
+    let letter = bytes[0] as char;
+    let swapped = if letter.is_ascii_uppercase() {
+        letter.to_ascii_lowercase()
+    } else {
+        letter.to_ascii_uppercase()
+    };
+    Some(format!("{swapped}{}", &path[1..]))
+}
+
+fn same_except_drive_letter_case(left: &str, right: &str) -> bool {
+    left == right || other_drive_letter_case(left).is_some_and(|other| other == right)
+}
+
+/// The catalog's spelling of a scanned folder when it differs only in drive-letter case.
+/// Windows ignores that case, but catalog lookups compare paths exactly, and one older
+/// import stored folders as `d:\...` while scans report `D:\...`. `None` means the scanned
+/// spelling is already the catalog's, or the catalog has neither.
+pub(crate) fn catalog_drive_letter_spelling(
+    conn: &Connection,
+    file_path: &str,
+) -> Result<Option<String>> {
+    let Some(other) = other_drive_letter_case(file_path) else {
+        return Ok(None);
+    };
+    let mut exists =
+        conn.prepare_cached("SELECT EXISTS(SELECT 1 FROM tracks WHERE file_path = ?1)")?;
+    if exists.query_row([file_path], |row| row.get::<_, bool>(0))? {
+        return Ok(None);
+    }
+    Ok(exists
+        .query_row([&other], |row| row.get::<_, bool>(0))?
+        .then_some(other))
 }
 
 fn display_scoped_path(path: &Path) -> String {
@@ -7221,6 +7276,58 @@ mod tests {
             )
             .expect("updated zero-disc row");
         assert_eq!(updated, (Some(80), None, None));
+    }
+
+    #[test]
+    fn fast_sync_matches_a_catalog_folder_stored_with_a_lowercase_drive_letter() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+        // One older import stored `d:\...`; scans always report the drive as `D:\...`.
+        let scanned_path = initial.file_path.clone();
+        let stored_path = other_drive_letter_case(&scanned_path).expect("drive-letter path");
+        initial.file_path = stored_path.clone();
+        refresh_fast_sync_row_hash(&mut initial);
+        let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+        assert_eq!(
+            catalog_drive_letter_spelling(&conn, &scanned_path).unwrap(),
+            Some(stored_path.clone())
+        );
+        assert_eq!(
+            catalog_drive_letter_spelling(&conn, &stored_path).unwrap(),
+            None
+        );
+
+        write_fast_sync_mp3(&mp3, "Track Title", Some(196), "", 2008);
+        let album = prepare_existing_album_fast_sync(&conn, &folder).expect("album candidate");
+        assert!(
+            album.prepared.is_some(),
+            "the album sync must match the stored spelling"
+        );
+        let file = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare file sync")
+            .expect("cataloged target candidate");
+        let outcome = apply_existing_album_fast_sync(&mut conn, &file).expect("apply file sync");
+        assert!(matches!(
+            outcome,
+            ExistingAlbumFastSyncOutcome::Updated {
+                changed_tracks: 1,
+                ..
+            }
+        ));
+        // The rating lands without renaming the catalog folder.
+        let updated: (Option<i32>, String) = conn
+            .query_row(
+                "SELECT normalized_rating, file_path FROM tracks WHERE id = ?1",
+                params![target_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("updated row");
+        assert_eq!(updated, (Some(80), stored_path));
     }
 
     #[test]

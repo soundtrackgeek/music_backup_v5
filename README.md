@@ -1,5 +1,9 @@
 # Music Library
 
+## Drive-letter case no longer blocks Aurora syncs (0.215.5)
+
+Windows treats `d:\MUSIC` and `D:\MUSIC` as the same folder. Music Library now does too when it syncs Aurora's tag edits, so albums stored with a lowercase drive letter (seven albums from one earlier import) no longer wait with "not in the Music Library catalog".
+
 ## Chart links update in the background after a removal (0.215.4)
 
 When Aurora moves an album to the Inbox or removes it, Music Library no longer re-matches every chart against the whole catalog before it finishes. That step took 25-40 seconds of each move on a large library. The removed album's chart links are cleared in the same atomic commit, and a background helper then re-matches the affected charts, so an entry can link to another copy of the album or song you still own. If Aurora starts its next operation while the helper runs, the operation waits for it instead of failing. Smart playlists refresh after the charts are updated.
