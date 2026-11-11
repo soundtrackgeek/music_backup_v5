@@ -1,5 +1,9 @@
 # Music Library
 
+## Ratings saved on the 5-step scale are read (0.215.7)
+
+Some taggers save a 3-star rating as byte 153 and a 4-star rating as 204 (the 5-step Windows scale) in both the MusicBee and the Default rating frame. Music Library used to reject those tracks with "unsupported MusicBee rating byte", which stopped Move to Inbox, imports and Aurora syncs for the album. When both frames hold the same 5-step byte, Music Library now reads it on that scale.
+
 ## Drive-letter case no longer blocks Aurora syncs (0.215.6)
 
 Windows treats `d:\MUSIC` and `D:\MUSIC` as the same folder. Music Library now does too when it syncs Aurora's tag edits, so albums stored with a lowercase drive letter (seven albums from one earlier import) no longer wait with "not in the Music Library catalog".

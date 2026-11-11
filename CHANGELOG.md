@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.7] - 2026-11-11
+
+### Fixed
+- Tracks whose MusicBee rating frame holds a 5-step Windows-scale byte (51, 102, 153 or 204) now scan when a Default rating frame holds the same byte; Music Library reads the rating on the 5-step scale (153 = 3 stars, 204 = 4 stars). Before, the scan failed with "unsupported MusicBee rating byte 153", which blocked Move to Inbox, imports and Aurora background syncs for albums such as Andrew Powell - Ladyhawke (1985), whose second disc has 30 such tracks. A MusicBee byte without a matching Default frame is still rejected.
+
 ## [0.215.6] - 2026-11-11
 
 ### Fixed

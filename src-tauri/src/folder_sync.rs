@@ -1777,7 +1777,15 @@ fn musicbee_rating(tag: &Tag, path: &Path) -> Result<Option<f64>> {
     }
 
     let (value, mapping, label) = if let Some(value) = musicbee.first().copied() {
-        (value, MUSICBEE_RATINGS.as_slice(), "MusicBee")
+        // Some taggers write the 5-step Windows scale (153 = 3 stars) into both
+        // frames. A matching Default frame says which scale the byte uses.
+        if legacy_default.first() == Some(&value)
+            && !MUSICBEE_RATINGS.iter().any(|(byte, _)| *byte == value)
+        {
+            (value, LEGACY_DEFAULT_RATINGS.as_slice(), "legacy Default")
+        } else {
+            (value, MUSICBEE_RATINGS.as_slice(), "MusicBee")
+        }
     } else if let Some(value) = legacy_default.first().copied() {
         (value, LEGACY_DEFAULT_RATINGS.as_slice(), "legacy Default")
     } else {
@@ -2395,6 +2403,41 @@ mod tests {
             musicbee_rating(&tag, path).expect("preferred MusicBee rating"),
             Some(3.0)
         );
+    }
+
+    #[test]
+    fn scanner_reads_a_five_step_byte_written_into_both_rating_frames() {
+        let path = Path::new("five-step-in-both-frames.mp3");
+        let both = |rating| {
+            let mut tag = Tag::new();
+            for user in [MUSICBEE_POPM_OWNER, LEGACY_DEFAULT_POPM_OWNER] {
+                tag.add_frame(Popularimeter {
+                    user: user.to_owned(),
+                    rating,
+                    counter: 0,
+                });
+            }
+            tag
+        };
+        assert_eq!(musicbee_rating(&both(153), path).unwrap(), Some(3.0));
+        assert_eq!(musicbee_rating(&both(204), path).unwrap(), Some(4.0));
+        // A byte on both scales keeps its MusicBee meaning.
+        assert_eq!(musicbee_rating(&both(255), path).unwrap(), Some(5.0));
+
+        // Without a matching Default frame the MusicBee byte stays unsupported.
+        let mut alone = Tag::new();
+        alone.add_frame(Popularimeter {
+            user: MUSICBEE_POPM_OWNER.to_owned(),
+            rating: 153,
+            counter: 0,
+        });
+        assert!(musicbee_rating(&alone, path).is_err());
+        alone.add_frame(Popularimeter {
+            user: LEGACY_DEFAULT_POPM_OWNER.to_owned(),
+            rating: 204,
+            counter: 0,
+        });
+        assert!(musicbee_rating(&alone, path).is_err());
     }
 
     #[test]
