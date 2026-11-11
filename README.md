@@ -1,5 +1,9 @@
 # Music Library
 
+## Aurora previews no longer wait on old plans (0.215.3)
+
+Every Aurora preview first tries to finish leftover follow-up work (quality scan, cover archive) from earlier adds, moves and removals. Plans that could never finish, such as an album whose files changed afterwards or an album with no cover anywhere, were retried on every preview and cost about two minutes each time. Each plan is now finished once: albums without a cover are reported as a warning, changed albums are marked as abandoned, and later previews skip them. A Move to Inbox preview now takes a second or two. The first preview after updating clears the old backlog one last time.
+
 ## Move to Inbox previews in seconds (0.215.2)
 
 Aurora's **Move to Inbox** now prepares only the selected album, the same way **Remove album** does, instead of copying and comparing the whole catalog. The preview no longer times out on a large library, and the move keeps its backup, file checks and single atomic catalog update.

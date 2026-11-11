@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.3] - 2026-11-11
+
+### Fixed
+- **Aurora previews no longer spend minutes on old plans**: before each preview, Music Library resumes unfinished post-import work (quality cache, cover archive) from earlier Aurora plans. Plans that could never complete were retried every time: an album with no cover in its files or the cover archive, or an album whose files changed after the import (which also re-hashed every MP3 on each attempt). On a large library this added about two minutes to every Move to Inbox, Remove album and add preview. Each plan now records when its work is done: missing covers become a one-time warning ("Add one with Music Library's cover tools"), a changed album is marked abandoned and no longer retried, and finished plans are skipped without reading the catalog. The first preview after updating clears the existing backlog once; later Move to Inbox previews take about a second.
+
 ## [0.215.2] - 2026-11-10
 
 ### Fixed

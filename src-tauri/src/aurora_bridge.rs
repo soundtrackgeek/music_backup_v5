@@ -352,6 +352,16 @@ struct ApplyJournal {
 struct PostcommitState {
     quality_cached: bool,
     covers_archived: bool,
+    /// Set when retrying can no longer succeed (an album changed after import), so
+    /// later previews stop re-reading every album of this import.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    abandoned: Option<String>,
+}
+
+impl PostcommitState {
+    fn finished(&self) -> bool {
+        (self.quality_cached && self.covers_archived) || self.abandoned.is_some()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2142,6 +2152,17 @@ fn load_postcommit_state(directory: &Path) -> Result<PostcommitState> {
     Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
 
+/// The first committed album whose files no longer match the reviewed import.
+fn changed_committed_album(plan: &StoredPlan) -> Result<Option<PathBuf>> {
+    for album in &plan.albums {
+        let destination = PathBuf::from(&album.destination_path);
+        if inventory_without_owner_marker(&destination)? != album.inventory {
+            return Ok(Some(destination));
+        }
+    }
+    Ok(None)
+}
+
 fn committed_quality(
     plan: &StoredPlan,
     directory: &Path,
@@ -2149,13 +2170,6 @@ fn committed_quality(
     let mut published = Vec::new();
     for (index, album) in plan.albums.iter().enumerate() {
         let destination = PathBuf::from(&album.destination_path);
-        // Do not attach old quality/art to a later replacement or changed release.
-        if inventory_without_owner_marker(&destination)? != album.inventory {
-            bail!(
-                "The committed album changed before post-import recovery: {}",
-                destination.display()
-            );
-        }
         published.push(PublishedAlbum {
             root: plan_album_root(plan, &destination)?,
             destination,
@@ -2189,12 +2203,26 @@ fn complete_committed_intake(
     let mut warnings = Vec::new();
     let result = (|| -> Result<()> {
         let mut state = load_postcommit_state(directory)?;
-        if state.quality_cached && state.covers_archived {
+        if state.finished() {
             return Ok(());
         }
-        let quality = committed_quality(plan, directory)?;
+        // Do not attach old quality/art to a later replacement or changed release. A
+        // changed album never changes back, so stop retrying instead of re-reading it
+        // during every later preview.
+        if let Some(changed) = changed_committed_album(plan)? {
+            state.abandoned = Some(format!(
+                "The committed album changed before post-import recovery: {}",
+                changed.display()
+            ));
+            atomic_write_json(&directory.join("postcommit.json"), &state)?;
+            bail!(
+                "The committed album changed before post-import recovery, so it will not be retried: {}",
+                changed.display()
+            );
+        }
         let database = app_data_dir.join("music-library.sqlite3");
         if !state.quality_cached {
+            let quality = committed_quality(plan, directory)?;
             let cached = retry_postcommit_database_busy(|attempt| {
                 if attempt > 0 { progress.report("waiting", "Waiting to save imported audio quality; the album move is already committed.", plan.albums.len()); }
                 let conn = open_database(&database)?;
@@ -2235,11 +2263,15 @@ fn complete_committed_intake(
             if imported + missing != plan.albums.len() as u64 {
                 bail!("Cover import did not account for every reviewed album; cover recovery remains pending");
             }
-            if missing > 0 {
-                bail!("{missing} imported albums still have no available cover; cover recovery remains pending");
-            }
+            // An album with no embedded or archived cover stays without one until a cover
+            // is added, so retrying during every preview cannot help. Report it once.
             state.covers_archived = true;
             atomic_write_json(&directory.join("postcommit.json"), &state)?;
+            if missing > 0 {
+                warnings.push(format!(
+                    "{missing} imported albums have no cover in their files or the cover archive. Add one with Music Library's cover tools."
+                ));
+            }
         }
         Ok(())
     })();
@@ -3742,7 +3774,7 @@ fn cleanup_abandoned_bridge_plans(conn: &Connection, app_data_dir: &Path) -> Res
             if plan.operation == PlanOperation::Intake
                 && entry.path().join("postcommit-quality.json").is_file()
                 && load_postcommit_state(&entry.path())
-                    .is_ok_and(|state| !state.quality_cached || !state.covers_archived)
+                    .is_ok_and(|state| !state.finished())
             {
                 validate_plan_session_binding(&plan, &state)?;
                 if let Some(import_run_id) = state.import_run_id {
@@ -4481,6 +4513,7 @@ mod tests {
             &PostcommitState {
                 quality_cached: true,
                 covers_archived: false,
+                abandoned: None,
             },
         )
         .unwrap();
@@ -4514,6 +4547,9 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("album changed"));
+        // A changed album never matches again, so later previews skip this import.
+        let state = load_postcommit_state(&directory).unwrap();
+        assert!(state.abandoned.is_some() && state.finished());
     }
 
     #[test]
@@ -5811,6 +5847,82 @@ mod tests {
         assert!(
             validate_album_removal_paths(Path::new(r"H:\Album"), Path::new(r"D:\Other")).is_err()
         );
+    }
+
+    #[test]
+    #[ignore = "Requires a disposable full-size catalog copy in AURORA_MOVE_BENCH_DIR"]
+    fn benchmark_move_to_inbox_on_catalog_copy() {
+        let directory = PathBuf::from(std::env::var_os("AURORA_MOVE_BENCH_DIR").unwrap());
+        // The benchmark removes an album; never run it against a live catalog.
+        assert!(
+            directory.join("disposable-benchmark-copy").is_file(),
+            "Mark the catalog copy's folder with a disposable-benchmark-copy file"
+        );
+        let album_id = std::env::var("AURORA_MOVE_BENCH_ALBUM").unwrap();
+        let database = directory.join("music-library.sqlite3");
+        let inbox = tempdir().unwrap();
+        let started = std::time::Instant::now();
+        let mut last = std::time::Instant::now();
+        let mut lap = |label: &str| {
+            eprintln!("MOVE BENCH {label}: {:?}", last.elapsed());
+            last = std::time::Instant::now();
+        };
+        let pool = db::pool_for_path(&database).unwrap();
+        let mut conn = open_database(&database).unwrap();
+        lap("open + migrate");
+        cleanup_abandoned_bridge_plans(&conn, &directory).unwrap();
+        lap("cleanup abandoned plans");
+        let resolved = resolve_catalog_album_folder(&conn, &album_id).unwrap();
+        lap("resolve album folder");
+        let destination = inbox
+            .path()
+            .join(resolved.folder.file_name().unwrap());
+        let plan_dir = directory.join("bench-plan");
+        let _ = fs::remove_dir_all(&plan_dir);
+        let (session, scope) = importer::prepare_album_removal(
+            &mut conn,
+            &album_id,
+            &display_path(&resolved.folder),
+            &display_path(&destination),
+            &plan_dir.join("album-removal.json"),
+        )
+        .unwrap();
+        lap("prepare scope");
+        inventory_folder(&resolved.folder).unwrap();
+        lap("inventory files");
+        drop(conn);
+        pool.shutdown().unwrap();
+        lap("shutdown (optimize + checkpoint)");
+        let mut conn = open_database(&database).unwrap();
+        lap("reopen");
+        importer::apply_album_removal(&mut conn, &database, session, &scope, &mut |stage, _| {
+            lap(&format!("apply before {stage}"));
+        })
+        .unwrap();
+        lap("apply committing");
+        drop(conn);
+        pool.shutdown().unwrap();
+        lap("shutdown after apply");
+        eprintln!("MOVE BENCH total {:?}", started.elapsed());
+    }
+
+    #[test]
+    #[ignore = "Requires a disposable full-size catalog copy in AURORA_MOVE_BENCH_DIR"]
+    fn benchmark_chart_reconcilers_on_catalog_copy() {
+        let directory = PathBuf::from(std::env::var_os("AURORA_MOVE_BENCH_DIR").unwrap());
+        // The benchmark removes an album; never run it against a live catalog.
+        assert!(
+            directory.join("disposable-benchmark-copy").is_file(),
+            "Mark the catalog copy's folder with a disposable-benchmark-copy file"
+        );
+        let conn = open_database(&directory.join("music-library.sqlite3")).unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        let started = std::time::Instant::now();
+        db::reconcile_album_chart_matches(&tx).unwrap();
+        eprintln!("CHART BENCH albums {:?}", started.elapsed());
+        let started = std::time::Instant::now();
+        db::reconcile_track_chart_matches(&tx).unwrap();
+        eprintln!("CHART BENCH tracks {:?}", started.elapsed());
     }
 
     #[test]
