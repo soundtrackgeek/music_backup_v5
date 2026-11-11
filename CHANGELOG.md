@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.6] - 2026-11-11
+
+### Fixed
+- The 0.215.5 macOS build failed: the new drive-letter sync test builds its album in a temp folder, which has no drive letter on macOS. That test now runs on Windows only, and a new test checks the drive-letter helpers on every platform. This release ships the 0.215.5 fix.
+
 ## [0.215.5] - 2026-11-11
 
 ### Fixed

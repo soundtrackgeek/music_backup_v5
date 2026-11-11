@@ -1,6 +1,6 @@
 # Music Library
 
-## Drive-letter case no longer blocks Aurora syncs (0.215.5)
+## Drive-letter case no longer blocks Aurora syncs (0.215.6)
 
 Windows treats `d:\MUSIC` and `D:\MUSIC` as the same folder. Music Library now does too when it syncs Aurora's tag edits, so albums stored with a lowercase drive letter (seven albums from one earlier import) no longer wait with "not in the Music Library catalog".
 

@@ -7279,6 +7279,24 @@ mod tests {
     }
 
     #[test]
+    fn drive_letter_case_helpers_only_swap_the_drive_letter() {
+        assert_eq!(
+            other_drive_letter_case(r"d:\MUSIC\A").as_deref(),
+            Some(r"D:\MUSIC\A")
+        );
+        assert_eq!(
+            other_drive_letter_case(r"D:\MUSIC").as_deref(),
+            Some(r"d:\MUSIC")
+        );
+        assert_eq!(other_drive_letter_case(r"\server\share"), None);
+        assert_eq!(other_drive_letter_case("/var/music"), None);
+        assert!(same_except_drive_letter_case(r"d:\MUSIC", r"D:\MUSIC"));
+        assert!(!same_except_drive_letter_case(r"D:\MUSIC", r"D:\music"));
+    }
+
+    // Drive letters exist only on Windows; elsewhere temp folders have none.
+    #[cfg(windows)]
+    #[test]
     fn fast_sync_matches_a_catalog_folder_stored_with_a_lowercase_drive_letter() {
         let temp = tempfile::tempdir().expect("tempdir");
         let folder = temp.path().join("Fast Album");
