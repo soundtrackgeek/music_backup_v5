@@ -1,5 +1,9 @@
 # Music Library
 
+## Correct lengths for CRC-protected MP3s (0.215.8)
+
+Some MP3 encoders add a checksum to every frame. Music Library's audio reader then skipped the header that holds the track length and guessed from the first few frames, so a 3:34 song could read as 19 minutes. Music Library now reads the length from that header itself when the guess disagrees. Aurora tag edits for such albums (for example an Album Artist rename) sync again instead of waiting with "cannot apply this change on its own".
+
 ## Ratings saved on the 5-step scale are read (0.215.7)
 
 Some taggers save a 3-star rating as byte 153 and a 4-star rating as 204 (the 5-step Windows scale) in both the MusicBee and the Default rating frame. Music Library used to reject those tracks with "unsupported MusicBee rating byte", which stopped Move to Inbox, imports and Aurora syncs for the album. When both frames hold the same 5-step byte, Music Library now reads it on that scale.

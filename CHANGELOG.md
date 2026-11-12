@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.215.8] - 2026-11-12
+
+### Fixed
+- MP3s whose frames carry a CRC checksum now get their correct length when they have no TLEN tag. Symphonia ignores the Xing/Info header in a CRC-protected first frame and estimates the length from the first 16 frames, which read Huey Lewis & The News - Jacob's Ladder as 1159 seconds instead of 214. Music Library now reads the frame count from the Xing/Info or VBRI header itself and uses it when the estimate differs by more than a second. The wrong length made Aurora background syncs fall back to "requires reviewed reconciliation", which blocked an Album Artist rename on five Huey Lewis & The News albums and an edit on The Fresh Prince of Bel-Air. Lengths that Symphonia already reads correctly are unchanged.
+
 ## [0.215.7] - 2026-11-11
 
 ### Fixed

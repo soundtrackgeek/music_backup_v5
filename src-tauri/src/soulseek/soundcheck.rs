@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{fs::File, path::Path, sync::OnceLock};
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+    path::Path,
+    sync::OnceLock,
+};
 use symphonia::{
     core::{
         codecs::{
@@ -148,6 +153,11 @@ fn inspect_probed_file(
                     (sample_rate > 0).then_some(frames as f64 / f64::from(sample_rate))
                 })
         });
+    let duration_seconds = if extension == "mp3" {
+        reconcile_mp3_duration(duration_seconds, mp3_header_duration_seconds(path))
+    } else {
+        duration_seconds
+    };
     let mut track_number = None;
     let mut track_total = None;
     if let Some(revision) = format.metadata().skip_to_latest() {
@@ -319,11 +329,149 @@ fn infer_track_number(path: &Path) -> Option<u32> {
     }
 }
 
+/// Prefers the frame count in an MP3's own VBR header when Symphonia's length
+/// disagrees with it by more than a second. Symphonia skips a Xing header whose
+/// first frame carries a CRC, then guesses from the first 16 frames, which can
+/// make a quiet-intro track read several times too long.
+fn reconcile_mp3_duration(probed: Option<f64>, header: Option<f64>) -> Option<f64> {
+    match (probed, header) {
+        (Some(probed), Some(header)) if (probed - header).abs() > 1.0 => Some(header),
+        (None, header) => header,
+        (probed, _) => probed,
+    }
+}
+
+/// Reads an MP3's length from the Xing/Info or VBRI header in its first frame.
+pub(crate) fn mp3_header_duration_seconds(path: &Path) -> Option<f64> {
+    let mut file = File::open(path).ok()?;
+    let mut offset = 0_u64;
+    let mut id3 = [0_u8; 10];
+    // Skip any ID3v2 tags before the first MPEG frame.
+    loop {
+        file.seek(SeekFrom::Start(offset)).ok()?;
+        file.read_exact(&mut id3).ok()?;
+        if &id3[..3] != b"ID3" {
+            break;
+        }
+        let size = id3[6..10]
+            .iter()
+            .fold(0_u64, |size, byte| (size << 7) | u64::from(byte & 0x7f));
+        let footer = if id3[5] & 0x10 != 0 { 10 } else { 0 };
+        offset += 10 + size + footer;
+    }
+    file.seek(SeekFrom::Start(offset)).ok()?;
+    let mut buffer = Vec::with_capacity(64 * 1024);
+    file.take(64 * 1024).read_to_end(&mut buffer).ok()?;
+    mp3_header_duration_from_bytes(&buffer)
+}
+
+fn mp3_header_duration_from_bytes(buffer: &[u8]) -> Option<f64> {
+    let read_u32 = |at: usize| {
+        buffer
+            .get(at..at + 4)
+            .map(|bytes| u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    };
+    let start = (0..buffer.len().saturating_sub(4)).find(|&at| {
+        let (sync, flags, rates) = (buffer[at], buffer[at + 1], buffer[at + 2]);
+        sync == 0xff
+            && flags & 0xe0 == 0xe0
+            && (flags >> 3) & 0x3 != 1
+            && (flags >> 1) & 0x3 == 1
+            && (1..=14).contains(&(rates >> 4))
+            && (rates >> 2) & 0x3 != 3
+    })?;
+    let header = &buffer[start..start + 4];
+    let version = (header[1] >> 3) & 0x3;
+    let mpeg1 = version == 3;
+    let sample_rate = [44_100.0, 48_000.0, 32_000.0][usize::from((header[2] >> 2) & 0x3)]
+        / match version {
+            3 => 1.0,
+            2 => 2.0,
+            _ => 4.0,
+        };
+    let samples_per_frame = if mpeg1 { 1152.0 } else { 576.0 };
+    let mono = header[3] >> 6 == 3;
+    let side_info = match (mpeg1, mono) {
+        (true, false) => 32,
+        (true, true) | (false, false) => 17,
+        (false, true) => 9,
+    };
+    let crc = if header[1] & 0x1 == 0 { 2 } else { 0 };
+    let mut frames = None;
+    // A CRC-protected frame may place the tag after the CRC or, as LAME does,
+    // where it would be without one.
+    for at in [start + 4 + side_info, start + 4 + crc + side_info] {
+        if matches!(buffer.get(at..at + 4), Some(b"Xing" | b"Info")) {
+            let flags = read_u32(at + 4)?;
+            frames = (flags & 0x1 != 0).then(|| read_u32(at + 8)).flatten();
+            break;
+        }
+    }
+    if frames.is_none() && buffer.get(start + 36..start + 40) == Some(b"VBRI".as_slice()) {
+        frames = read_u32(start + 36 + 14);
+    }
+    frames
+        .filter(|frames| *frames > 0)
+        .map(|frames| f64::from(frames) * samples_per_frame / sample_rate)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{fs, io::Write};
     use tempfile::tempdir;
+
+    /// A CRC-protected MPEG-1 Layer III frame with a LAME-style Xing tag.
+    fn crc_protected_xing_frame(frames: u32) -> Vec<u8> {
+        let mut frame = vec![0xff, 0xfa, 0x90, 0x64, 0x86, 0x1f];
+        frame.resize(36, 0);
+        frame.extend_from_slice(b"Xing");
+        frame.extend_from_slice(&0x0f_u32.to_be_bytes());
+        frame.extend_from_slice(&frames.to_be_bytes());
+        frame.resize(417, 0);
+        frame
+    }
+
+    #[test]
+    fn mp3_header_duration_reads_a_xing_tag_behind_a_crc() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("crc.mp3");
+        let mut bytes = b"ID3\x03\x00\x00\x00\x00\x01\x00".to_vec();
+        bytes.resize(10 + 128, 0);
+        bytes.extend(crc_protected_xing_frame(8_202));
+        fs::write(&path, bytes).unwrap();
+
+        let seconds = mp3_header_duration_seconds(&path).expect("xing duration");
+        assert!((seconds - 214.26).abs() < 0.01, "{seconds}");
+
+        // VBRI and plain Info tags read the same way; a frame without a tag has none.
+        let mut vbri = vec![0xff, 0xfb, 0x90, 0x64];
+        vbri.resize(36, 0);
+        vbri.extend_from_slice(b"VBRI\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00");
+        vbri.extend_from_slice(&100_u32.to_be_bytes());
+        assert_eq!(
+            mp3_header_duration_from_bytes(&vbri),
+            Some(100.0 * 1152.0 / 44_100.0)
+        );
+        assert_eq!(
+            mp3_header_duration_from_bytes(&[0xff, 0xfb, 0x90, 0x64, 0, 0]),
+            None
+        );
+    }
+
+    #[test]
+    fn mp3_header_duration_replaces_only_a_disagreeing_estimate() {
+        assert_eq!(
+            reconcile_mp3_duration(Some(1159.2), Some(214.3)),
+            Some(214.3)
+        );
+        assert_eq!(
+            reconcile_mp3_duration(Some(214.25), Some(214.3)),
+            Some(214.25)
+        );
+        assert_eq!(reconcile_mp3_duration(None, Some(214.3)), Some(214.3));
+        assert_eq!(reconcile_mp3_duration(Some(180.0), None), Some(180.0));
+    }
 
     fn write_wav(path: &Path) {
         let sample_count = 8_000_u32;
