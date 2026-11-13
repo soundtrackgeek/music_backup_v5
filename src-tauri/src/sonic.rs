@@ -53,6 +53,8 @@ pub struct SonicStatus {
     pub profile: String,
     pub schedule: SonicSchedule,
     pub idle_supported: bool,
+    /// Step 2 of an analysis job: CLAP embeddings for "Describe a sound".
+    pub sound_search: crate::sonic_clap::SoundSearchStatus,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
@@ -207,7 +209,7 @@ pub(crate) fn work(dir: &Path) -> Result<Connection> {
     Ok(c)
 }
 
-fn catalog(dir: &Path) -> Result<Connection> {
+pub(crate) fn catalog(dir: &Path) -> Result<Connection> {
     let c = Connection::open_with_flags(
         dir.join("music-library.sqlite3"),
         OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -574,16 +576,19 @@ pub(crate) fn analyze_headless(dir: &Path, key: &str) -> Result<serde_json::Valu
 
 pub(crate) fn run(app: &AppHandle, payload: serde_json::Value) -> Result<serde_json::Value> {
     use chrono::Timelike;
-    run_at(
+    run_with(
         &directory(app)?,
         serde_json::from_value(payload)?,
         &crate::jobs::should_stop,
         &crate::jobs::progress_with_eta,
         &idle_seconds,
         &|| chrono::Local::now().hour(),
+        Some(&crate::sonic_clap::launch),
     )
 }
 
+/// Bliss and timelines only; the sound search step needs the model.
+#[cfg(test)]
 fn run_at(
     dir: &Path,
     request: AnalyzeRequest,
@@ -592,7 +597,26 @@ fn run_at(
     idle: &impl Fn() -> Option<u64>,
     hour: &impl Fn() -> u32,
 ) -> Result<serde_json::Value> {
+    run_with(dir, request, stop, report, idle, hour, None)
+}
+
+/// Step 1 checks every queue entry for Bliss features and a timeline. Step 2
+/// (when `clap` is given) adds sound search embeddings for the checked entries.
+fn run_with(
+    dir: &Path,
+    request: AnalyzeRequest,
+    stop: &impl Fn() -> bool,
+    report: &impl Fn(i64, i64, &str, Option<i64>),
+    idle: &impl Fn() -> Option<u64>,
+    hour: &impl Fn() -> u32,
+    clap: Option<&crate::sonic_clap::Launch<'_>>,
+) -> Result<serde_json::Value> {
     let _lock = lock(dir)?;
+    let step = if clap.is_some() && request.scope != "reuse" {
+        "Step 1 of 2 · "
+    } else {
+        ""
+    };
     if request.scope == "reuse" {
         let cache = Connection::open_with_flags(
             dir.join("music-analysis.sqlite3"),
@@ -721,7 +745,7 @@ fn run_at(
                 report(
                     completed,
                     total,
-                    "Waiting for idle time / scheduled hours",
+                    &format!("{step}Waiting for idle time / scheduled hours"),
                     None,
                 );
                 reported = Instant::now();
@@ -739,7 +763,7 @@ fn run_at(
             report(
                 completed,
                 total,
-                &format!("{action} {filename}"),
+                &format!("{step}{action} {filename}"),
                 estimate.remaining(total - completed),
             );
             reported = Instant::now();
@@ -779,7 +803,7 @@ fn run_at(
                 Some(error) => {
                     format!("{failed_this_run} files failed. Last file: {filename}. {error}")
                 }
-                None => format!("{action} {filename}"),
+                None => format!("{step}{action} {filename}"),
             };
             report(
                 completed,
@@ -792,6 +816,10 @@ fn run_at(
         if fatal {
             bail!("Audio analysis stopped because the analyzer or its storage failed. Last file: {filename}. {} Completed analysis and remaining checkpoints are saved. Fix the reported problem, then retry this job.", error.as_deref().unwrap_or_default());
         }
+    }
+    if let Some(launch) = clap.filter(|_| !reuse_only) {
+        let allowed = || schedule(&w).is_ok_and(|s| s.allows(hour(), idle()));
+        crate::sonic_clap::run_batch(dir, &batch, launch, stop, report, &allowed)?;
     }
     let failed: i64 = w.query_row(
         "SELECT count(*) FROM sonic_items WHERE batch_id=?1 AND state='failed'",
@@ -814,7 +842,7 @@ pub(crate) fn attach(c: &Connection, dir: &Path) -> Result<bool> {
     Ok(true)
 }
 
-fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SonicTrack> {
+pub(crate) fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SonicTrack> {
     let directory: String = r.get(6)?;
     let filename: String = r.get(7)?;
     Ok(SonicTrack {
@@ -834,7 +862,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SonicTrack> {
         distance: None,
     })
 }
-const SELECT:&str="t.id,t.title,COALESCE(NULLIF(t.display_artist,''),t.album_artist_display),t.album,t.album_id,t.canonical_genre,t.file_path,t.filename,t.normalized_rating,t.time_seconds,t.love,t.album_artist_display";
+pub(crate) const SELECT:&str="t.id,t.title,COALESCE(NULLIF(t.display_artist,''),t.album_artist_display),t.album,t.album_id,t.canonical_genre,t.file_path,t.filename,t.normalized_rating,t.time_seconds,t.love,t.album_artist_display";
 
 fn active_sonic_batch(dir: &Path) -> Result<Option<String>> {
     let path = dir.join("jobs.sqlite3");
@@ -857,7 +885,8 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         [],
         |r| r.get(0),
     )?;
-    let (analyzed, timelines) = if attach(&c, dir)? {
+    let has_sonic = attach(&c, dir)?;
+    let (analyzed, timelines) = if has_sonic {
         let analyzed = c.query_row("SELECT count(*) FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename WHERE s.profile=?1",[PROFILE],|r|r.get(0))?;
         let timelines = if crate::sonic_timeline::attach(&c, dir)? {
             c.query_row("SELECT count(*) FROM tracks t JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename JOIN timeline.timelines x ON x.audio_hash=s.audio_hash AND x.version=?2 AND x.error IS NULL WHERE s.profile=?1",params![PROFILE, crate::sonic_timeline::VERSION],|r|r.get(0))?
@@ -867,6 +896,15 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         (analyzed, timelines)
     } else {
         (0, 0)
+    };
+    let sound_search = if has_sonic {
+        crate::sonic_clap::status(&c, dir)?
+    } else {
+        crate::sonic_clap::SoundSearchStatus {
+            model_ready: crate::sonic_clap::model_ready(dir),
+            model_bytes: crate::sonic_clap::model_bytes() as i64,
+            ..Default::default()
+        }
     };
     let timeline_bytes = ["", "-wal"]
         .iter()
@@ -889,6 +927,7 @@ pub(crate) fn status_at(dir: &Path) -> Result<SonicStatus> {
         profile: PROFILE.into(),
         schedule: schedule(&w)?,
         idle_supported: cfg!(windows),
+        sound_search,
     })
 }
 
@@ -1375,53 +1414,16 @@ pub async fn sonic_save_playlist(
         if !matches.seed_ready || matches.tracks.is_empty() {
             bail!("Analyze the seed and more music before saving a similarity playlist");
         }
-        let tracks = matches
-            .tracks
-            .into_iter()
-            .map(|t| crate::ai::AiPlaylistTrack {
-                track_id: t.track_id,
-                album_id: t.album_id,
-                album: Some(t.album),
-                album_artist: Some(t.album_artist),
-                display_artist: Some(t.artist),
-                title: Some(t.title),
-                genre: t.genre,
-                year: None,
-                seconds: t.seconds,
-                rating: t.rating,
-                loved: t.loved,
-                file_path: Some(t.file_path),
-                filename: Some(t.filename),
-            })
-            .collect::<Vec<_>>();
-        let total_seconds = tracks.iter().map(|t| t.seconds).sum();
-        let count = tracks.len();
-        let playlist = crate::ai::AiPlaylist {
-            smart_settings: None,
-            mixtape: None,
-            prompt: String::new(),
-            name: name.trim().into(),
-            description: format!(
+        let playlist = similarity_playlist(
+            name.trim(),
+            format!(
                 "Sounds like the selected track. {} analyzed library tracks; profile {PROFILE}.",
                 matches.analyzed
             ),
-            request: crate::models::BrowseRequest::default(),
-            strategy: "balanced".into(),
-            target_track_count: count as u32,
-            target_minutes: 0,
-            max_tracks_per_artist: 100,
-            max_tracks_per_album: 100,
-            matching_track_count: matches.analyzed,
-            candidate_count: count,
-            total_seconds,
-            tracks,
-            model: "local sonic analysis".into(),
-            usage: crate::ai::AiUsage {
-                input_tokens: None,
-                cached_input_tokens: None,
-                output_tokens: None,
-            },
-        };
+            matches.analyzed,
+            matches.tracks,
+            "local sonic analysis",
+        );
         crate::db::save_playlist_for_app(
             &app,
             crate::ai::SavePlaylistRequest {
@@ -1435,6 +1437,60 @@ pub async fn sonic_save_playlist(
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())
+}
+
+/// A saved playlist of ranked sound matches, in their ranked order.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn similarity_playlist(
+    name: &str,
+    description: String,
+    matching: i64,
+    tracks: Vec<SonicTrack>,
+    model: &str,
+) -> crate::ai::AiPlaylist {
+    let tracks = tracks
+        .into_iter()
+        .map(|t| crate::ai::AiPlaylistTrack {
+            track_id: t.track_id,
+            album_id: t.album_id,
+            album: Some(t.album),
+            album_artist: Some(t.album_artist),
+            display_artist: Some(t.artist),
+            title: Some(t.title),
+            genre: t.genre,
+            year: None,
+            seconds: t.seconds,
+            rating: t.rating,
+            loved: t.loved,
+            file_path: Some(t.file_path),
+            filename: Some(t.filename),
+        })
+        .collect::<Vec<_>>();
+    let total_seconds = tracks.iter().map(|t| t.seconds).sum();
+    let count = tracks.len();
+    crate::ai::AiPlaylist {
+        smart_settings: None,
+        mixtape: None,
+        prompt: String::new(),
+        name: name.into(),
+        description,
+        request: crate::models::BrowseRequest::default(),
+        strategy: "balanced".into(),
+        target_track_count: count as u32,
+        target_minutes: 0,
+        max_tracks_per_artist: 100,
+        max_tracks_per_album: 100,
+        matching_track_count: matching,
+        candidate_count: count,
+        total_seconds,
+        tracks,
+        model: model.into(),
+        usage: crate::ai::AiUsage {
+            input_tokens: None,
+            cached_input_tokens: None,
+            output_tokens: None,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -2103,6 +2159,92 @@ mod tests {
             .shutdown()
             .unwrap();
     }
+    #[test]
+    fn sound_search_step_embeds_checked_tracks_and_isolates_a_crashing_file() {
+        let dir = fixture();
+        let folder = dir.path().to_string_lossy().to_string();
+        // Sorts first, so the restarted worker proves itself on the next file.
+        let filename = "0crash.mp3";
+        let path = dir.path().join(filename);
+        fs::write(&path, [255; 256]).unwrap();
+        let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        c.execute("INSERT INTO tracks VALUES(9,'Boom','Singer','Various Artists','Album','album','Pop',?1,?2,80,180,NULL)", params![folder, filename]).unwrap();
+        crate::sonic_timeline::mark_done(dir.path(), "hash9");
+        let s = results(dir.path()).unwrap();
+        s.execute("INSERT INTO sonic_audio VALUES('hash9',?1,?2)", params![PROFILE, serde_json::to_string(&vec![0f32; DIMENSIONS]).unwrap()]).unwrap();
+        let (size, modified) = signature(&path).unwrap();
+        s.execute("INSERT INTO sonic_tracks VALUES(?1,?2,?3,'hash9',?4,?5,?6,'now')", params![track_key(&folder, filename), folder, filename, PROFILE, size as i64, modified]).unwrap();
+        work(dir.path())
+            .unwrap()
+            .execute(
+                "INSERT INTO sonic_settings VALUES(1,?1)",
+                [serde_json::to_string(&SonicSchedule {
+                    idle_only: false,
+                    ..Default::default()
+                })
+                .unwrap()],
+            )
+            .unwrap();
+        let messages = std::cell::RefCell::new(Vec::new());
+        let request = |batch: &str| AnalyzeRequest {
+            scope: "all".into(),
+            album_id: None,
+            batch_id: Some(batch.into()),
+        };
+        let result = run_with(
+            dir.path(),
+            request("clap"),
+            &|| false,
+            &|_, _, message, _| messages.borrow_mut().push(message.to_string()),
+            &|| Some(0),
+            &|| 12,
+            Some(&crate::sonic_clap::tests::fake),
+        )
+        .unwrap();
+        assert_eq!(result["failedCount"], 0);
+        let clap = crate::sonic_clap::open(dir.path()).unwrap();
+        let rows: Vec<(String, bool, Option<String>)> = clap
+            .prepare("SELECT audio_hash,embedding IS NOT NULL,error FROM clap_audio ORDER BY audio_hash")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(rows.len(), 4);
+        assert!(rows[..3].iter().all(|r| r.1 && r.2.is_none()), "{rows:?}");
+        assert_eq!(rows[3].0, "hash9");
+        assert!(rows[3].2.as_deref().unwrap().contains("stopped on this file"));
+        let messages = messages.into_inner();
+        assert!(messages.iter().any(|m| m.starts_with("Step 1 of 2")));
+        assert!(messages.iter().any(|m| m.contains("Restarting")));
+        assert_eq!(messages.last().unwrap(), "Step 2 of 2 · Sound search is up to date");
+        let status = status_at(dir.path()).unwrap().sound_search;
+        assert_eq!((status.analyzed, status.failed), (3, 1));
+        assert_eq!(status.device.as_deref(), Some("Fake"));
+
+        // A later run (Continue analysis) embeds nothing twice.
+        let calls = std::cell::Cell::new(0);
+        let counting = |d: &Path, s: &dyn Fn() -> bool, r: &dyn Fn(&str)| {
+            calls.set(calls.get() + 1);
+            crate::sonic_clap::tests::fake(d, s, r)
+        };
+        run_with(dir.path(), request("clap"), &|| false, &|_, _, _, _| {}, &|| Some(0), &|| 12, Some(&counting)).unwrap();
+        assert_eq!(calls.get(), 0);
+
+        // The fake encoder places every fixture path on one axis; a cached
+        // query on that axis finds the three playable tracks.
+        let mut query = vec![0f32; crate::sonic_clap::DIMENSIONS];
+        query[dir.path().join("1.mp3").to_string_lossy().len() % crate::sonic_clap::DIMENSIONS] = 1.0;
+        let bytes: Vec<u8> = query.iter().flat_map(|v| half::f16::from_f32(*v).to_le_bytes()).collect();
+        clap.execute("INSERT INTO clap_queries VALUES('rainy sunday jazz',?1,?2)", params![crate::sonic_clap::MODEL, bytes]).unwrap();
+        let found = crate::sonic_clap::describe_at(dir.path(), "  Rainy   Sunday jazz ", 10).unwrap();
+        assert_eq!(found.query, "Rainy Sunday jazz");
+        assert_eq!(found.searched, 3);
+        assert_eq!(found.tracks.len(), 3);
+        assert!(found.tracks.iter().all(|t| t.distance.unwrap().abs() < 1e-3));
+        assert!(crate::sonic_clap::describe_at(dir.path(), "   ", 10).is_err());
+    }
+
     fn fixture() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let c = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();

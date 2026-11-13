@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/published-charts/": "resources/published-charts/",
+      "../Tools/sonic-analyzer/LICENSE": "_up_/Tools/sonic-analyzer/LICENSE",
+      "../Tools/sonic-analyzer/NOTICE.md": "_up_/Tools/sonic-analyzer/NOTICE.md",
+      "../Tools/clap-worker/NOTICE.md": "_up_/Tools/clap-worker/NOTICE.md",
+      "binaries/DirectML.dll": "DirectML.dll"
+    }
+  }
+}

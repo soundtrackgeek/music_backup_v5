@@ -61,6 +61,44 @@ is unchanged since analysis, and averages tracks longer than 600 seconds into at
 Later features such as sections inside a track and a stereo health check use the same
 data; see [What Songstress could add](songstress-stereo-and-timeline-2026-10.md).
 
+## Sound search
+
+**Describe a sound** (0.216.0) finds tracks from a text description such as
+“rainy Sunday jazz” or “aggressive metal with distorted guitars”. Results show a
+match score; **Save as playlist** saves the top 100 in ranked order. At most three
+tracks per artist are listed, and banned tracks are left out.
+
+It uses the LAION CLAP model `larger_clap_music_and_speech` (Apache-2.0), through the
+ONNX export `Xenova/larger_clap_music_and_speech` at a pinned revision. The model
+files download on the first analysis run into
+`<app data>/clap-model/larger_clap_music_and_speech-e9fd5ac/` (about 475 MB on
+Windows, 330 MB on macOS). Each file is checked against its SHA-256 before use, and an
+interrupted download resumes.
+
+An analysis job runs step 2 after step 1. For each checked track it reads the
+track's timeline, skips stretches more than 10 dB quieter than the track's median
+(intros, fades, hidden-track silence), and embeds up to three ten-second windows
+spread through the rest. A track's embedding is the mean of its windows. Tracks
+without a timeline get evenly spread windows. A file that changed since its
+Bliss analysis is skipped until the next run re-analyzes it. Files that cannot be
+decoded are recorded and not retried.
+
+The model runs in a separate program, `music-clap-worker`. On Windows it uses the GPU
+through DirectML (`DirectML.dll` ships beside it) and falls back to the CPU when no
+usable GPU is found. The panel shows which one the last run used. Set
+`MUSIC_CLAP_DEVICE=cpu` to force the CPU. If the worker crashes, the job restarts it
+and retries the affected tracks one at a time. A track that crashes it on its own is
+recorded as failed once the restarted worker has handled another track. Three crashes
+in a row stop the job with the worker's message; results so far stay saved.
+
+Progress is saved after every eight tracks. Pause, a crash or closing the app keeps
+everything embedded so far. The schedule (idle time and hours) applies to step 2 too.
+Embeddings are stored by audio hash in `music-clap.sqlite3`, 1 KB each (about 1.3 GB
+per million tracks). Queries are cached there too. Search scores every embedding, which
+takes a second or two for a million tracks.
+
+Intel Macs cannot run sound search: ONNX Runtime has no build for them.
+
 ## Idle time and scheduling
 
 Windows defaults to starting new files only after five minutes without keyboard

@@ -90,7 +90,7 @@ jobs:
           security list-keychains -d user -s "$keychain"
       - name: Run verification gate
         run: npm run check
-      - name: Prepare universal audio analyzer
+      - name: Prepare universal audio analyzer and sound search worker
         if: matrix.platform == 'macos'
         run: npm run sonic:prepare -- universal-apple-darwin
       - name: Build installers and signed updater archives
@@ -114,6 +114,8 @@ jobs:
           xcrun lipo "$app/Contents/MacOS/$executable" -verify_arch x86_64
           xcrun lipo "$app/Contents/MacOS/music-sonic-analyzer" -verify_arch arm64
           xcrun lipo "$app/Contents/MacOS/music-sonic-analyzer" -verify_arch x86_64
+          xcrun lipo "$app/Contents/MacOS/music-clap-worker" -verify_arch arm64
+          xcrun lipo "$app/Contents/MacOS/music-clap-worker" -verify_arch x86_64
           codesign --verify --deep --strict "$app"
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose "$app"

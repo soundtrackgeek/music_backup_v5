@@ -1,9 +1,9 @@
-import { commands, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule } from "../bindings";
+import { commands, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule, type SoundSearchResults } from "../bindings";
 import { isTauriRuntime } from "./tauriClient";
 import { previewActivity } from "./activity";
 import { mockRows } from "./webPreview";
 import { clearPreviewFailures, previewFailureCount } from "./sonicDiagnostics";
-export type { SonicMatches, SonicStatus, SonicTrack, SonicSchedule } from "../bindings";
+export type { SonicMatches, SonicStatus, SonicTrack, SonicSchedule, SoundSearchResults, SoundSearchStatus } from "../bindings";
 export type { SonicAlbum, SonicAlbumMatches } from "../bindings";
 export async function findSonicAlbums(albumId: string, minimumCoverage: number): Promise<import("../bindings").SonicAlbumMatches> {
   if (isTauriRuntime()) return commands.sonicAlbumMatches({ albumId, minimumCoverage, limit: 20 });
@@ -20,7 +20,8 @@ const seeds: SonicTrack[] = [
   { trackId: 902, trackKey: "preview:sonic-902", title: "A Real Hero", artist: "College & Electric Youth", album: "Drive", albumId: "sonic-drive", albumArtist: "Various Artists", filePath: "Preview", filename: "902.mp3", genre: "Electronic", rating: 80, seconds: 268, loved: false, distance: 0.18 },
   { trackId: 903, trackKey: "preview:sonic-903", title: "Nightcall", artist: "Kavinsky", album: "OutRun", albumId: "sonic-outrun", albumArtist: "Kavinsky", filePath: "Preview", filename: "903.mp3", genre: "Electronic", rating: 80, seconds: 258, loved: false, distance: 0.24 },
 ];
-export async function getSonicStatus(): Promise<SonicStatus> { return isTauriRuntime() ? commands.sonicStatus() : { analyzed: previewReady ? 3 : 0, pending: 0, failed: previewFailureCount(), total: 1096288, timelines: previewReady ? 3 : 0, timelineBytes: previewReady ? 33792 : 0, profile: "Browser preview", idleSupported: true, schedule: previewSchedule }; }
+export async function getSonicStatus(): Promise<SonicStatus> { return isTauriRuntime() ? commands.sonicStatus() : { analyzed: previewReady ? 3 : 0, pending: 0, failed: previewFailureCount(), total: 1096288, timelines: previewReady ? 3 : 0, timelineBytes: previewReady ? 33792 : 0, profile: "Browser preview", idleSupported: true, schedule: previewSchedule,
+  soundSearch: { analyzed: previewReady ? 3 : 0, failed: 0, bytes: previewReady ? 3072 : 0, modelReady: previewReady, modelBytes: 474725522, device: previewReady ? "DirectML" : null } }; }
 export async function configureSonicSchedule(schedule: SonicSchedule): Promise<SonicStatus> { if (isTauriRuntime()) return commands.sonicConfigure(schedule); previewSchedule = schedule; return getSonicStatus(); }
 export async function getSonicSeeds(): Promise<SonicTrack[]> { return isTauriRuntime() ? commands.sonicSeeds() : previewReady ? seeds : []; }
 export async function startSonicAnalysis(scope: "all" | "favorites" | "album" | "reuse" | "failed", albumId: string | null): Promise<number> {
@@ -59,4 +60,15 @@ export async function getTrackTimeline(trackId: number): Promise<import("../bind
     return { start: i, level: -38 + 26 * swell + 2 * Math.sin(i / 3), brightness: 900 + 2600 * swell, width: bridge ? -34 : -14 + 4 * Math.sin(i / 11), correlation: bridge ? 0.98 : 0.7 + 0.15 * Math.sin(i / 7), chroma };
   });
   return { ...base, state: "ready", seconds, channels: 2, sampleRate: 44100, leftDb: -17.8, rightDb: -18.4, points };
+}
+/** "Describe a sound": CLAP text-to-audio search over analyzed tracks. */
+export async function describeSound(query: string): Promise<SoundSearchResults> {
+  if (isTauriRuntime()) return commands.sonicDescribe(query, 50);
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) throw new Error("Describe a sound in 1–300 characters");
+  return { query: words.join(" "), searched: previewReady ? 3 : 0, tracks: previewReady ? seeds.map((t, i) => ({ ...t, distance: 0.62 + i * 0.04 })) : [] };
+}
+export async function saveDescribedSound(query: string, name: string): Promise<string> {
+  if (isTauriRuntime()) { const saved = await commands.sonicSaveDescribed(query, name); return `Saved ${saved.name} in Playlists.`; }
+  return `Browser preview: ${name} (${query})`;
 }

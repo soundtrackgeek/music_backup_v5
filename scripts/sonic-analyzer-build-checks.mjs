@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { prepareSonicAnalyzer } from "./build-sonic-analyzer.mjs";
+import { prepareClapWorker, prepareSonicAnalyzer } from "./build-sonic-analyzer.mjs";
 
 function fixture(t, platform) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "sonic-build-"));
@@ -85,4 +85,51 @@ test("cross-compiling does not execute a foreign architecture", t => {
   };
   prepareSonicAnalyzer({ ...options, run, target: "aarch64-apple-darwin" });
   assert.equal(executed, false);
+});
+
+function clapFixture(t, platform, { dll = true, info = { available: true, dimensions: 512 } } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "sonic-build-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const run = (command, args) => {
+    if (command === "cargo") {
+      const triple = args[args.indexOf("--target") + 1];
+      const release = path.join(root, "Tools/clap-worker/target", triple, "release");
+      fs.mkdirSync(release, { recursive: true });
+      fs.writeFileSync(path.join(release, `music-clap-worker${platform === "win32" ? ".exe" : ""}`), triple);
+      if (dll && triple.includes("windows")) fs.writeFileSync(path.join(release, "DirectML.dll"), "dml");
+    } else if (command === "lipo") {
+      fs.writeFileSync(args[4], `${fs.readFileSync(args[1], "utf8")}+${fs.readFileSync(args[2], "utf8")}`);
+    } else if (command.includes("music-clap-worker")) {
+      assert.deepEqual(args, ["--info"]);
+      return JSON.stringify(info);
+    } else {
+      assert.fail(`Unexpected build command: ${command}`);
+    }
+  };
+  return { root, platform, hostArch: "x64", run };
+}
+
+test("Windows sound search preparation ships DirectML.dll beside the worker", t => {
+  const options = clapFixture(t, "win32");
+  prepareClapWorker({ ...options, target: "x86_64-pc-windows-msvc" });
+  const binaries = path.join(options.root, "src-tauri/binaries");
+  assert.equal(fs.readFileSync(path.join(binaries, "music-clap-worker-x86_64-pc-windows-msvc.exe"), "utf8"), "x86_64-pc-windows-msvc");
+  assert.equal(fs.readFileSync(path.join(binaries, "DirectML.dll"), "utf8"), "dml");
+});
+
+test("a Windows worker without DirectML.dll blocks bundling", t => {
+  const options = clapFixture(t, "win32", { dll: false });
+  assert.throws(() => prepareClapWorker({ ...options, target: "x86_64-pc-windows-msvc" }), /DirectML\.dll is missing/);
+});
+
+test("a worker with the wrong embedding size blocks bundling", t => {
+  const options = clapFixture(t, "win32", { info: { available: true, dimensions: 768 } });
+  assert.throws(() => prepareClapWorker({ ...options, target: "x86_64-pc-windows-msvc" }), /smoke test/);
+  assert.equal(fs.existsSync(path.join(options.root, "src-tauri/binaries/music-clap-worker-x86_64-pc-windows-msvc.exe")), false);
+});
+
+test("universal macOS sound search worker joins both slices", t => {
+  const options = clapFixture(t, "darwin", { info: { available: false, dimensions: 512 } });
+  prepareClapWorker({ ...options, target: "universal-apple-darwin" });
+  assert.equal(fs.readFileSync(path.join(options.root, "src-tauri/binaries/music-clap-worker-universal-apple-darwin"), "utf8"), "aarch64-apple-darwin+x86_64-apple-darwin");
 });

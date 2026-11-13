@@ -57,4 +57,5 @@ release-notes.md
 # Generated sonic analyzer binaries and Rust build caches
 /src-tauri/binaries/
 /Tools/sonic-analyzer/target/
+/Tools/clap-worker/target/
 /crates/sonic-core/target/

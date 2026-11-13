@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.216.0] - 2026-11-13
+
+### Added
+- **Describe a sound** in Tools → Audio analysis: type a description such as “rainy Sunday jazz” and get the tracks that fit, with a match score, then save them as a playlist. It uses LAION CLAP `larger_clap_music_and_speech` (Apache-2.0) through a pinned ONNX export. At most three tracks per artist are listed and banned tracks are left out.
+- Audio analysis jobs have a second step that embeds each checked track for sound search: up to three ten-second windows from the loud parts of its timeline. Continue analysis resumes it after a pause, a crash or a restart, and picks up tracks added to the library since, which get both steps. Progress is saved every eight tracks, and the idle and hours schedule applies.
+- The model runs in a new sidecar, `music-clap-worker`. On Windows it uses the GPU through DirectML (`DirectML.dll` ships beside it) and falls back to the CPU. It reads only the windows it needs and decodes the next tracks while the model runs, about 13 tracks per second from a USB hard drive. If it crashes, the job restarts it and retries the affected tracks one at a time to find the file that caused it.
+- The first run downloads the model (about 475 MB on Windows) from Hugging Face, resumes an interrupted download, and checks each file's SHA-256. Embeddings are stored by audio hash in `music-clap.sqlite3`, about 1.3 GB per million tracks.
+- The Audio analysis panel shows a progress bar for each step (Bliss features, timelines, sound search), which step a running job is on, its time left, the model status and whether the last run used the GPU or the CPU.
+
 ## [0.215.8] - 2026-11-12
 
 ### Fixed

@@ -1,0 +1,28 @@
+[package]
+name = "music-clap-worker"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Local CLAP sound-search embeddings for Music Library"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+# Same decoder and resampler versions as the Bliss analyzer.
+symphonia = { version = "=0.6.1", default-features = false, features = ["all-meta", "mpa"] }
+rubato = "=3.0.0"
+audioadapter-buffers = "=3.0.0"
+rustfft = "6.4"
+
+# ONNX Runtime has no prebuilt Intel macOS library, so that slice of the
+# universal binary is a stub that reports CLAP as unavailable.
+[target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+ort = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "download-binaries", "copy-dylibs", "tls-native", "api-22"] }
+tokenizers = { version = "=0.22.2", default-features = false, features = ["fancy-regex"] }
+
+[target.'cfg(windows)'.dependencies]
+ort = { version = "=2.0.0-rc.12", default-features = false, features = ["directml"] }
+
+[profile.release]
+opt-level = 3

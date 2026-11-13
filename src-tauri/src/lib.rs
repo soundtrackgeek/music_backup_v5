@@ -39,6 +39,7 @@ mod sonic_queue;
 mod sonic_failures;
 mod sonic_coverage;
 mod sonic_timeline;
+mod sonic_clap;
 mod sonic_timeline_view;
 mod sonic_backup;
 mod sonic_backup_schedule;

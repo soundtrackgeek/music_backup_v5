@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, copyFileSync } from "node:fs";
+import { mkdirSync, copyFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -42,8 +42,50 @@ export function prepareSonicAnalyzer({ root, target, platform = process.platform
   }
 }
 
+/**
+ * The CLAP sound search worker. On Windows it ships with DirectML.dll beside it
+ * (ONNX Runtime links it at load time); the Intel macOS slice is a stub that
+ * reports sound search as unavailable.
+ */
+export function prepareClapWorker({ root, target, platform = process.platform, hostArch = process.arch, run = execFileSync }) {
+  const suffix = platform === "win32" ? ".exe" : "";
+  const manifest = resolve(root, "Tools/clap-worker/Cargo.toml");
+  const destination = resolve(root, "src-tauri/binaries");
+  mkdirSync(destination, { recursive: true });
+  function build(triple) {
+    run("cargo", ["build", "--locked", "--release", "--manifest-path", manifest, "--target", triple], { cwd: root, stdio: "inherit" });
+    return resolve(root, `Tools/clap-worker/target/${triple}/release/music-clap-worker${suffix}`);
+  }
+  function smoke(binary) {
+    const value = JSON.parse(run(binary, ["--info"], { cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024, windowsHide: true }));
+    if (value.dimensions !== 512 || typeof value.available !== "boolean") throw new Error("Built sound search worker failed its smoke test");
+  }
+  if (target === "universal-apple-darwin") {
+    const arm = build("aarch64-apple-darwin");
+    const intel = build("x86_64-apple-darwin");
+    copyFileSync(arm, resolve(destination, "music-clap-worker-aarch64-apple-darwin"));
+    copyFileSync(intel, resolve(destination, "music-clap-worker-x86_64-apple-darwin"));
+    run("lipo", ["-create", arm, intel, "-output", resolve(destination, `music-clap-worker-${target}`)], { stdio: "inherit" });
+    if (platform === "darwin") smoke(resolve(destination, `music-clap-worker-${target}`));
+    return;
+  }
+  const binary = build(target);
+  const nativeArch = { x64: "x86_64", arm64: "aarch64" }[hostArch];
+  const nativePlatform = { win32: "-windows-", darwin: "-apple-darwin", linux: "-linux-" }[platform];
+  if (nativeArch && nativePlatform && target.startsWith(`${nativeArch}-`) && target.includes(nativePlatform)) smoke(binary);
+  if (target.includes("-windows-")) {
+    // ort's copy-dylibs leaves a link to its download cache; copy the real file.
+    const dll = [`Tools/clap-worker/target/${target}/release/DirectML.dll`, "Tools/clap-worker/target/release/DirectML.dll"]
+      .map(path => resolve(root, path)).find(path => existsSync(path));
+    if (!dll) throw new Error("DirectML.dll is missing from the sound search worker build");
+    copyFileSync(dll, resolve(destination, "DirectML.dll"));
+  }
+  copyFileSync(binary, resolve(destination, `music-clap-worker-${target}${suffix}`));
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const root = resolve(import.meta.dirname, "..");
   const target = process.argv[2] || process.env.TAURI_ENV_TARGET_TRIPLE || execFileSync("rustc", ["--print", "host-tuple"], { encoding: "utf8" }).trim();
   prepareSonicAnalyzer({ root, target });
+  prepareClapWorker({ root, target });
 }

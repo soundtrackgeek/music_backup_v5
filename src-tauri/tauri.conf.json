@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.215.8",
+  "version": "0.216.0",
   "identifier": "com.local.musiclibrary",
   "build": {
     "beforeDevCommand": "npm run sonic:prepare && npm run dev",
@@ -35,7 +35,8 @@
     "resources": [
       "resources/published-charts/",
       "../Tools/sonic-analyzer/LICENSE",
-      "../Tools/sonic-analyzer/NOTICE.md"
+      "../Tools/sonic-analyzer/NOTICE.md",
+      "../Tools/clap-worker/NOTICE.md"
     ],
     "icon": [
       "icons/32x32.png",
@@ -45,7 +46,8 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/music-sonic-analyzer"
+      "binaries/music-sonic-analyzer",
+      "binaries/music-clap-worker"
     ]
   },
   "plugins": {

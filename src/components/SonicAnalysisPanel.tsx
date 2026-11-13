@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { configureSonicSchedule, findSonicMatches, getSonicSeeds, getSonicStatus, saveSonicPlaylist, startSonicAnalysis, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule } from "../backend/sonic";
+import { configureSonicSchedule, describeSound, findSonicMatches, getSonicSeeds, getSonicStatus, saveDescribedSound, saveSonicPlaylist, startSonicAnalysis, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule, type SoundSearchResults } from "../backend/sonic";
 import { controlActivityJob, listActivityJobs, listenToActivityJobs, type ActivityJob } from "../backend/activity";
 import "./SonicAnalysisPanel.css";
 import { SonicBackupPanel } from "./SonicBackupPanel";
@@ -9,6 +9,28 @@ import { SonicAtlas } from "./SonicAtlas";
 export function storageSize(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   return `${Math.round(bytes / 1024 ** 2).toLocaleString()} MB`;
+}
+
+/** "about 3 h 20 min left" from a job's ETA. */
+export function timeLeft(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || seconds < 0) return null;
+  if (seconds < 60) return "less than a minute left";
+  const minutes = Math.round(seconds / 60), hours = Math.floor(minutes / 60);
+  return hours ? `about ${hours} h ${minutes % 60} min left` : `about ${minutes} min left`;
+}
+
+function Stage({ label, done, total, detail }: { label: string; done: number; total: number; detail?: string }) {
+  return <li>
+    <span><strong>{label}</strong> {`${done.toLocaleString()} of ${total.toLocaleString()}`}</span>
+    <progress aria-label={`${label} progress`} max={Math.max(total, 1)} value={Math.min(done, total)} />
+    {detail && <small>{detail}</small>}
+  </li>;
+}
+
+function soundSearchDetail(status: SonicStatus): string {
+  const s = status.soundSearch;
+  const model = s.modelReady ? `Model ready${s.device ? ` · last run on ${s.device === "DirectML" ? "the GPU (DirectML)" : "the CPU"}` : ""}` : `The model (${storageSize(s.modelBytes)}) downloads on the next analysis run`;
+  return `${model} · ${storageSize(s.bytes)} on this computer${s.failed ? ` · ${s.failed.toLocaleString()} could not be read` : ""}`;
 }
 
 export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string; onOpenAlbum?: (id: string) => void }) {
@@ -23,6 +45,8 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
   const [schedule, setSchedule] = useState<SonicSchedule | null>(null);
   const [diagnosticsRevision, setDiagnosticsRevision] = useState(0);
   const [jobs, setJobs] = useState<ActivityJob[]>([]);
+  const [description, setDescription] = useState("");
+  const [described, setDescribed] = useState<SoundSearchResults | null>(null);
   const refreshing = useRef(false);
   const dirty = useRef(false);
   const serial = useRef(0);
@@ -68,6 +92,8 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     .filter((job): job is ActivityJob => Boolean(job && job.state !== "completed" && job.canRetry))
     .sort((a, b) => b.id - a.id);
   const saved = active ?? stopped[0] ?? null;
+  const soundStep = saved ? /^Step 2 of 2/.test(saved.message) : false;
+  const remaining = saved?.state === "running" ? timeLeft(saved.etaSeconds) : null;
   const canContinue = saved?.state === "paused" || saved?.canRetry && (saved.state === "failed" || saved.state === "cancelled");
   async function controlSaved(action: "resume" | "retry" | "pause") {
     if (!saved) return;
@@ -115,14 +141,33 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (live.current) setBusy(false); }
   }
+  async function describe() {
+    const query = description, id = ++serial.current; setBusy(true); setError(null); setMessage(null);
+    try { const result = await describeSound(query); if (live.current && id === serial.current) setDescribed(result); }
+    catch (e) { if (live.current && id === serial.current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (live.current && id === serial.current) setBusy(false); }
+  }
+  async function saveDescribed() {
+    if (!described) return;
+    setBusy(true); setError(null);
+    try { const result = await saveDescribedSound(described.query, `Sounds like ${described.query}`.slice(0, 200)); if (live.current) setMessage(result); }
+    catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (live.current) setBusy(false); }
+  }
   return <section className="sonic-analysis" aria-label="Audio analysis">
     {onOpenAlbum && <><button type="button" onClick={() => setAtlasOpen(true)}>Open sonic atlas</button>{atlasOpen && <SonicAtlas onClose={() => setAtlasOpen(false)} onOpenAlbum={t => onOpenAlbum(t.albumId)} />}</>}
     <div><h2>Audio analysis</h2><p>Discover connections by sound. Analysis runs locally and resumes from saved track checkpoints.</p></div>
     <p>{status ? `${status.analyzed.toLocaleString()} of ${status.total.toLocaleString()} tracks analyzed · ${status.pending.toLocaleString()} pending · ${status.failed.toLocaleString()} failed` : "Reading analysis coverage…"}</p>
     {status && <p>{`Per-second timelines: ${status.timelines.toLocaleString()} of ${status.analyzed.toLocaleString()} analyzed tracks · ${storageSize(status.timelineBytes)} on this computer`}</p>}
+    {status && <ol className="sonic-stages" aria-label="Analysis steps">
+      <Stage label="Bliss features" done={status.analyzed} total={status.total} />
+      <Stage label="Timelines" done={status.timelines} total={status.analyzed} />
+      <Stage label="Sound search" done={status.soundSearch.analyzed} total={status.analyzed} detail={soundSearchDetail(status)} />
+    </ol>}
     {saved && <div className="sonic-current-work" aria-label="Saved audio analysis">
       <strong>{saved.kind === "sonicReuse" ? "Saved verification" : "Saved analysis"} · {saved.state}</strong>
-      <span>{saved.completed.toLocaleString()} of {saved.total.toLocaleString()} queue entries checked</span>
+      {saved.kind === "sonicAnalysis" && <span className="sonic-step">{soundStep ? "Step 2 of 2 · Sound search" : "Step 1 of 2 · Bliss features and timelines"}</span>}
+      <span>{saved.completed.toLocaleString()} of {saved.total.toLocaleString()} {soundStep ? "tracks for sound search" : "queue entries checked"}{remaining ? ` · ${remaining}` : ""}</span>
       {saved.total > 0 && <progress aria-label="Saved analysis progress" max={saved.total} value={saved.completed} />}
       {saved.message && <p>{saved.message}</p>}
       {saved.error && <p className="sonic-job-error">{saved.error}</p>}
@@ -130,7 +175,7 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
         <button type="button" disabled={busy || !canContinue} onClick={() => void controlSaved(saved.state === "paused" ? "resume" : "retry")}>{canContinue ? saved.kind === "sonicReuse" ? "Continue verification" : "Continue analysis" : saved.state === "running" ? "Analysis running" : saved.state === "queued" ? "Analysis queued" : "Stopping analysis…"}</button>
         {(saved.state === "running" || saved.state === "queued") && saved.resumable && <button type="button" disabled={busy} onClick={() => void controlSaved("pause")}>Pause analysis</button>}
       </div>
-      <p>Continue this saved job to keep its place. Unchanged tracks reuse completed analysis.</p>
+      <p>Continue this saved job to keep its place. It also picks up tracks added to the library since, and runs every step for them. Unchanged tracks reuse completed analysis.</p>
     </div>}
     {schedule && <fieldset className="sonic-schedule" disabled={busy}><legend>When to analyze</legend>
       <label><input type="checkbox" disabled={!status?.idleSupported || busy} checked={schedule.idleOnly} onChange={e => changeSchedule({ idleOnly: e.target.checked })} />Only when the computer is idle</label>
@@ -147,6 +192,13 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     {matches && <p>Matches among {matches.analyzed.toLocaleString()} analyzed tracks. {matches.seedReady ? "" : "This seed needs analysis."}</p>}
     {matches?.seedReady && !matches.tracks.length && <p>No eligible matches yet. Analyze more music.</p>}
     {matches?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}</span></div>)}
+    {!albumId && <form className="sonic-describe" aria-label="Describe a sound" onSubmit={e => { e.preventDefault(); void describe(); }}>
+      <label className="sonic-seed">Describe a sound<input type="search" maxLength={300} value={description} placeholder="rainy Sunday jazz" disabled={busy} onChange={e => { serial.current++; setBusy(false); setDescription(e.target.value); setDescribed(null); }} /></label>
+      <div className="sonic-analysis-actions"><button type="submit" disabled={busy || !description.trim()}>Find tracks</button><button type="button" disabled={busy || !described?.tracks.length} onClick={() => void saveDescribed()}>Save as playlist</button></div>
+      {status && !status.soundSearch.analyzed && <p>Sound search works on tracks that finished step 2 of audio analysis.</p>}
+      {described && <p>{described.tracks.length ? `Best matches for “${described.query}” among ${described.searched.toLocaleString()} tracks with sound search.` : "No tracks with sound search yet. Run audio analysis first."}</p>}
+      {described?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}{t.distance !== null ? ` · ${Math.round((1 - t.distance) * 100)}% match` : ""}</span></div>)}
+    </form>}
     {!albumId && <SonicBackupPanel onVerify={() => analyze("reuse")} />}
     {!albumId && <><SonicFailuresPanel disabled={busy || !schedule} revision={diagnosticsRevision} onRetry={() => analyze("failed")} /><SonicCoveragePanel /></>}
     {message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}

@@ -4,7 +4,7 @@ import { SonicAnalysisPanel } from "./SonicAnalysisPanel";
 import * as backend from "../backend/sonic";
 import * as activity from "../backend/activity";
 
-vi.mock("../backend/sonic", () => ({ getSonicStatus: vi.fn(), getSonicSeeds: vi.fn(), configureSonicSchedule: vi.fn(), startSonicAnalysis: vi.fn(), findSonicMatches: vi.fn(), saveSonicPlaylist: vi.fn() }));
+vi.mock("../backend/sonic", () => ({ getSonicStatus: vi.fn(), getSonicSeeds: vi.fn(), configureSonicSchedule: vi.fn(), startSonicAnalysis: vi.fn(), findSonicMatches: vi.fn(), saveSonicPlaylist: vi.fn(), describeSound: vi.fn(), saveDescribedSound: vi.fn() }));
 vi.mock("../backend/activity", () => ({ listActivityJobs: vi.fn(), controlActivityJob: vi.fn(), listenToActivityJobs: vi.fn() }));
 
 beforeEach(() => {
@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.mocked(activity.listenToActivityJobs).mockResolvedValue(() => undefined);
 });
 afterEach(() => vi.resetAllMocks());
+const soundSearch = { analyzed: 0, failed: 0, bytes: 0, modelReady: false, modelBytes: 474_725_522, device: null };
 const savedJob: activity.ActivityJob = { id: 560, kind: "sonicAnalysis", label: "Audio analysis", state: "failed", progress: 22, completed: 249274, total: 1108247, etaSeconds: null, message: "Saved checkpoint", error: "Storage failed", createdAt: "2026-10-14", updatedAt: "2026-10-14", resumable: true, canCancel: true, canRetry: true };
 
 it.each([["paused", "resume"], ["failed", "retry"], ["cancelled", "retry"]] as const)("continues %s analysis directly while coverage is still loading", async (state, action) => {
@@ -43,7 +44,7 @@ it("updates the saved job from Activity events and pauses it without creating an
 });
 
 it("keeps coverage readers out of queue compaction and refreshes when analysis advances", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   let publish!: (jobs: activity.ActivityJob[]) => void;
@@ -75,7 +76,7 @@ it("keeps unfinished analysis available after a newer reuse verification complet
 });
 
 it("saves edited settings before continuing and leaves the saved job alone if saving fails", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(activity.listActivityJobs).mockResolvedValue([savedJob]);
@@ -92,7 +93,7 @@ it("saves edited settings before continuing and leaves the saved job alone if sa
   expect(backend.configureSonicSchedule).toHaveBeenLastCalledWith({ ...status.schedule, idleOnly: false });
 });
 it("saves idle and overnight settings separately from queueing an album", async () => {
-  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 2, total: 100, pending: 98, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(backend.configureSonicSchedule).mockImplementation(async schedule => ({ ...status, schedule }));
@@ -115,7 +116,7 @@ it.each([
   ["reuse", "Verify reused analysis"],
   ["failed", "Retry failed tracks"],
 ] as const)("saves the visible schedule before starting %s analysis", async (scope, button) => {
-  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: 22, endHour: 8 } };
+  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: 22, endHour: 8 } };
   const unrestricted = { idleOnly: false, idleMinutes: 5, startHour: null, endHour: null };
   vi.mocked(backend.getSonicStatus).mockResolvedValueOnce(status).mockResolvedValue({ ...status, schedule: unrestricted });
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
@@ -139,7 +140,7 @@ it.each([
 });
 
 it("keeps analysis unqueued when the visible schedule cannot be saved", async () => {
-  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 0, total: 100, pending: 0, failed: 0, timelines: 0, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   vi.mocked(backend.configureSonicSchedule).mockRejectedValue(new Error("Could not save analysis schedule"));
@@ -152,7 +153,7 @@ it("keeps analysis unqueued when the visible schedule cannot be saved", async ()
 });
 
 it("shows how many analyzed tracks have a per-second timeline and its size", async () => {
-  const status = { analyzed: 1200, total: 1500, pending: 0, failed: 0, timelines: 800, timelineBytes: 9_100_000, profile: "test", idleSupported: true, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  const status = { analyzed: 1200, total: 1500, pending: 0, failed: 0, timelines: 800, timelineBytes: 9_100_000, profile: "test", idleSupported: true, soundSearch, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
   vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
   vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
   render(<SonicAnalysisPanel />);
@@ -163,4 +164,41 @@ it("formats timeline storage in megabytes and gigabytes", async () => {
   const { storageSize } = await import("./SonicAnalysisPanel");
   expect(storageSize(0)).toBe("0 MB");
   expect(storageSize(13_528_000_000)).toBe("12.6 GB");
+});
+
+it("shows each analysis step with its own progress", async () => {
+  const status = { analyzed: 1200, total: 1500, pending: 0, failed: 0, timelines: 800, timelineBytes: 9_100_000, profile: "test", idleSupported: true, soundSearch: { ...soundSearch, analyzed: 300, bytes: 2_000_000_000, modelReady: true, device: "DirectML" }, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } };
+  vi.mocked(backend.getSonicStatus).mockResolvedValue(status);
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  vi.mocked(activity.listActivityJobs).mockResolvedValue([{ ...savedJob, state: "running", completed: 40, total: 900, etaSeconds: 7500, message: "Step 2 of 2 · Sound search (DirectML) 1.mp3" }]);
+  render(<SonicAnalysisPanel />);
+  expect(await screen.findByLabelText("Sound search progress")).toHaveAttribute("value", "300");
+  expect(screen.getByText("Model ready · last run on the GPU (DirectML) · 1.9 GB on this computer")).toBeInTheDocument();
+  expect(await screen.findByText("Step 2 of 2 · Sound search")).toBeInTheDocument();
+  expect(screen.getByText("40 of 900 tracks for sound search · about 2 h 5 min left")).toBeInTheDocument();
+});
+
+it("finds tracks that fit a described sound and saves them", async () => {
+  vi.mocked(backend.getSonicStatus).mockResolvedValue({ analyzed: 3, total: 3, pending: 0, failed: 0, timelines: 3, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch: { ...soundSearch, analyzed: 3 }, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } });
+  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
+  const track = { trackId: 1, trackKey: "k1", title: "Blue in Green", artist: "Miles Davis", album: "Kind of Blue", albumId: "a", albumArtist: "Miles Davis", filePath: "D:", filename: "1.mp3", genre: "Jazz", rating: null, seconds: 300, loved: false, distance: 0.46 };
+  vi.mocked(backend.describeSound).mockResolvedValue({ query: "rainy Sunday jazz", searched: 3, tracks: [track] });
+  vi.mocked(backend.saveDescribedSound).mockResolvedValue("Saved Sounds like rainy Sunday jazz in Playlists.");
+  render(<SonicAnalysisPanel />);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Describe a sound" }), { target: { value: "rainy Sunday jazz" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find tracks" }));
+  expect(await screen.findByText("Miles Davis · Kind of Blue · 54% match")).toBeInTheDocument();
+  expect(backend.describeSound).toHaveBeenCalledWith("rainy Sunday jazz");
+  const saveButtons = screen.getAllByRole("button", { name: "Save as playlist" });
+  fireEvent.click(saveButtons[saveButtons.length - 1]);
+  expect(await screen.findByText("Saved Sounds like rainy Sunday jazz in Playlists.")).toBeInTheDocument();
+  expect(backend.saveDescribedSound).toHaveBeenCalledWith("rainy Sunday jazz", "Sounds like rainy Sunday jazz");
+});
+
+it("formats the time left", async () => {
+  const { timeLeft } = await import("./SonicAnalysisPanel");
+  expect(timeLeft(null)).toBeNull();
+  expect(timeLeft(30)).toBe("less than a minute left");
+  expect(timeLeft(600)).toBe("about 10 min left");
+  expect(timeLeft(86_400)).toBe("about 24 h 0 min left");
 });
