@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.218.0] - 2026-11-14
+
+### Added
+- Aurora's `syncExistingFolders` request accepts `reviewedAlbum: true` for one album the user reviewed in Aurora's library auto-tagger. That sync may renumber tracks, change disc numbers, remove tracks and change the album's tags in one album-sized update, so the album keeps its id, its remaining tracks keep their ids and ratings, and no reviewed import is needed. The album must keep its catalog id and Album Unique Id, and each remaining MP3 must keep its path and audio length; otherwise the sync stops with an explanation and the files keep their tags. The bridge reports `reviewedAlbumSync` in its capabilities. Aurora 0.58.0 uses it.
+
 ## [0.217.0] - 2026-11-14
 
 ### Added

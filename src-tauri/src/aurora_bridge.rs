@@ -179,6 +179,10 @@ struct SyncExistingFoldersRequest {
     changed_file_paths: Vec<String>,
     #[serde(default)]
     deleted_file_paths: Vec<String>,
+    /// The user reviewed this album edit (Aurora's auto-tagger), so renumbered and removed
+    /// tracks may be synced together with album tag changes.
+    #[serde(default)]
+    reviewed_album: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -758,6 +762,7 @@ fn capabilities() -> Result<Value> {
             "playlistAuthoring": true,
             "recordPlays": true,
             "relocateAlbumFolders": true,
+            "reviewedAlbumSync": true,
         },
     }))
 }
@@ -1384,6 +1389,11 @@ fn sync_existing_folders(
     {
         bail!("Verified deletion sync accepts one album and at most 100 deleted tracks");
     }
+    if request.reviewed_album
+        && (request.folder_paths.len() != 1 || !request.changed_file_paths.is_empty())
+    {
+        bail!("A reviewed album sync accepts exactly one album folder");
+    }
     let database_path = app_data_dir.join("music-library.sqlite3");
     prune_deprecated_sync_backups(&database_path, 1)?;
     let mut conn = open_database(&database_path)?;
@@ -1397,7 +1407,17 @@ fn sync_existing_folders(
     let mut seen_album_ids = BTreeSet::new();
     let mut total_tracks = 0_usize;
     for (folder_index, folder) in folders.into_iter().enumerate() {
-        let candidate = if !request.deleted_file_paths.is_empty() {
+        let candidate = if request.reviewed_album {
+            let candidate =
+                importer::prepare_reviewed_album_sync(&conn, &folder, &request.deleted_file_paths)?;
+            if !candidate.supports_album_sized_sync() {
+                bail!(
+                    "Music Library could not update {} on its own: the album would change its catalog identity (for example its Album Unique Id, or Album Artist, Album or Year on an album without one), or a track's audio length changed. The files keep their new tags; run a reviewed import in Music Library",
+                    folder.display()
+                );
+            }
+            candidate
+        } else if !request.deleted_file_paths.is_empty() {
             importer::prepare_existing_album_deletion_sync(
                 &conn,
                 &folder,
@@ -5519,6 +5539,7 @@ mod tests {
             folder_paths: vec!["C:\\Music\\Album".to_owned(); MAX_SYNC_FOLDERS + 1],
             changed_file_paths: Vec::new(),
             deleted_file_paths: Vec::new(),
+            reviewed_album: false,
         };
 
         let error = sync_existing_folders(temp.path(), request).expect_err("bounded request");

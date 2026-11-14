@@ -346,6 +346,11 @@ pub(crate) struct ExistingAlbumSyncCandidate {
 }
 
 impl ExistingAlbumSyncCandidate {
+    /// False when the edit needs a full reviewed import instead of an album-sized update.
+    pub(crate) fn supports_album_sized_sync(&self) -> bool {
+        self.prepared.is_some()
+    }
+
     pub(crate) fn folder(&self) -> &Path {
         &self.folder
     }
@@ -728,6 +733,26 @@ pub(crate) fn prepare_existing_album_deletion_sync(
     folder: &Path,
     deleted_paths: &[String],
 ) -> Result<ExistingAlbumSyncCandidate> {
+    prepare_existing_album_scoped_sync(conn, folder, deleted_paths, false)
+}
+
+/// An album edit the user reviewed in Aurora's auto-tagger: tracks may be renumbered or
+/// removed and every album tag may change together. The album must keep its catalog id and
+/// every remaining MP3 its path, so ids, ratings, play history and added dates are kept.
+pub(crate) fn prepare_reviewed_album_sync(
+    conn: &Connection,
+    folder: &Path,
+    deleted_paths: &[String],
+) -> Result<ExistingAlbumSyncCandidate> {
+    prepare_existing_album_scoped_sync(conn, folder, deleted_paths, true)
+}
+
+fn prepare_existing_album_scoped_sync(
+    conn: &Connection,
+    folder: &Path,
+    deleted_paths: &[String],
+    reviewed: bool,
+) -> Result<ExistingAlbumSyncCandidate> {
     let mut scan = crate::folder_sync::scan_existing_album(folder)?;
     let scanned_folders = scan
         .track_identities()
@@ -908,7 +933,7 @@ pub(crate) fn prepare_existing_album_deletion_sync(
         // The complete-folder guard verifies every file. With a stable album ID,
         // a consistent album-artist edit is metadata, not a different album.
         let mut identity_current = current.clone();
-        if deleted_tracks.is_empty()
+        if (reviewed || deleted_tracks.is_empty())
             && !current.album_unique_id.is_empty()
             && current.album_unique_id == scanned.album_unique_id
             && !scanned.album_artist_display.trim().is_empty()
@@ -920,13 +945,21 @@ pub(crate) fn prepare_existing_album_deletion_sync(
             || stored_unique_id != &current_album.album_unique_id
             || current.album_unique_id != scanned.album_unique_id
             || current.row_hash != previous_row_hash
-            || !fast_sync_scanned_track_changes_are_supported(&identity_current, &scanned)
+            || !(if reviewed {
+                reviewed_track_changes_are_supported(&current, &scanned)
+            } else {
+                fast_sync_scanned_track_changes_are_supported(&identity_current, &scanned)
+            })
             || raw_id.is_none()
             || raw_row_hash.as_deref() != Some(previous_row_hash.as_str())
         {
             fast_supported = false;
         }
-        let desired = fast_sync_desired_track(&current, &scanned);
+        let desired = if reviewed {
+            reviewed_desired_track(&current, &scanned)
+        } else {
+            fast_sync_desired_track(&current, &scanned)
+        };
         tracks.push(ScopedTrackUpdate {
             id: *id,
             raw_id,
@@ -972,7 +1005,9 @@ pub(crate) fn prepare_existing_album_deletion_sync(
     {
         identity_album.album_artist_display = current_album.previous.album_artist_display.clone();
     }
-    if !(if deleted_tracks.is_empty() {
+    if !(if reviewed {
+        current_album.album_unique_id == desired_album.album_unique_id
+    } else if deleted_tracks.is_empty() {
         fast_sync_album_changes_are_supported(&current_album, &identity_album)
     } else {
         fast_sync_album_identity_is_supported(&current_album, &desired_album)
@@ -1483,6 +1518,37 @@ fn fast_sync_durations_are_equivalent(current: Option<i64>, scanned: Option<i64>
         (None, None) => true,
         _ => false,
     }
+}
+
+/// A reviewed edit may change any tag except the album's identity. The file must stay the
+/// same recording: its length has to match the catalog, read from the audio when TLEN differs.
+fn reviewed_track_changes_are_supported(current: &TrackRow, scanned: &TrackRow) -> bool {
+    let same_identity = current.album_unique_id == scanned.album_unique_id
+        && current.album_id == scanned.album_id
+        && current.file_path == scanned.file_path
+        && current.filename == scanned.filename;
+    same_identity
+        && (fast_sync_durations_are_equivalent(current.time_seconds, scanned.time_seconds)
+            || crate::soulseek::soundcheck::inspect_file(
+                &Path::new(&scanned.file_path).join(&scanned.filename),
+                false,
+                0,
+            )
+            .and_then(|result| result.duration_seconds)
+            .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
+            .is_some_and(|seconds| {
+                fast_sync_durations_are_equivalent(current.time_seconds, Some(seconds.round() as i64))
+            }))
+}
+
+fn reviewed_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
+    let mut desired = fast_sync_desired_track(current, scanned);
+    desired.disc_number_raw = scanned.disc_number_raw.clone();
+    desired.disc_number = scanned.disc_number;
+    desired.track_number_raw = scanned.track_number_raw.clone();
+    desired.track_number = scanned.track_number;
+    refresh_fast_sync_row_hash(&mut desired);
+    desired
 }
 
 fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
@@ -6187,6 +6253,76 @@ mod tests {
             &[display_scoped_path(&folder.join("..").join("foreign.mp3"))]
         )
         .is_err());
+    }
+
+    #[test]
+    fn reviewed_album_sync_renumbers_removes_and_retags_in_one_update() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().canonicalize().unwrap();
+        let files = [folder.join("01.mp3"), folder.join("02.mp3"), folder.join("03.mp3")];
+        for (index, path) in files.iter().enumerate() {
+            write_fast_sync_mp3(path, &format!("Track {index}"), None, "", 2008);
+            let mut tag = Tag::read_from_path(path).unwrap();
+            tag.set_track(index as u32 + 1);
+            tag.write_to_path(path, Version::Id3v24).unwrap();
+        }
+        let initial = scanned_fast_sync_tracks(&folder, "fast-album");
+        let (mut conn, old_run, _, _) = fast_sync_database(&initial[0]);
+        seed_fast_sync_track(&conn, old_run, 3, &initial[1]);
+        seed_fast_sync_track(&conn, old_run, 4, &initial[2]);
+        conn.execute("DELETE FROM albums WHERE id=?1", [&initial[0].album_id])
+            .unwrap();
+        seed_fast_sync_album(&conn, old_run, &initial);
+        db::rebuild_search_indexes(&conn).unwrap();
+        let album_id = initial[0].album_id.clone();
+        let id_of = |conn: &Connection, filename: &str| -> i64 {
+            conn.query_row("SELECT id FROM tracks WHERE filename=?1", [filename], |r| r.get(0))
+                .unwrap()
+        };
+        let kept_id = id_of(&conn, "03.mp3");
+
+        // The auto-tagger drops the bonus track, renumbers the last one and fixes the year.
+        fs::remove_file(&files[1]).unwrap();
+        for (path, number) in [(&files[0], 1), (&files[2], 2)] {
+            let mut tag = Tag::read_from_path(path).unwrap();
+            tag.set_track(number);
+            tag.set_year(1976);
+            tag.set_title(format!("Song {number}"));
+            tag.write_to_path(path, Version::Id3v24).unwrap();
+        }
+        let deleted = vec![display_scoped_path(&files[1])];
+        let unreviewed = prepare_existing_album_deletion_sync(&conn, &folder, &deleted).unwrap();
+        assert!(!unreviewed.supports_album_sized_sync());
+        let candidate = prepare_reviewed_album_sync(&conn, &folder, &deleted).unwrap();
+        assert!(candidate.supports_album_sized_sync());
+        let outcome = apply_existing_album_fast_sync(&mut conn, &candidate).unwrap();
+        assert!(matches!(outcome, ExistingAlbumFastSyncOutcome::Updated { .. }));
+
+        let (number, title): (i64, String) = conn
+            .query_row(
+                "SELECT track_number, title FROM tracks WHERE id=?1",
+                [kept_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((number, title.as_str()), (2, "Song 2"));
+        let (year, total): (i64, i64) = conn
+            .query_row(
+                "SELECT year, total_tracks FROM albums WHERE id=?1",
+                [&album_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((year, total), (1976, 2));
+        let removed: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tracks WHERE filename='02.mp3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(removed, 0);
+        let retry = prepare_reviewed_album_sync(&conn, &folder, &deleted).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &retry).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
     }
 
     #[test]

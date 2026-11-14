@@ -1,5 +1,9 @@
 # Music Library
 
+## Auto-tag library albums from Aurora (0.218.0)
+
+Aurora 0.58.0 can auto-tag an album that is already in the library, for example to drop four bonus tracks from a 15-track copy of an 11-track release and renumber the rest. Music Library takes that reviewed edit in one update instead of asking for a reviewed import, so the album keeps its ratings, added date and play history.
+
 ## Rename library albums from Aurora (0.217.0)
 
 Aurora 0.58.0 can rename an album folder and its tracks when you fix the Album Artist, Album or Year tags, for example `D:\Music\Artist - Album (1978)` to `D:\Music\Artist - Album (1976)`. Music Library renames the files in place and updates every path it stores, so the album keeps its ratings, added date, play history, playlist entries and sound analysis. An interrupted rename is finished or rolled back the next time Aurora talks to Music Library.
