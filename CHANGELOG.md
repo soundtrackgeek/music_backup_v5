@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.218.2] - 2026-11-14
+
+### Fixed
+- An Aurora tag edit that changed a disc tag from blank or `0/0` to `1/1` left the catalog without a disc number. The quick folder sync treats a blank disc, disc 0 and disc 1 as the same disc and kept the catalog's old value, so Aurora renamed the tracks `1-01 - Artist - Title` but its naming check, which reads the catalog, expected `01`. The sync now stores a real disc number from the file. A blank or `0` disc tag still keeps a blank or `0` catalog disc, and clears a disc 1 that the tag no longer has. Albums synced before this fix get their disc number the next time one of their tags is edited.
+
 ## [0.218.1] - 2026-11-14
 
 ### Fixed

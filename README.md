@@ -1,5 +1,9 @@
 # Music Library
 
+## Disc numbers from Aurora tag edits (0.218.2)
+
+When Aurora changes a disc tag from blank or `0/0` to `1/1`, the catalog now stores disc 1 instead of keeping no disc number, so Aurora's album naming check agrees with the `1-01 - Artist - Title` names it gives the tracks.
+
 ## Release build fix (0.218.1)
 
 The 0.218.0 release build failed on macOS, so 0.217.0 and 0.218.0 were never published. 0.218.1 fixes the cross-platform path handling behind the album rename and ships both: in-place album renames for Aurora (`relocateAlbum`) and the reviewed album sync that Aurora 0.58.0's library auto-tagger needs.

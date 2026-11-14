@@ -1573,6 +1573,18 @@ fn fast_sync_desired_track(current: &TrackRow, scanned: &TrackRow) -> TrackRow {
     desired.track_rating_value = scanned.track_rating_value;
     desired.release_year_raw = scanned.release_year_raw.clone();
     desired.release_year = scanned.release_year;
+    // The fast path only runs when the discs are equivalent (blank, 0 or 1). A real disc
+    // number in the file must still reach the catalog: a `1/1` disc tag edited onto a blank
+    // or zero disc names its tracks `1-01`, and Aurora reads the disc from the catalog.
+    // A blank or zero disc in the file keeps a blank or zero catalog disc as it is, and
+    // clears a first disc that the tag no longer has.
+    if scanned.disc_number.is_some_and(|disc| disc > 0) {
+        desired.disc_number_raw = scanned.disc_number_raw.clone();
+        desired.disc_number = scanned.disc_number;
+    } else if current.disc_number.is_some_and(|disc| disc > 0) {
+        desired.disc_number_raw.clear();
+        desired.disc_number = None;
+    }
     refresh_fast_sync_row_hash(&mut desired);
     desired
 }
@@ -6444,6 +6456,48 @@ mod tests {
         assert_eq!(desired.normalized_rating, Some(80));
     }
 
+    #[test]
+    fn fast_sync_stores_a_first_disc_edited_onto_a_blank_or_zero_disc() {
+        let values = |disc_number: &str| {
+            vec![
+                "Track Artist",
+                "",
+                disc_number,
+                "Fast Album",
+                "Pop Rock",
+                "",
+                "Label",
+                "",
+                "Track Title",
+                "1",
+                "2008",
+                "",
+                "fast-album",
+                r"D:\Music\Fast Album",
+                "1-01 - Track Title.mp3",
+                "Album Artist",
+                "2:05",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+        };
+        for blank in ["", "0"] {
+            let current = parse_fast_sync_record(values(blank));
+            let scanned = parse_fast_sync_record(values("1"));
+            assert!(fast_sync_track_changes_are_supported(&current, &scanned));
+            let desired = fast_sync_desired_track(&current, &scanned);
+            assert_eq!(desired.disc_number_raw, "1");
+            assert_eq!(desired.disc_number, Some(1));
+            assert_ne!(desired.row_hash, current.row_hash);
+        }
+        // Clearing the disc tag clears the catalog's first disc again.
+        let current = parse_fast_sync_record(values("1"));
+        let desired = fast_sync_desired_track(&current, &parse_fast_sync_record(values("0")));
+        assert_eq!(desired.disc_number_raw, "");
+        assert_eq!(desired.disc_number, None);
+    }
+
     fn scanned_fast_sync_track(folder: &Path, album_unique_id: &str) -> TrackRow {
         scanned_fast_sync_tracks(folder, album_unique_id)
             .into_iter()
@@ -7572,6 +7626,51 @@ mod tests {
             )
             .expect("updated zero-disc row");
         assert_eq!(updated, (Some(80), None, None));
+    }
+
+    #[test]
+    fn existing_file_fast_sync_stores_a_first_disc_when_catalog_disc_is_blank() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder = temp.path().join("Fast Album");
+        fs::create_dir(&folder).expect("album folder");
+        let folder = folder.canonicalize().expect("canonical album folder");
+        let mp3 = folder.join("01 - Track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", None, "", 2008);
+        let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+        initial.disc_number_raw.clear();
+        initial.disc_number = None;
+        refresh_fast_sync_row_hash(&mut initial);
+        let (mut conn, _, target_id, _) = fast_sync_database(&initial);
+
+        let mut tag = Tag::read_from_path(&mp3).expect("read target MP3");
+        tag.set_disc(1);
+        tag.set_total_discs(1);
+        tag.write_to_path(&mp3, Version::Id3v24)
+            .expect("write first disc number");
+
+        let candidate = prepare_existing_file_fast_sync(&conn, &folder, &mp3)
+            .expect("prepare first-disc sync")
+            .expect("cataloged target candidate");
+        let outcome =
+            apply_existing_album_fast_sync(&mut conn, &candidate).expect("apply first-disc sync");
+        assert!(matches!(
+            outcome,
+            ExistingAlbumFastSyncOutcome::Updated {
+                changed_tracks: 1,
+                ..
+            }
+        ));
+
+        let updated: (Option<i32>, Option<String>) = conn
+            .query_row(
+                "SELECT t.disc_number, r.disc_number
+                 FROM tracks AS t JOIN raw_tracks AS r ON r.id = t.id
+                 WHERE t.id = ?1",
+                params![target_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("updated first-disc row");
+        assert_eq!(updated, (Some(1), Some("1".to_owned())));
     }
 
     #[test]
