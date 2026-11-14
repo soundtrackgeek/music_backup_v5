@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.218.1] - 2026-11-14
+
+### Fixed
+- The 0.218.0 release build failed on macOS: the test for the folder that `relocateAlbum` gives a renamed album read Windows catalog paths with the platform's own path rules, which do not treat `\` as a separator on macOS. The folder is now worked out by splitting catalog paths on both separators, so it is the same on every platform, and network paths such as `\\NAS\Music` keep their prefix. This release ships the 0.217.0 and 0.218.0 changes.
+
 ## [0.218.0] - 2026-11-14
 
 ### Added

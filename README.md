@@ -1,5 +1,9 @@
 # Music Library
 
+## Release build fix (0.218.1)
+
+The 0.218.0 release build failed on macOS, so 0.217.0 and 0.218.0 were never published. 0.218.1 fixes the cross-platform path handling behind the album rename and ships both: in-place album renames for Aurora (`relocateAlbum`) and the reviewed album sync that Aurora 0.58.0's library auto-tagger needs.
+
 ## Auto-tag library albums from Aurora (0.218.0)
 
 Aurora 0.58.0 can auto-tag an album that is already in the library, for example to drop four bonus tracks from a 15-track copy of an 11-track release and renumber the rest. Music Library takes that reviewed edit in one update instead of asking for a reviewed import, so the album keeps its ratings, added date and play history.

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 const JOURNAL_FORMAT_VERSION: u32 = 1;
 const MAX_RELOCATED_FILES: usize = 500;
@@ -142,29 +142,47 @@ fn is_mp3_name(name: &str) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case("mp3"))
 }
 
+/// Splits a path on both separators. Catalog paths are Windows paths on every platform, and
+/// `Path` treats `\` as an ordinary character on macOS and Linux, so this splits by hand.
+fn path_parts(path: &str) -> Vec<&str> {
+    path.split(['\\', '/'])
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
 /// The catalog directory of a track with its album folder component replaced. Every
-/// other component keeps the catalog's own spelling, such as its drive-letter case.
+/// other component keeps the catalog's own spelling, such as its drive-letter case, and
+/// disc folders below the album folder are kept.
 fn relocated_directory(directory: &str, source: &Path, folder_name: &str) -> Result<String> {
-    let source_components = PathBuf::from(display_path(source)).components().count();
-    let directory_path = PathBuf::from(directory.replace('/', "\\"));
-    let components = directory_path.components().collect::<Vec<_>>();
-    if components.len() < source_components
-        || !normalized_path(&components[..source_components].iter().collect::<PathBuf>())
-            .eq(&normalized_path(source))
+    let source_text = display_path(source);
+    let source_parts = path_parts(&source_text);
+    let parts = path_parts(directory);
+    let depth = source_parts.len();
+    if depth == 0
+        || parts.len() < depth
+        || !parts
+            .iter()
+            .zip(&source_parts)
+            .all(|(part, source_part)| part.to_lowercase() == source_part.to_lowercase())
     {
         bail!("Catalog folder {directory} is outside the album folder");
     }
-    let mut relocated = components[..source_components - 1]
+    if parts[depth..]
         .iter()
-        .collect::<PathBuf>();
-    relocated.push(folder_name);
-    for component in &components[source_components..] {
-        if !matches!(component, Component::Normal(_)) {
-            bail!("Catalog folder {directory} contains an unsafe component");
-        }
-        relocated.push(component.as_os_str());
+        .any(|part| matches!(*part, "." | ".."))
+    {
+        bail!("Catalog folder {directory} contains an unsafe component");
     }
-    Ok(relocated.display().to_string())
+    let separator = if directory.contains('\\') { "\\" } else { "/" };
+    let prefix_len = directory.len() - directory.trim_start_matches(['\\', '/']).len();
+    let mut relocated = parts[..depth - 1].to_vec();
+    relocated.push(folder_name);
+    relocated.extend_from_slice(&parts[depth..]);
+    Ok(format!(
+        "{}{}",
+        &directory[..prefix_len],
+        relocated.join(separator)
+    ))
 }
 
 fn catalog_album_rows(conn: &Connection, album_id: &str) -> Result<Vec<(String, String)>> {
@@ -831,6 +849,16 @@ mod tests {
             r"D:\MUSIC\Artist - Album (1976)\CD2"
         );
         assert!(relocated_directory(r"D:\MUSIC\Other", source, "New").is_err());
+        assert!(relocated_directory(r"D:\MUSIC\Artist - Album (1978)\..", source, "New").is_err());
+        assert_eq!(
+            relocated_directory(
+                r"\\nas\music\Artist - Album (1978)",
+                Path::new(r"\\NAS\Music\Artist - Album (1978)"),
+                "Artist - Album (1976)"
+            )
+            .unwrap(),
+            r"\\nas\music\Artist - Album (1976)"
+        );
     }
 
     #[test]
