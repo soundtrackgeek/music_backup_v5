@@ -1,5 +1,9 @@
 # Music Library
 
+## Rename library albums from Aurora (0.217.0)
+
+Aurora 0.58.0 can rename an album folder and its tracks when you fix the Album Artist, Album or Year tags, for example `D:\Music\Artist - Album (1978)` to `D:\Music\Artist - Album (1976)`. Music Library renames the files in place and updates every path it stores, so the album keeps its ratings, added date, play history, playlist entries and sound analysis. An interrupted rename is finished or rolled back the next time Aurora talks to Music Library.
+
 ## Correct lengths for CRC-protected MP3s (0.215.8)
 
 Some MP3 encoders add a checksum to every frame. Music Library's audio reader then skipped the header that holds the track length and guessed from the first few frames, so a 3:34 song could read as 19 minutes. Music Library now reads the length from that header itself when the guess disagrees. Aurora tag edits for such albums (for example an Album Artist rename) sync again instead of waiting with "cannot apply this change on its own".

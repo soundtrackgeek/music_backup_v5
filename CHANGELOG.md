@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.217.0] - 2026-11-14
+
+### Added
+- New Aurora bridge operation `relocateAlbum` renames an album folder and its MP3s in place and rewrites every path in the catalog, so the album keeps its ids, ratings, added date, play history, saved playlist entries, sonic analysis, hidden-favorites and rating-mission state. Aurora 0.58.0 uses it to rename a library album after its Album Artist, Album or Year tags change. The bridge reports `relocateAlbumFolders` in its capabilities.
+- The rename is journaled under `aurora-bridge/relocations`. Files are staged under temporary names first, so swapped track names work, and a failure rolls every file and the folder back. If Music Library stops mid-rename, the next `relocateAlbum` or `syncExistingFolders` request finishes the job when the catalog was already updated, or restores the old names when it was not.
+- The new folder name must be a valid Windows file name and must not already exist in the library root; a case-only rename is allowed. Track files keep the `.mp3` extension and may not overwrite files outside the album.
+
 ## [0.216.0] - 2026-11-13
 
 ### Added

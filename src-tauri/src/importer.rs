@@ -1991,6 +1991,110 @@ fn update_scoped_track(
     Ok(())
 }
 
+/// One cataloged MP3 whose folder and/or file name changed on disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CatalogPathMove {
+    pub(crate) old_directory: String,
+    pub(crate) old_filename: String,
+    pub(crate) new_directory: String,
+    pub(crate) new_filename: String,
+}
+
+fn catalog_path_move_key(directory: &str, filename: &str) -> String {
+    music_sonic_core::track_key(directory, filename)
+}
+
+/// Points every catalog row of one album at its relocated file. Row ids stay the same,
+/// so ratings, plays, playlists and analysis that reference the rows remain attached.
+/// Each move must name exactly one current row of the album, and every row must move.
+pub(crate) fn relocate_album_catalog_paths(
+    tx: &Transaction<'_>,
+    album_id: &str,
+    source_path: &str,
+    moves: &[CatalogPathMove],
+) -> Result<(i64, usize)> {
+    let _workflow_guard = ImportWorkflowGuard::acquire()?;
+    let headers = StringRecord::from(REQUIRED_COLUMNS.to_vec());
+    let header_map = HeaderMap::from_headers(&headers)?;
+    let rows = load_scoped_album_tracks(tx, album_id, &header_map)?;
+    if rows.is_empty() {
+        bail!("The album is no longer present in Music Library");
+    }
+    let mut by_key = HashMap::with_capacity(moves.len());
+    for item in moves {
+        if by_key
+            .insert(catalog_path_move_key(&item.old_directory, &item.old_filename), item)
+            .is_some()
+        {
+            bail!("The relocation names one catalog track more than once");
+        }
+    }
+    if by_key.len() != rows.len() {
+        bail!(
+            "The relocation covers {} files, but the album has {} catalog tracks",
+            by_key.len(),
+            rows.len()
+        );
+    }
+    let mut destinations = HashSet::with_capacity(rows.len());
+    let mut updates = Vec::with_capacity(rows.len());
+    for (id, raw_id, _raw_row_hash, row_hash, current) in rows {
+        let key = catalog_path_move_key(&current.file_path, &current.filename);
+        let item = by_key.get(&key).ok_or_else(|| {
+            anyhow!(
+                "Catalog track {} is missing from the relocation",
+                Path::new(&current.file_path).join(&current.filename).display()
+            )
+        })?;
+        if !destinations.insert(catalog_path_move_key(&item.new_directory, &item.new_filename)) {
+            bail!("Two catalog tracks would share one relocated file");
+        }
+        let mut desired = current.clone();
+        desired.file_path = item.new_directory.clone();
+        desired.filename = item.new_filename.clone();
+        refresh_fast_sync_row_hash(&mut desired);
+        updates.push(ScopedTrackUpdate {
+            id,
+            raw_id,
+            previous_row_hash: row_hash,
+            current,
+            desired,
+        });
+    }
+
+    let started = Instant::now();
+    let started_at = Utc::now().to_rfc3339();
+    tx.execute(
+        "INSERT INTO import_runs (
+             source_path, source_size_bytes, started_at, status, backup_path,
+             added_tracks, changed_tracks, removed_tracks,
+             added_albums, changed_albums, removed_albums
+         ) VALUES (?1, 0, ?2, 'running', NULL, 0, ?3, 0, 0, 1, 0)",
+        params![source_path, &started_at, updates.len() as i64],
+    )
+    .context("Could not create the album relocation import run")?;
+    let import_run_id = tx.last_insert_rowid();
+    for track in &updates {
+        update_scoped_raw_track(tx, import_run_id, track)?;
+        update_scoped_track(tx, import_run_id, album_id, track)?;
+    }
+    let (track_rows, album_count) = insert_rating_snapshot_from_catalog(tx, import_run_id)?;
+    tx.execute(
+        "UPDATE import_runs
+         SET completed_at = ?1, status = 'completed', track_rows = ?2,
+             album_count = ?3, duration_ms = ?4, rating_events_count = 0
+         WHERE id = ?5",
+        params![
+            Utc::now().to_rfc3339(),
+            track_rows,
+            album_count,
+            started.elapsed().as_millis() as i64,
+            import_run_id,
+        ],
+    )?;
+    Ok((import_run_id, updates.len()))
+}
+
 fn update_scoped_album(
     tx: &Transaction<'_>,
     import_run_id: i64,
@@ -6217,6 +6321,62 @@ mod tests {
             .into_iter()
             .map(|values| parse_fast_sync_record(values.into_iter().collect()))
             .collect()
+    }
+
+    #[test]
+    fn relocation_rebinds_album_rows_and_matches_a_fresh_scan() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Fast Album (1978)");
+        fs::create_dir(&folder).unwrap();
+        let folder = folder.canonicalize().unwrap();
+        let mp3 = folder.join("track.mp3");
+        write_fast_sync_mp3(&mp3, "Track Title", Some(255), "L", 2008);
+        let mut initial = scanned_fast_sync_track(&folder, "fast-album");
+        refresh_fast_sync_row_hash(&mut initial);
+        let (mut conn, _, target_id, outside_hash) = fast_sync_database(&initial);
+
+        let destination = temp.path().join("Fast Album (1976)");
+        fs::rename(&folder, &destination).unwrap();
+        let destination = destination.canonicalize().unwrap();
+        fs::rename(destination.join("track.mp3"), destination.join("01 - Track Title.mp3")).unwrap();
+        let moved = CatalogPathMove {
+            old_directory: initial.file_path.clone(),
+            old_filename: initial.filename.clone(),
+            new_directory: display_scoped_path(&destination),
+            new_filename: "01 - Track Title.mp3".into(),
+        };
+        let tx = conn.transaction().unwrap();
+        let wrong = CatalogPathMove { old_filename: "other.mp3".into(), ..moved.clone() };
+        assert!(relocate_album_catalog_paths(&tx, &initial.album_id, "test", &[wrong]).is_err());
+        let (run, count) =
+            relocate_album_catalog_paths(&tx, &initial.album_id, "test", std::slice::from_ref(&moved)).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(count, 1);
+
+        let row: (i64, String, String, i32, String, i64) = conn
+            .query_row(
+                "SELECT id, file_path, filename, normalized_rating, row_hash, import_run_id FROM tracks WHERE id=?1",
+                [target_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert_eq!((row.0, row.1.as_str(), row.2.as_str(), row.3), (target_id, moved.new_directory.as_str(), "01 - Track Title.mp3", 100));
+        assert_eq!(row.5, run);
+        let raw: (String, String, String) = conn
+            .query_row("SELECT file_path, filename, row_hash FROM raw_tracks WHERE id=?1", [target_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap();
+        assert_eq!((raw.0.as_str(), raw.1.as_str(), raw.2.as_str()), (moved.new_directory.as_str(), "01 - Track Title.mp3", row.4.as_str()));
+        let outside: String = conn
+            .query_row("SELECT row_hash FROM tracks WHERE album_id='mb:outside-album'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(outside, outside_hash);
+        // The rebound row is exactly what a fresh scan of the renamed folder produces,
+        // so the next tag sync of the renamed folder finds nothing to change.
+        let repeated = prepare_existing_album_fast_sync(&conn, &destination).unwrap();
+        assert_eq!(
+            apply_existing_album_fast_sync(&mut conn, &repeated).unwrap(),
+            ExistingAlbumFastSyncOutcome::Unchanged
+        );
     }
 
     #[test]

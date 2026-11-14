@@ -12,6 +12,8 @@ use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod album_relocation;
+
 const PROTOCOL_VERSION: u32 = 1;
 const PLAN_FORMAT_VERSION: u32 = 3;
 const BRIDGE_DIRECTORY: &str = "aurora-bridge";
@@ -622,8 +624,19 @@ fn handle_request_file(request_path: &Path) -> Result<Value> {
                 .context("repairBatch payload must contain planId and sessionId")?;
             repair_committed_batch(&app_data_dir, payload, &mut progress)
         }
+        "relocateAlbum" => {
+            let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            let payload: album_relocation::RelocateAlbumRequest =
+                serde_json::from_value(request.payload)
+                    .context("relocateAlbum payload must contain albumId and folderName")?;
+            album_relocation::relocate_album(&app_data_dir, payload)
+        }
         "syncExistingFolders" => {
             let _bridge_lock = BridgeProcessLock::acquire(&app_data_dir)?;
+            // A folder sync must never read an album whose rename was interrupted.
+            let recovery_conn = open_database(&app_data_dir.join("music-library.sqlite3"))?;
+            album_relocation::recover_interrupted_relocations(&app_data_dir, &recovery_conn)?;
+            drop(recovery_conn);
             let payload: SyncExistingFoldersRequest = serde_json::from_value(request.payload)
                 .context("syncExistingFolders payload must contain folderPaths")?;
             sync_existing_folders(&app_data_dir, payload)
@@ -744,6 +757,7 @@ fn capabilities() -> Result<Value> {
             "sonicSmartPlaylistsV1": true,
             "playlistAuthoring": true,
             "recordPlays": true,
+            "relocateAlbumFolders": true,
         },
     }))
 }
