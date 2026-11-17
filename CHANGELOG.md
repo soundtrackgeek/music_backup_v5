@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.218.3] - 2026-11-17
+
+### Fixed
+- **Starting Music Library no longer shows "Catalog connections are busy"**: the Statistics query that counts albums by artist country rescanned every library artist for each imported MusicBrainz origin. On a large catalog it took 15 to 40 seconds and held one of the four catalog readers while the other startup requests waited, so some of them gave up. The query now goes through the artist counts once and finds origins by index. It returns the same counts in about a tenth of a second.
+
 ## [0.218.2] - 2026-11-14
 
 ### Fixed

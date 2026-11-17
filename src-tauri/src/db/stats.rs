@@ -164,6 +164,10 @@ pub(super) fn country_catalog_stats(conn: &Connection) -> Result<Vec<CountryCata
 
 pub(super) fn country_catalog_stats_sql() -> String {
     let album_artist_key = catalog_artist_key_sql("album_artist_display");
+    // Walk the per-artist counts once and find each artist's origins through
+    // the local_artist_key index. Joining origins to the materialized counts
+    // instead rescans every artist for every origin row, which took 15-40 s
+    // on a large catalog and held a reader long enough to exhaust the pool.
     format!(
         "
         WITH album_counts AS MATERIALIZED (
@@ -172,18 +176,25 @@ pub(super) fn country_catalog_stats_sql() -> String {
                 COUNT(*) AS album_count
             FROM albums INDEXED BY idx_albums_artist_key
             GROUP BY {album_artist_key}
+        ),
+        origin_counts AS MATERIALIZED (
+            SELECT
+                origin.country_code,
+                COUNT(*) AS artist_count,
+                SUM(album_counts.album_count) AS album_count
+            FROM album_counts
+            JOIN musicbrainz_artist_origin_countries origin
+              ON origin.local_artist_key = album_counts.local_artist_key
+            GROUP BY origin.country_code
         )
         SELECT
             country.country_code,
             country.country_name,
-            COUNT(album_counts.local_artist_key) AS artist_count,
-            COALESCE(SUM(album_counts.album_count), 0) AS album_count
+            COALESCE(origin_counts.artist_count, 0) AS artist_count,
+            COALESCE(origin_counts.album_count, 0) AS album_count
         FROM musicbrainz_origin_countries country
-        LEFT JOIN musicbrainz_artist_origin_countries origin
-          ON origin.country_code = country.country_code
-        LEFT JOIN album_counts
-          ON album_counts.local_artist_key = origin.local_artist_key
-        GROUP BY country.country_code, country.country_name
+        LEFT JOIN origin_counts
+          ON origin_counts.country_code = country.country_code
         ORDER BY LOWER(country.country_name), country.country_code
         "
     )
@@ -1983,6 +1994,9 @@ mod tests {
             ) VALUES (
                 'pet shop boys', 'Pet Shop Boys', 'mbid-pet-shop-boys', 'GB',
                 'United Kingdom', '2026-08-02T00:00:00Z', '2026-08-02T00:00:00Z'
+            ), (
+                'a-ha', 'a-ha', 'mbid-a-ha', 'NO',
+                'Norway', '2026-08-02T00:00:00Z', '2026-08-02T00:00:00Z'
             );
             ",
         )
@@ -2018,6 +2032,14 @@ mod tests {
                 .count(),
             1,
             "country catalog should scan albums once: {plan:#?}"
+        );
+        // Rescanning the per-artist counts for every origin row is quadratic
+        // and took 15-40 s on a 74,000-album catalog.
+        assert!(
+            !plan
+                .iter()
+                .any(|detail| detail.contains("SCAN album_counts LEFT-JOIN")),
+            "country catalog must not rescan artist counts per origin: {plan:#?}"
         );
     }
 
