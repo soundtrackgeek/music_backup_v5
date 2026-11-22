@@ -414,6 +414,24 @@ fn start_deferred_maintenance(app_data_dir: &Path) {
 
 fn run_deferred_maintenance() -> Result<()> {
     let app_data_dir = bridge_app_data_dir()?;
+    if !db::smart_playlist_refresh_pending(&app_data_dir) && !db::chart_rematch_pending(&app_data_dir)
+    {
+        return Ok(());
+    }
+    // Every write this helper makes (chart re-match, smart playlist refresh, and the closing
+    // optimize/checkpoint) happens under the maintenance lock and the bridge workflow lock.
+    // Bridge requests that find the maintenance lock held wait (`BridgeProcessLock::acquire`)
+    // instead of meeting a busy catalog; an Aurora batch removal starts its next album right
+    // after the previous one commits, which is when this helper runs.
+    let Some(_maintenance_lock) =
+        db::MaintenanceLock::try_acquire(&app_data_dir, db::CHART_REMATCH_LOCK)?
+    else {
+        // Another helper is running; it rereads both markers before it finishes.
+        return Ok(());
+    };
+    // Declared after the maintenance lock so it is released first: a waiting request then
+    // never sees the workflow lock held without the maintenance lock.
+    let _bridge_lock = acquire_bridge_lock_for_maintenance(&app_data_dir)?;
     let database = app_data_dir.join("music-library.sqlite3");
     let pool = db::pool_for_path(&database)?;
     let outcome = (|| -> Result<()> {
@@ -430,7 +448,7 @@ fn run_deferred_maintenance() -> Result<()> {
             let ran = db::run_deferred_smart_playlist_refresh(&app_data_dir, &conn)?;
             drop(conn);
             if ran.is_none() {
-                // Another process holds the refresh; it will see the marker again.
+                // The desktop app holds the refresh; it will see the marker again.
                 break;
             }
         }
@@ -442,35 +460,32 @@ fn run_deferred_maintenance() -> Result<()> {
     outcome
 }
 
-/// How long a bridge request waits for a running background chart re-match (25-40 s on a
-/// large catalog) before it reports the workflow as busy.
+/// How long a bridge request waits for running background maintenance (a chart re-match
+/// takes 25-40 s on a large catalog) before it reports the workflow as busy.
 const CHART_REMATCH_WAIT: Duration = Duration::from_secs(4 * 60);
 
-/// Runs a deferred chart re-match while holding both its own lock and the bridge workflow
-/// lock, so it never writes during an Aurora operation. Bridge requests that find the
-/// workflow lock held by this helper wait for it (`BridgeProcessLock::acquire`) instead
-/// of failing; they never take the chart lock, so the two cannot wait on each other.
-fn run_deferred_chart_rematch(app_data_dir: &Path, database: &Path) -> Result<()> {
-    if !db::chart_rematch_pending(app_data_dir) {
-        return Ok(());
-    }
-    let Some(_chart_lock) = db::MaintenanceLock::try_acquire(app_data_dir, db::CHART_REMATCH_LOCK)?
-    else {
-        // Another helper is already re-matching; it rereads the marker when it finishes.
-        return Ok(());
-    };
-    // Declared after the chart lock so it is released first: a waiting request then
-    // never sees the workflow lock held without the chart lock.
+/// The helper yields to Aurora: it only polls for the workflow lock, so a bridge request
+/// that arrives meanwhile can take it first, and the helper runs once the requests stop.
+fn acquire_bridge_lock_for_maintenance(app_data_dir: &Path) -> Result<BridgeProcessLock> {
     let deadline = std::time::Instant::now() + Duration::from_secs(60 * 60);
-    let _bridge_lock = loop {
+    loop {
         match BridgeProcessLock::try_acquire(app_data_dir) {
-            Ok(lock) => break lock,
+            Ok(lock) => return Ok(lock),
             Err(_) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(500));
             }
             Err(error) => return Err(error),
         }
-    };
+    }
+}
+
+/// Runs a deferred chart re-match. The caller holds the maintenance and bridge workflow
+/// locks, so it never writes during an Aurora operation; bridge requests never take the
+/// maintenance lock, so the two cannot wait on each other.
+fn run_deferred_chart_rematch(app_data_dir: &Path, database: &Path) -> Result<()> {
+    if !db::chart_rematch_pending(app_data_dir) {
+        return Ok(());
+    }
     let mut conn = open_database(database)?;
     // A removal that commits while this runs rewrites the marker; run again for it.
     for _ in 0..3 {
@@ -4921,8 +4936,17 @@ mod tests {
         // The detached helper's work: it refreshes them without the desktop app and clears
         // the marker, and running it again with nothing pending is harmless.
         drop(conn);
-        run_deferred_maintenance().expect("deferred maintenance");
+        // While an Aurora request holds the workflow lock, the helper does not write: it
+        // holds the maintenance lock, so requests that arrive meanwhile wait for it.
+        let request = BridgeProcessLock::try_acquire(&app_data).unwrap();
+        let helper = std::thread::spawn(run_deferred_maintenance);
+        std::thread::sleep(Duration::from_millis(700));
+        assert!(db::smart_playlist_refresh_pending(&app_data));
+        assert!(chart_rematch_running(&app_data));
+        drop(request);
+        helper.join().unwrap().expect("deferred maintenance");
         assert!(!db::smart_playlist_refresh_pending(&app_data));
+        assert!(!chart_rematch_running(&app_data));
         run_deferred_maintenance().expect("nothing left to refresh");
     }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.218.4] - 2026-11-22
+
+### Fixed
+- **Removing several albums from Aurora no longer stops with "database is locked"**: after each album removal or import, a background helper re-matches charts, refreshes smart playlists and optimizes the catalog. Only the chart re-match told Aurora's requests to wait; the smart playlist refresh and the final optimize/checkpoint wrote to the catalog while Aurora's next album preview or removal ran. On a large catalog that takes longer than the 15-second busy wait, so the request failed with "database is locked" or "Music Library database is locked by another operation". The helper now does all of its work while holding the maintenance and workflow locks. Aurora's requests wait up to four minutes for it, as they already did for the chart re-match, and the helper still lets Aurora's requests go first.
+
 ## [0.218.3] - 2026-11-17
 
 ### Fixed
