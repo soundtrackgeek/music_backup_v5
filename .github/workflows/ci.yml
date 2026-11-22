@@ -34,16 +34,17 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
 
+      # Same cache as the Release workflow's Windows verify job. Its key ignores
+      # the app's own version, so a version bump does not save a new copy.
       - name: Cache Cargo
-        uses: actions/cache@v6
+        uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: |
+            src-tauri
+            Tools/sonic-analyzer
+            Tools/clap-worker
+            crates/sonic-core
+          shared-key: windows-verify
 
       - name: Install Node dependencies
         run: npm ci

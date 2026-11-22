@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.218.5] - 2026-11-22
+
+### Changed
+- **Release runs finish faster**: the Release workflow ran the full verification gate (`npm run check`) and only then started building installers, so a release took about 44 minutes. The gate now runs in its own Windows and macOS jobs beside the installer builds, and publishing waits for both, so a failing check still blocks the release.
+- **Rust build caches survive between releases**: the CI workflow saved a new 2.8 GB Cargo cache on every push, because its cache key hashed `src-tauri/Cargo.lock`, which changes with every version bump. Together with the release caches this went past GitHub's 10 GB cache limit, so the previous release's cache was evicted and every release compiled all Rust dependencies from scratch. CI now uses the same Rust cache as the Release workflow's Windows checks, with a key that ignores the app's own version. The audio analyzer, sound search worker and sonic-core build folders are now cached as well.
+
 ## [0.218.4] - 2026-11-22
 
 ### Fixed
