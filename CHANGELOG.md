@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.220.1] - 2026-11-24
+
+### Fixed
+
+- **Search → By sound** applies year and rating filters without the SQLite `no such function: unicode_lower` error. Its read-only catalog connection now loads the same Unicode support as regular Search.
+
 ## [0.220.0] - 2026-11-24
 
 ### Added

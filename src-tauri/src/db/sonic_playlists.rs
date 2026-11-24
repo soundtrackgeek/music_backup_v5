@@ -463,7 +463,8 @@ mod tests {
         request.filters.year_from = Some(1980);
         request.filters.year_to = Some(1989);
         request.filters.missing_fields = vec!["rating".into()];
-        let found = crate::sonic_clap::evaluate_playlist(&c, " Rainy   jazz ", &request, 10).unwrap();
+        let found =
+            crate::sonic_clap::describe_at(dir.path(), " Rainy   jazz ", &request, 10).unwrap();
         assert_eq!(found.query, "Rainy jazz");
         assert_eq!(found.searched, 6);
         assert_eq!(found.tracks.iter().map(|hit| hit.track.track_id).collect::<Vec<_>>(), [4, 5, 6, 8]);
@@ -472,7 +473,7 @@ mod tests {
         let mut rated = request.clone();
         rated.filters.missing_fields.clear();
         rated.filters.track_rating_min = Some(4.0);
-        let rated = crate::sonic_clap::evaluate_playlist(&c, "rainy jazz", &rated, 10).unwrap();
+        let rated = crate::sonic_clap::describe_at(dir.path(), "rainy jazz", &rated, 10).unwrap();
         assert_eq!(rated.tracks.len(), 1);
         assert_eq!(rated.tracks[0].track.track_id, 3);
 

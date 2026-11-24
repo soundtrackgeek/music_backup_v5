@@ -214,6 +214,7 @@ pub(crate) fn catalog(dir: &Path) -> Result<Connection> {
         dir.join("music-library.sqlite3"),
         OpenFlags::SQLITE_OPEN_READ_ONLY,
     )?;
+    crate::db::configure_reader(&c)?;
     c.busy_timeout(Duration::from_secs(5))?;
     c.execute_batch("PRAGMA query_only=ON;")?;
     Ok(c)
