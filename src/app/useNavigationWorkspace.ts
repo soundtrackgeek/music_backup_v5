@@ -48,6 +48,7 @@ type Inputs = Pick<
   | "setSelectedGenreId"
   | "setGenreExportResult"
   | "setRequest"
+  | "setSearchMode"
   | "setSavedSearches"
   | "setPlaylistLaunch"
   | "setAlbumRequest"
@@ -92,6 +93,7 @@ export function useNavigationWorkspace({
   setSelectedGenreId,
   setGenreExportResult,
   setRequest,
+  setSearchMode,
   setSavedSearches,
   setPlaylistLaunch,
   setAlbumRequest,
@@ -158,6 +160,7 @@ export function useNavigationWorkspace({
 
   function openInsightInSearch(cohort: InsightCohort) {
     setRequest(normalizeBrowseRequestForClient(cohort.request));
+    setSearchMode("catalog");
     setActiveSection("Search");
   }
 
@@ -213,6 +216,7 @@ export function useNavigationWorkspace({
     nextRequest.filters.trackIds = [trackId];
     nextRequest.limit = 50;
     setRequest(nextRequest);
+    setSearchMode("catalog");
     setActiveSection("Search");
   }
 

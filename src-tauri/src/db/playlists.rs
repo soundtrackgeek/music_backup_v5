@@ -451,6 +451,22 @@ fn evaluate_smart_playlist_once(conn: &Connection, id: i64) -> Result<SavedPlayl
             "Sonic Smart: {} of {} requested songs, nearest to any of {} examples, distance ≤ {}, at most {} per track artist. {}",
             desired_count, track_limit.unwrap_or(1000), recipe.seeds.len(), recipe.max_distance, recipe.max_per_artist,
             if desired_count < track_limit.unwrap_or(1000) as i64 { "Insufficient current matches; rules were kept." } else { "Examples excluded. Refresh leaves playback queues unchanged." });
+    } else if let Some(query) = saved
+        .playlist
+        .smart_settings
+        .as_ref()
+        .and_then(|settings| settings.sound_description.as_deref())
+    {
+        let result = crate::sonic_clap::evaluate_playlist(
+            conn, query, &request, track_limit.unwrap_or(1000),
+        )?;
+        playlist_tracks = result.tracks.into_iter().map(|hit| hit.into_playlist_track()).collect();
+        desired_count = playlist_tracks.len() as i64;
+        saved.playlist.model = "local sound search".into();
+        saved.playlist.description = format!(
+            "Describe a sound: “{}”. {} songs ranked by sound from {} analyzed audio candidates. At most 3 songs per artist.",
+            result.query, desired_count, result.searched,
+        );
     } else {
         loop {
             let response = search_library(conn, request.clone(), 1_000)?;
@@ -763,6 +779,12 @@ fn validate_smart_settings(settings: &crate::ai::SmartPlaylistSettings) -> Resul
     if let Some(recipe) = &settings.sonic {
         recipe.validate()?;
     }
+    if let Some(query) = &settings.sound_description {
+        if settings.sonic.is_some() {
+            bail!("Choose either a sound description or sound examples");
+        }
+        crate::sonic_clap::normalize_query(query)?;
+    }
     Ok(())
 }
 
@@ -770,6 +792,11 @@ pub(crate) fn save_smart_playlist_on(
     conn: &Connection,
     input: crate::ai::SaveSmartPlaylistRequest,
 ) -> Result<SavedPlaylist> {
+    // Encode new text before reserving the catalog writer.
+    validate_smart_settings(&input.settings)?;
+    if let Some(query) = &input.settings.sound_description {
+        crate::sonic_clap::prepare_playlist_query(conn, query)?;
+    }
     smart_playlist_write(conn, |conn| save_smart_playlist_once(conn, input.clone()))
 }
 
@@ -778,8 +805,10 @@ fn save_smart_playlist_once(
     input: crate::ai::SaveSmartPlaylistRequest,
 ) -> Result<SavedPlaylist> {
     validate_smart_settings(&input.settings)?;
-    if input.settings.sonic.is_some() && input.request.view != "tracks" {
-        bail!("Sonic Smart playlists match songs. Choose Songs before adding sound examples.")
+    if (input.settings.sonic.is_some() || input.settings.sound_description.is_some())
+        && input.request.view != "tracks"
+    {
+        bail!("Sound rules match songs. Choose Songs before adding a sound rule.")
     }
     if !matches!(input.request.view.as_str(), "tracks" | "albums")
         || !input.request.filters.track_ids.is_empty()
@@ -826,7 +855,10 @@ fn save_smart_playlist_once(
     playlist.name = input.name.clone();
     playlist.request = input.request;
     playlist.request.offset = 0;
-    if input.settings.sonic.is_none() {
+    if input.settings.sound_description.is_none() && playlist.model == "local sound search" {
+        playlist.model = "Local rules".into();
+    }
+    if input.settings.sonic.is_none() && input.settings.sound_description.is_none() {
         playlist.description =
             "Reusable library filters shared by Aurora and Music Library.".into();
     }
@@ -1477,6 +1509,7 @@ mod tests {
                 track_limit: 10,
                 refresh_policy: "manual".into(),
                 sonic: None,
+                sound_description: None,
             },
         };
         (dir, c, other, input)
@@ -1584,6 +1617,7 @@ mod tests {
                 request: test_playlist_plan().request,
                 settings: crate::ai::SmartPlaylistSettings {
                     sonic: None,
+                    sound_description: None,
                     track_limit: 100,
                     refresh_policy: "library".into(),
                 },
@@ -1632,6 +1666,7 @@ mod tests {
                 request: request.clone(),
                 settings: crate::ai::SmartPlaylistSettings {
                     sonic: None,
+                    sound_description: None,
                     track_limit: 1,
                     refresh_policy: "manual".into(),
                 },
@@ -1671,6 +1706,7 @@ mod tests {
                 request,
                 settings: crate::ai::SmartPlaylistSettings {
                     sonic: None,
+                    sound_description: None,
                     track_limit: 10,
                     refresh_policy: "library".into(),
                 },
@@ -1691,6 +1727,7 @@ mod tests {
             request: test_playlist_plan().request,
             settings: crate::ai::SmartPlaylistSettings {
                 sonic: None,
+                sound_description: None,
                 track_limit: 1,
                 refresh_policy: "library".into(),
             },
@@ -1737,6 +1774,7 @@ mod tests {
                 request,
                 settings: crate::ai::SmartPlaylistSettings {
                     sonic: None,
+                    sound_description: None,
                     track_limit: 100,
                     refresh_policy: "library".into(),
                 },
@@ -1790,6 +1828,7 @@ mod tests {
             },
             settings: crate::ai::SmartPlaylistSettings {
                 sonic: None,
+                sound_description: None,
                 track_limit: 10,
                 refresh_policy: "manual".into(),
             },
@@ -1955,6 +1994,7 @@ mod tests {
                 request: test_playlist_plan().request,
                 settings: crate::ai::SmartPlaylistSettings {
                     sonic: None,
+                    sound_description: None,
                     track_limit: 10,
                     refresh_policy: "manual".into(),
                 },

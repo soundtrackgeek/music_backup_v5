@@ -35,6 +35,7 @@ type Inputs = Pick<
   WorkspaceStores,
   | "request"
   | "activeSection"
+  | "searchMode"
   | "setIsSearching"
   | "setBrowseError"
   | "setResponse"
@@ -61,6 +62,7 @@ type Inputs = Pick<
 export function useSearchWorkspace({
   request,
   activeSection,
+  searchMode,
   setIsSearching,
   setBrowseError,
   setResponse,
@@ -94,7 +96,7 @@ export function useSearchWorkspace({
   );
 
   useEffect(() => {
-    if (activeSection !== "Search") {
+    if (activeSection !== "Search" || searchMode === "sound") {
       return;
     }
 
@@ -129,7 +131,7 @@ export function useSearchWorkspace({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, catalogRefreshKey, request]);
+  }, [activeSection, catalogRefreshKey, request, searchMode]);
 
   const chips = useMemo(() => {
     const nextChips: { key: string; label: ReactNode; remove: () => void }[] =

@@ -429,7 +429,7 @@ pub(crate) fn search_library(
     })
 }
 
-pub(super) fn browse_from_clause(is_tracks: bool) -> String {
+pub(crate) fn browse_from_clause(is_tracks: bool) -> String {
     if is_tracks {
         let origin_key_sql = catalog_artist_key_sql("a.album_artist_display");
         format!(
@@ -530,7 +530,7 @@ pub(super) fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<B
     })
 }
 
-pub(super) fn build_where_clause(
+pub(crate) fn build_where_clause(
     is_tracks: bool,
     search_text: &str,
     filters: &BrowseFilters,

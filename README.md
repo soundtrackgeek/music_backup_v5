@@ -118,11 +118,14 @@ Library. Save the kept shortlist as a regular playlist; play tracks directly in
 Aurora's **Ratings → Hidden favorites**. Reload either shelf to see the other app's
 changes. No new audio scan is needed. See [Hidden favorites](docs/hidden-favorites.md).
 
-Music Library **0.216.0** adds **Describe a sound** to **Tools → Audio analysis**:
-type something like “rainy Sunday jazz” and get the tracks in your library that fit,
-then save them as a playlist. It uses LAION CLAP (`larger_clap_music_and_speech`),
-which places music and text in one space. Audio analysis now has two steps per job:
-step 1 is Bliss features and timelines, step 2 embeds three loud ten-second windows
+In **Search → By sound**, describe what you want to hear, such as “rainy Sunday
+jazz”, and optionally narrow the search by year and track rating. Open the album
+or artist from a match, save the displayed tracks in ranked order, or explore
+nearby sounds in **Sonic Atlas**. In **Playlists → Create Smart playlist**, enable
+**Describe a sound** to combine a description with reusable metadata rules and
+rerank on refresh. Sound search uses LAION CLAP (`larger_clap_music_and_speech`).
+Start or continue the two-step analysis job from **Tools → Audio analysis**.
+Step 1 produces Bliss features and timelines. Step 2 embeds three loud ten-second windows
 of each track for sound search. The panel shows a progress bar for each step and
 the time left. **Continue analysis** keeps its place after a pause or a crash, adds
 tracks added to the library since, and runs both steps for them. On Windows the model

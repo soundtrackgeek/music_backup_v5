@@ -438,6 +438,8 @@ pub struct SmartPlaylistSettings {
     pub refresh_policy: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sonic: Option<super::db::SonicPlaylistRecipe>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound_description: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, specta::Type)]

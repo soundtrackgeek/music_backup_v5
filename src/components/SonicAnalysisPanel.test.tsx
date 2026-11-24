@@ -4,7 +4,7 @@ import { SonicAnalysisPanel } from "./SonicAnalysisPanel";
 import * as backend from "../backend/sonic";
 import * as activity from "../backend/activity";
 
-vi.mock("../backend/sonic", () => ({ getSonicStatus: vi.fn(), getSonicSeeds: vi.fn(), configureSonicSchedule: vi.fn(), startSonicAnalysis: vi.fn(), findSonicMatches: vi.fn(), saveSonicPlaylist: vi.fn(), describeSound: vi.fn(), saveDescribedSound: vi.fn() }));
+vi.mock("../backend/sonic", () => ({ getSonicStatus: vi.fn(), getSonicSeeds: vi.fn(), configureSonicSchedule: vi.fn(), startSonicAnalysis: vi.fn(), findSonicMatches: vi.fn(), saveSonicPlaylist: vi.fn() }));
 vi.mock("../backend/activity", () => ({ listActivityJobs: vi.fn(), controlActivityJob: vi.fn(), listenToActivityJobs: vi.fn() }));
 
 beforeEach(() => {
@@ -176,23 +176,6 @@ it("shows each analysis step with its own progress", async () => {
   expect(screen.getByText("Model ready · last run on the GPU (DirectML) · 1.9 GB on this computer")).toBeInTheDocument();
   expect(await screen.findByText("Step 2 of 2 · Sound search")).toBeInTheDocument();
   expect(screen.getByText("40 of 900 tracks for sound search · about 2 h 5 min left")).toBeInTheDocument();
-});
-
-it("finds tracks that fit a described sound and saves them", async () => {
-  vi.mocked(backend.getSonicStatus).mockResolvedValue({ analyzed: 3, total: 3, pending: 0, failed: 0, timelines: 3, timelineBytes: 0, profile: "test", idleSupported: true, soundSearch: { ...soundSearch, analyzed: 3 }, schedule: { idleOnly: true, idleMinutes: 5, startHour: null, endHour: null } });
-  vi.mocked(backend.getSonicSeeds).mockResolvedValue([]);
-  const track = { trackId: 1, trackKey: "k1", title: "Blue in Green", artist: "Miles Davis", album: "Kind of Blue", albumId: "a", albumArtist: "Miles Davis", filePath: "D:", filename: "1.mp3", genre: "Jazz", rating: null, seconds: 300, loved: false, distance: 0.46 };
-  vi.mocked(backend.describeSound).mockResolvedValue({ query: "rainy Sunday jazz", searched: 3, tracks: [track] });
-  vi.mocked(backend.saveDescribedSound).mockResolvedValue("Saved Sounds like rainy Sunday jazz in Playlists.");
-  render(<SonicAnalysisPanel />);
-  fireEvent.change(screen.getByRole("searchbox", { name: "Describe a sound" }), { target: { value: "rainy Sunday jazz" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find tracks" }));
-  expect(await screen.findByText("Miles Davis · Kind of Blue · 54% match")).toBeInTheDocument();
-  expect(backend.describeSound).toHaveBeenCalledWith("rainy Sunday jazz");
-  const saveButtons = screen.getAllByRole("button", { name: "Save as playlist" });
-  fireEvent.click(saveButtons[saveButtons.length - 1]);
-  expect(await screen.findByText("Saved Sounds like rainy Sunday jazz in Playlists.")).toBeInTheDocument();
-  expect(backend.saveDescribedSound).toHaveBeenCalledWith("rainy Sunday jazz", "Sounds like rainy Sunday jazz");
 });
 
 it("formats the time left", async () => {

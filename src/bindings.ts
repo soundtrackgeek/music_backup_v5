@@ -17,8 +17,14 @@ export const commands = {
 	listeningClearSource: (source: string) => __TAURI_INVOKE<ListeningOverview>("listening_clear_source", { source }),
 	listeningSync: (source: string) => __TAURI_INVOKE<ListeningSyncResult>("listening_sync", { source }),
 	sonicStatus: () => __TAURI_INVOKE<SonicStatus>("sonic_status"),
-	sonicDescribe: (query: string, limit: number) => __TAURI_INVOKE<SoundSearchResults>("sonic_describe", { query, limit }),
-	sonicSaveDescribed: (query: string, name: string) => __TAURI_INVOKE<SavedPlaylist_Serialize>("sonic_save_described", { query, name }),
+	sonicDescribe: (query: string, limit: number, request: {
+	view?: BrowseView,
+	searchText?: string,
+	filters?: BrowseFilters,
+	sort?: BrowseSort,
+	limit?: number,
+	offset?: number,
+} | null) => __TAURI_INVOKE<SoundSearchResults>("sonic_describe", { query, limit, request }),
 	sonicFailedTracks: (after: string | null) => __TAURI_INVOKE<FailedTracksPage>("sonic_failed_tracks", { after }),
 	sonicExportFailedTracks: (path: string) => __TAURI_INVOKE<FailedTracksExport>("sonic_export_failed_tracks", { path }),
 	sonicCheckCoverage: (after: number | null) => __TAURI_INVOKE<AnalysisCoverage>("sonic_check_coverage", { after }),
@@ -4701,12 +4707,14 @@ export type SmartPlaylistSettings_Deserialize = {
 	trackLimit: number,
 	refreshPolicy: string,
 	sonic?: SonicPlaylistRecipe | null,
+	soundDescription?: string | null,
 };
 
 export type SmartPlaylistSettings_Serialize = {
 	trackLimit: number,
 	refreshPolicy: string,
 	sonic?: SonicPlaylistRecipe | null,
+	soundDescription?: string | null,
 };
 
 export type SonicAlbum = {
@@ -4823,11 +4831,17 @@ export type SoulseekTransfersChanged = TransferQueueSnapshot;
 /**  Serializes exactly as its payload. */
 export type SoulseekUploadsChanged = UploadQueueSnapshot;
 
+export type SoundSearchHit = {
+	track: SonicTrack,
+	year: number | null,
+	coverPath: string | null,
+};
+
 export type SoundSearchResults = {
 	query: string,
-	/**  Tracks searched (audio with an embedding). */
+	/**  Audio candidates scored for the description. */
 	searched: number,
-	tracks: SonicTrack[],
+	tracks: SoundSearchHit[],
 };
 
 export type SoundSearchStatus = {

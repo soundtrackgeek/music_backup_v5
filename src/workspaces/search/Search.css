@@ -408,3 +408,108 @@
     grid-template-columns: 1fr;
   }
 }
+.sound-search-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sound-search-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.sound-search-heading p {
+  margin: 6px 0 0;
+}
+
+.sound-search-form fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  margin: 16px 0 0;
+  border: 0;
+}
+
+.sound-search-filters {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin: 0;
+}
+
+.sound-search-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sound-search-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+
+.sound-search-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.sound-search-album,
+.sound-search-artist {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.sound-search-album {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-search-album .cover-mini {
+  flex-shrink: 0;
+}
+
+.sound-search-album small {
+  display: block;
+}
+
+.sound-search-album:hover strong,
+.sound-search-artist:hover {
+  text-decoration: underline;
+}
+
+.sound-search-meta {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 80px 64px 80px;
+  align-items: center;
+  column-gap: 10px;
+  max-width: 440px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 840px) {
+  .sound-search-list li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .sound-search-meta {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+}

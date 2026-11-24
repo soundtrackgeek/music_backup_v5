@@ -401,10 +401,101 @@ mod tests {
                     track_limit: 10,
                     refresh_policy: "library".into(),
                     sonic: Some(recipe),
+                    sound_description: None,
                 },
             },
         )
     }
+    #[test]
+    fn sound_descriptions_rank_after_filters_and_refresh_saved_membership() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("music-library.sqlite3");
+        let seeded = seeded_connection();
+        seeded.execute("DELETE FROM tracks", []).unwrap();
+        seeded
+            .execute("VACUUM INTO ?1", [path.to_string_lossy().as_ref()])
+            .unwrap();
+        crate::sonic::results(dir.path()).unwrap();
+        let c = Connection::open(path).unwrap();
+        configure(&c).unwrap();
+        c.execute(
+            "ATTACH DATABASE ?1 AS sonic",
+            [dir.path().join("music-analysis.sqlite3").to_string_lossy().as_ref()],
+        ).unwrap();
+        let clap = crate::sonic_clap::open(dir.path()).unwrap();
+        let model = crate::sonic_clap::MODEL;
+        let embedding = |first| {
+            let mut bytes = vec![0; crate::sonic_clap::DIMENSIONS * 2];
+            bytes[..2].copy_from_slice(&half::f16::from_f32(first).to_le_bytes());
+            bytes
+        };
+        clap.execute(
+            "INSERT INTO clap_queries VALUES('rainy jazz', ?1, ?2)",
+            params![model, embedding(1.0)],
+        ).unwrap();
+        let add_sound = |id, score, artist| {
+            add(&c, dir.path(), id, 0.0, artist);
+            clap.execute(
+                "INSERT INTO clap_audio VALUES(?1, ?2, ?3, NULL, NULL, 'now')",
+                params![format!("{id}.mp3"), model, embedding(score)],
+            ).unwrap();
+        };
+        for (id, score, artist) in [
+            (1, 0.99, "Wrong year"),
+            (2, 0.98, "Banned"),
+            (3, 0.97, "Rated"),
+            (4, 0.88, "One artist"),
+            (5, 0.82, "One artist"),
+            (6, 0.74, "One artist"),
+            (7, 0.70, "One artist"),
+            (8, 0.65, "Other artist"),
+            (9, 0.72, "Copy artist"),
+        ] {
+            add_sound(id, score, artist);
+        }
+        c.execute_batch("UPDATE tracks SET year=2000 WHERE id=1;
+            UPDATE tracks SET love='B' WHERE id=2;
+            UPDATE tracks SET normalized_rating=90 WHERE id=3;
+            UPDATE sonic.sonic_tracks SET audio_hash='4.mp3' WHERE filename='9.mp3';
+            INSERT INTO album_covers(album_id,source,cache_path,mime_type,extension,imported_at)
+              VALUES('mb:test','fixture','art.webp','image/webp','webp','now');").unwrap();
+        let mut request = BrowseRequest { view: "tracks".into(), ..Default::default() };
+        request.filters.year_from = Some(1980);
+        request.filters.year_to = Some(1989);
+        request.filters.missing_fields = vec!["rating".into()];
+        let found = crate::sonic_clap::evaluate_playlist(&c, " Rainy   jazz ", &request, 10).unwrap();
+        assert_eq!(found.query, "Rainy jazz");
+        assert_eq!(found.searched, 6);
+        assert_eq!(found.tracks.iter().map(|hit| hit.track.track_id).collect::<Vec<_>>(), [4, 5, 6, 8]);
+        assert_eq!(found.tracks[0].year, Some(1985));
+        assert_eq!(found.tracks[0].cover_path.as_deref(), Some("art.webp"));
+        let mut rated = request.clone();
+        rated.filters.missing_fields.clear();
+        rated.filters.track_rating_min = Some(4.0);
+        let rated = crate::sonic_clap::evaluate_playlist(&c, "rainy jazz", &rated, 10).unwrap();
+        assert_eq!(rated.tracks.len(), 1);
+        assert_eq!(rated.tracks[0].track.track_id, 3);
+
+        let saved = save_smart_playlist_on(&c, crate::ai::SaveSmartPlaylistRequest {
+            id: None,
+            expected_updated_at: None,
+            name: "Rainy jazz".into(),
+            request,
+            settings: crate::ai::SmartPlaylistSettings {
+                track_limit: 2,
+                refresh_policy: "manual".into(),
+                sonic: None,
+                sound_description: Some("rainy jazz".into()),
+            },
+        }).unwrap();
+        let ids = |playlist: &SavedPlaylist| playlist.playlist.tracks.iter().map(|track| track.track_id).collect::<Vec<_>>();
+        assert_eq!(ids(&saved), [4, 5]);
+        add_sound(10, 0.96, "New artist");
+        let refreshed = evaluate_smart_playlist(&c, saved.id).unwrap();
+        assert_eq!(ids(&refreshed), [10, 4]);
+        assert_eq!(refreshed.playlist.smart_settings.unwrap().sound_description.as_deref(), Some("rainy jazz"));
+    }
+
     #[test]
     fn sonic_rules_combine_seeds_filters_caps_and_freshness_then_grow_on_refresh() {
         let (dir, c, input) = fixture();

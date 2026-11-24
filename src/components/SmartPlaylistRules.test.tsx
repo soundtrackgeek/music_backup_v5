@@ -69,3 +69,23 @@ it("ignores an old example search after the query changes",async()=>{
   await waitFor(()=>expect(screen.queryByRole("button",{name:"Add Old result"})).not.toBeInTheDocument());
   expect(screen.getByLabelText("Find sound examples")).toHaveValue("latest");
 });
+
+it("combines a sound description with reusable song rules", async () => {
+  vi.mocked(saveSmartPlaylist).mockRejectedValue(new Error("Desktop evaluation required"));
+  render(<SmartPlaylistRules onSaved={vi.fn()} onCancel={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Warm synthwave" } });
+  fireEvent.change(screen.getByLabelText("Match", { exact: true }), { target: { value: "albums" } });
+  fireEvent.click(screen.getByLabelText("Describe a sound"));
+  expect(screen.getByLabelText("Match", { exact: true })).toHaveValue("tracks");
+  expect(screen.getByLabelText("Sounds like these examples")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save Smart playlist" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Sound description"), { target: { value: " warm analog synthwave " } });
+  fireEvent.change(screen.getByLabelText("Original year from"), { target: { value: "1980" } });
+  fireEvent.change(screen.getByLabelText("Minimum rating"), { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save Smart playlist" }));
+  await waitFor(() => expect(saveSmartPlaylist).toHaveBeenCalledWith(expect.objectContaining({
+    request: expect.objectContaining({ view: "tracks", filters: expect.objectContaining({ yearFrom: 1980, trackRatingMin: 4 }) }),
+    settings: expect.objectContaining({ soundDescription: "warm analog synthwave" }),
+  })));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Desktop evaluation required");
+});

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.219.0] - 2026-11-24
+
+### Added
+
+- **Search → By sound** finds tracks from a sound description and filters by year, minimum track rating, or unrated status before ranking. Results show artwork, year, rating, and similarity, with links to the album and artist. Save the displayed matches as a playlist or open Sonic Atlas from the same workspace.
+- **Describe a sound** is available as a Smart Playlist rule. Combine a description with catalog filters and refresh the playlist to rank the latest eligible tracks.
+
+### Changed
+
+- Sound discovery moved from Tools to Search. Use **Tools → Audio analysis** to manage the analysis that powers it.
+
 ## [0.218.5] - 2026-11-22
 
 ### Changed

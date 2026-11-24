@@ -4,6 +4,7 @@ import {
   type SavedSearch,
   type ExportResult,
 } from "../../types";
+import type { SoundSearchResults } from "../../backend/sonic";
 import { createRequest } from "../../app/requests";
 import { useMemo } from "react";
 import {
@@ -12,7 +13,25 @@ import {
   workspaceReducer,
 } from "../../app/workspaceStore";
 import { useReducer } from "react";
+export type SoundSearchDraft = {
+  query: string;
+  yearFrom: number | null;
+  yearTo: number | null;
+  rating: string;
+  result: SoundSearchResults | null;
+};
+
+export const emptySoundSearch: SoundSearchDraft = {
+  query: "",
+  yearFrom: null,
+  yearTo: null,
+  rating: "",
+  result: null,
+};
+
 type SearchState = {
+  searchMode: "catalog" | "sound";
+  soundSearch: SoundSearchDraft;
   request: BrowseRequest;
   response: BrowseResponse | null;
   savedSearches: SavedSearch[];
@@ -47,6 +66,8 @@ function createInitialState(): SearchState {
   const searchExportColumns: string[] = [];
   const exportResult: ExportResult | null = null;
   return {
+    searchMode: "catalog",
+    soundSearch: emptySoundSearch,
     request,
     response,
     savedSearches,
@@ -85,6 +106,8 @@ function useSearchStoreValue() {
   const setters = useMemo(
     () =>
       createWorkspaceSetters<SearchState>(dispatch, [
+        "searchMode",
+        "soundSearch",
         "request",
         "response",
         "savedSearches",
@@ -116,6 +139,10 @@ function useSearchStoreValue() {
   } = setters;
 
   return {
+    searchMode: state.searchMode,
+    soundSearch: state.soundSearch,
+    setSearchMode: setters.setSearchMode,
+    setSoundSearch: setters.setSoundSearch,
     request,
     setRequest,
     response,

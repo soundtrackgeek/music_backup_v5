@@ -336,6 +336,7 @@ export function PlaylistBuilderWorkspace({
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
   const isLocalSearchPlaylist = playlist?.model === "Local Search";
+  const isSoundSearchPlaylist = playlist?.model === "local sound search";
   const isSonicJourneyPlaylist = playlist?.model === "Sonic Journey";
   const playlistTrackKeys = useMemo(() => {
     const occurrences = new Map<number, number>();
@@ -498,6 +499,7 @@ export function PlaylistBuilderWorkspace({
                   <span>
                     {isLocalSearchPlaylist
                       ? "Local Search order · no Luna"
+                      : isSoundSearchPlaylist ? "Sound similarity order"
                       : isSonicJourneyPlaylist ? "Sonic journey · chosen stops in order"
                       : playlist.mixtape ? "Two-sided mixtape · A → B" : `${playlist.strategy} recipe`}
                   </span>
@@ -539,7 +541,7 @@ export function PlaylistBuilderWorkspace({
 
               <AiMarkdownExportButton
                 title={aiMarkdownTitle(
-                  isLocalSearchPlaylist ? "Search playlist" : isSonicJourneyPlaylist ? "Sonic journey" : playlist.mixtape ? "Two-sided mixtape" : "Luna playlist",
+                  isLocalSearchPlaylist ? "Search playlist" : isSoundSearchPlaylist ? "Sound search playlist" : isSonicJourneyPlaylist ? "Sonic journey" : playlist.mixtape ? "Two-sided mixtape" : "Luna playlist",
                   name,
                 )}
                 markdown={playlistMarkdown(
@@ -563,10 +565,11 @@ export function PlaylistBuilderWorkspace({
                   <dd>{playlist.matchingTrackCount.toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt>{isLocalSearchPlaylist || isSonicJourneyPlaylist ? "Order" : "Repeat cap"}</dt>
+                  <dt>{isLocalSearchPlaylist || isSoundSearchPlaylist || isSonicJourneyPlaylist ? "Order" : "Repeat cap"}</dt>
                   <dd>
                     {isLocalSearchPlaylist
                       ? "Search results"
+                      : isSoundSearchPlaylist ? "Sound similarity"
                       : isSonicJourneyPlaylist ? "Reviewed journey"
                       : `${playlist.maxTracksPerArtist} / artist`}
                   </dd>
@@ -574,7 +577,7 @@ export function PlaylistBuilderWorkspace({
               </dl>
 
               {isSonicJourneyPlaylist && <p className="saved-playlist-note">This playlist preserves your reviewed journey. Smart refresh is unavailable because it would replace the chosen stops and order.</p>}
-              {activeSavedPlaylist && !playlist.mixtape && !isSonicJourneyPlaylist ? (
+              {activeSavedPlaylist && !playlist.mixtape && !isSonicJourneyPlaylist && (!isSoundSearchPlaylist || playlist.smartSettings?.soundDescription) ? (
                 <section
                   className="playlist-automation-panel"
                   aria-label="Smart playlist automation"
@@ -727,6 +730,8 @@ export function PlaylistBuilderWorkspace({
                 <span>
                   {isLocalSearchPlaylist
                     ? `${playlist.candidateCount.toLocaleString()} local Search tracks loaded directly · no Luna request`
+                    : isSoundSearchPlaylist
+                      ? `${playlist.tracks.length} tracks ranked by sound`
                     : isSonicJourneyPlaylist
                       ? `${playlist.tracks.length} tracks connected using saved audio analysis`
                     : playlist.mixtape

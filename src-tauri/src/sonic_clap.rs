@@ -16,14 +16,15 @@
 //! `sonic_audio`, as 1 KB half-float blobs (about 1.3 GB for a million tracks).
 //! A track whose audio cannot be decoded gets a row with `error` set, so it is
 //! not retried until the model identity changes.
+use crate::models::BrowseRequest;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
 use music_sonic_core::{file_is_current, PROFILE};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, types::Value, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs,
     io::{self, BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -51,8 +52,6 @@ const READY_TIMEOUT: Duration = Duration::from_secs(180);
 const MAX_RESTARTS: u32 = 3;
 const MAX_ERROR: usize = 2000;
 const MAX_QUERY: usize = 300;
-/// Candidates scored before artist balancing.
-const CANDIDATES: usize = 400;
 const PER_ARTIST: usize = 3;
 
 pub(crate) struct ModelFile {
@@ -940,12 +939,41 @@ pub(crate) fn status(c: &Connection, dir: &Path) -> Result<SoundSearchStatus> {
 #[serde(rename_all = "camelCase")]
 pub struct SoundSearchResults {
     pub query: String,
-    /// Tracks searched (audio with an embedding).
-    pub searched: i64,
-    pub tracks: Vec<crate::sonic::SonicTrack>,
+    /// Audio candidates scored for the description.
+    pub searched: usize,
+    pub tracks: Vec<SoundSearchHit>,
 }
 
-fn normalize_query(query: &str) -> Result<String> {
+#[derive(Clone, Debug, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SoundSearchHit {
+    pub track: crate::sonic::SonicTrack,
+    pub year: Option<i32>,
+    pub cover_path: Option<String>,
+}
+
+impl SoundSearchHit {
+    pub(crate) fn into_playlist_track(self) -> crate::ai::AiPlaylistTrack {
+        let t = self.track;
+        crate::ai::AiPlaylistTrack {
+            track_id: t.track_id,
+            album_id: t.album_id,
+            album: Some(t.album),
+            album_artist: Some(t.album_artist),
+            display_artist: Some(t.artist),
+            title: Some(t.title),
+            genre: t.genre,
+            year: self.year,
+            seconds: t.seconds.max(0),
+            rating: t.rating,
+            loved: t.loved,
+            file_path: Some(t.file_path),
+            filename: Some(t.filename),
+        }
+    }
+}
+
+pub(crate) fn normalize_query(query: &str) -> Result<String> {
     let query = query.split_whitespace().collect::<Vec<_>>().join(" ");
     if query.is_empty() || query.chars().count() > MAX_QUERY {
         bail!("Describe a sound in 1–{MAX_QUERY} characters");
@@ -953,19 +981,8 @@ fn normalize_query(query: &str) -> Result<String> {
     Ok(query)
 }
 
-/// Runs the text encoder once for a query (about two seconds), then caches it.
-fn text_embedding(dir: &Path, c: &Connection, query: &str) -> Result<Vec<f32>> {
-    let key = query.to_lowercase();
-    let cached: Option<Vec<u8>> = c
-        .query_row(
-            "SELECT embedding FROM clap_queries WHERE query=?1 AND model=?2",
-            params![key, MODEL],
-            |r| r.get(0),
-        )
-        .optional()?;
-    if let Some(bytes) = cached.filter(|b| b.len() == DIMENSIONS * 2) {
-        return Ok(from_f16(&bytes));
-    }
+/// Runs the text encoder for an uncached query.
+fn encode_query(dir: &Path, query: &str) -> Result<Vec<f32>> {
     if !model_ready(dir) {
         bail!("Run audio analysis once so Music Library can download the sound search model");
     }
@@ -1001,85 +1018,186 @@ fn text_embedding(dir: &Path, c: &Connection, query: &str) -> Result<Vec<f32>> {
     }
     let reply: serde_json::Value = serde_json::from_slice(&output.stdout)
         .context("The sound search worker sent an unreadable answer")?;
-    let embedding = decode_embedding(
+    decode_embedding(
         reply["embedding"]
             .as_str()
             .context("The sound search worker sent no embedding")?,
-    )?;
-    c.execute(
-        "INSERT OR REPLACE INTO clap_queries VALUES(?1,?2,?3)",
-        params![key, MODEL, to_f16(&embedding)],
-    )?;
-    Ok(embedding)
+    )
 }
 
-/// The best-scoring audio hashes for a query embedding, best first.
-fn rank(c: &Connection, query: &[f32], keep: usize) -> Result<(i64, Vec<(String, f32)>)> {
-    let mut q = c.prepare(
-        "SELECT audio_hash,embedding FROM clap_audio WHERE model=?1 AND embedding IS NOT NULL",
+fn query_embedding(dir: &Path, query: &str) -> Result<Vec<f32>> {
+    let path = dir.join(FILE);
+    if !path.is_file() {
+        bail!("Sound search needs tracks that finished step 2 in Tools → Audio analysis");
+    }
+    let key = query.to_lowercase();
+    let reader = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    reader.busy_timeout(Duration::from_secs(5))?;
+    let cached: Option<Vec<u8>> = reader
+        .query_row(
+            "SELECT embedding FROM clap_queries WHERE query=?1 AND model=?2",
+            params![key, MODEL],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(bytes) = cached.filter(|bytes| bytes.len() == DIMENSIONS * 2) {
+        return Ok(from_f16(&bytes));
+    }
+    drop(reader);
+    let bytes = to_f16(&encode_query(dir, query)?);
+    let writer = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+    writer.busy_timeout(Duration::from_secs(5))?;
+    writer.execute(
+        "INSERT OR REPLACE INTO clap_queries VALUES(?1,?2,?3)",
+        params![key, MODEL, bytes],
     )?;
-    let mut rows = q.query([MODEL])?;
-    let mut searched = 0;
-    // A small sorted list beats a heap for a few hundred entries.
-    let mut best: Vec<(String, f32)> = Vec::with_capacity(keep + 1);
+    Ok(from_f16(&bytes))
+}
+
+fn catalog_directory(conn: &Connection) -> Result<&Path> {
+    conn.path()
+        .filter(|path| !path.is_empty())
+        .and_then(|path| Path::new(path).parent())
+        .context("Sound search needs a local catalog")
+}
+
+pub(crate) fn prepare_playlist_query(conn: &Connection, query: &str) -> Result<()> {
+    query_embedding(catalog_directory(conn)?, &normalize_query(query)?)?;
+    Ok(())
+}
+
+pub(crate) fn evaluate_playlist(
+    conn: &Connection,
+    query: &str,
+    request: &BrowseRequest,
+    limit: usize,
+) -> Result<SoundSearchResults> {
+    let dir = catalog_directory(conn)?;
+    let query = normalize_query(query)?;
+    let embedding = query_embedding(dir, &query)?;
+    rank_catalog(conn, dir, query, request, &embedding, limit)
+}
+
+fn attach_search_databases(conn: &Connection, dir: &Path) -> Result<()> {
+    let databases = conn
+        .prepare("PRAGMA database_list")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (schema, filename) in [("sonic", "music-analysis.sqlite3"), ("clap", FILE)] {
+        if databases.iter().any(|name| name == schema) {
+            continue;
+        }
+        let path = dir.join(filename);
+        if !path.is_file() {
+            bail!("Sound search needs tracks that finished step 2 in Tools → Audio analysis");
+        }
+        let mut uri = url::Url::from_file_path(path)
+            .map_err(|_| anyhow::anyhow!("Invalid audio analysis database path"))?;
+        uri.set_query(Some("mode=ro"));
+        conn.execute(&format!("ATTACH DATABASE ?1 AS {schema}"), [uri.as_str()])?;
+    }
+    Ok(())
+}
+
+fn rank_catalog(
+    conn: &Connection,
+    dir: &Path,
+    query: String,
+    request: &BrowseRequest,
+    embedding: &[f32],
+    limit: usize,
+) -> Result<SoundSearchResults> {
+    attach_search_databases(conn, dir)?;
+    let (where_sql, mut values) =
+        crate::db::build_where_clause(true, &request.search_text, &request.filters);
+    let filtered = !where_sql.is_empty();
+    let candidates_sql = if filtered {
+        let from = crate::db::browse_from_clause(true);
+        values.extend([Value::Text(PROFILE.into()), Value::Text(MODEL.into())]);
+        // Sort narrow IDs before fetching the embedding blobs. The covering
+        // audio hash index can find candidates without random reads of the blobs.
+        format!(
+            "WITH eligible AS MATERIALIZED (
+                SELECT t.id AS track_id, ca.rowid AS audio_id {from}
+                JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename
+                JOIN clap.clap_audio ca ON ca.audio_hash=s.audio_hash
+                {where_sql} AND s.profile=? AND ca.model=? AND COALESCE(t.love,'')!='B'
+                ORDER BY ca.rowid
+             )
+             SELECT eligible.track_id, eligible.audio_id, ca.embedding
+             FROM eligible CROSS JOIN clap.clap_audio ca ON ca.rowid=eligible.audio_id
+             WHERE ca.embedding IS NOT NULL"
+        )
+    } else {
+        // An unfiltered search can stream every embedding in storage order.
+        // Only top results need a catalog lookup.
+        values.push(Value::Text(MODEL.into()));
+        "SELECT rowid, rowid, embedding FROM clap.clap_audio
+         WHERE model=? AND embedding IS NOT NULL".into()
+    };
+    let mut candidates = conn.prepare(&candidates_sql)?;
+    let mut rows = candidates.query(params_from_iter(values))?;
+    let mut ranked = Vec::new();
     while let Some(row) = rows.next()? {
-        let bytes = row.get_ref(1)?.as_blob()?;
+        let bytes = row.get_ref(2)?.as_blob()?;
         if bytes.len() != DIMENSIONS * 2 {
             continue;
         }
-        searched += 1;
         let score: f32 = bytes
             .chunks_exact(2)
-            .zip(query)
+            .zip(embedding)
             .map(|(b, q)| half::f16::from_le_bytes([b[0], b[1]]).to_f32() * q)
             .sum();
-        if best.len() == keep && best.last().is_some_and(|b| b.1 >= score) {
-            continue;
+        if score.is_finite() {
+            ranked.push((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, score));
         }
-        let hash: String = row.get(0)?;
-        let at = best.partition_point(|b| b.1 >= score);
-        best.insert(at, (hash, score));
-        best.truncate(keep);
     }
-    Ok((searched, best))
-}
-
-pub(crate) fn describe_at(dir: &Path, query: &str, limit: usize) -> Result<SoundSearchResults> {
-    if !(1..=200).contains(&limit) {
-        bail!("Ask for 1–200 tracks");
-    }
-    let query = normalize_query(query)?;
-    if !dir.join(FILE).exists() {
-        bail!("Sound search is ready after audio analysis has embedded some tracks");
-    }
-    let clap = open(dir)?;
-    let embedding = text_embedding(dir, &clap, &query)?;
-    let (searched, best) = rank(&clap, &embedding, CANDIDATES)?;
-    drop(clap);
-    let c = crate::sonic::catalog(dir)?;
-    if !crate::sonic::attach(&c, dir)? {
-        bail!("Sound search is ready after audio analysis has embedded some tracks");
-    }
-    let mut lookup = c.prepare(&format!(
-        "SELECT {} FROM sonic.sonic_tracks s JOIN tracks t ON t.file_path=s.directory AND t.filename=s.filename WHERE s.audio_hash=?1 AND s.profile=?2 AND COALESCE(t.love,'')!='B' ORDER BY t.id LIMIT 1",
+    ranked.sort_unstable_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)));
+    let searched = ranked.len();
+    let selection = if filtered {
+        "FROM tracks t LEFT JOIN album_covers c ON c.album_id=t.album_id WHERE t.id=?1"
+    } else {
+        "FROM clap.clap_audio ca
+         JOIN sonic.sonic_tracks s ON s.audio_hash=ca.audio_hash AND s.profile=?2
+         JOIN tracks t ON t.file_path=s.directory AND t.filename=s.filename
+         LEFT JOIN album_covers c ON c.album_id=t.album_id
+         WHERE ca.rowid=?1 AND COALESCE(t.love,'')!='B' ORDER BY t.id LIMIT 1"
+    };
+    let mut lookup = conn.prepare(&format!(
+        "SELECT {}, t.year, c.cache_path {selection}",
         crate::sonic::SELECT
     ))?;
-    let mut per_artist = std::collections::HashMap::<String, usize>::new();
+    let mut seen = HashSet::new();
+    let mut per_artist = HashMap::<String, usize>::new();
     let mut tracks = Vec::new();
-    for (hash, score) in best {
-        let Some(mut track) = lookup
-            .query_row(params![hash, PROFILE], crate::sonic::row)
+    for (id, audio_id, score) in ranked {
+        if seen.contains(&audio_id) {
+            continue;
+        }
+        let args: [&dyn rusqlite::ToSql; 2] = [&id, &PROFILE];
+        let params = if filtered { &args[..1] } else { &args[..] };
+        let Some(mut hit) = lookup
+            .query_row(params, |row| {
+                Ok(SoundSearchHit {
+                    track: crate::sonic::row(row)?,
+                    year: row.get(12)?,
+                    cover_path: row.get(13)?,
+                })
+            })
             .optional()?
         else {
             continue;
         };
-        let count = per_artist.entry(track.artist.to_lowercase()).or_default();
+        let count = per_artist
+            .entry(hit.track.artist.trim().to_lowercase())
+            .or_default();
         if *count >= PER_ARTIST {
             continue;
         }
         *count += 1;
-        track.distance = Some(f64::from(1.0 - score));
-        tracks.push(track);
+        seen.insert(audio_id);
+        hit.track.distance = Some(f64::from(1.0 - score));
+        tracks.push(hit);
         if tracks.len() == limit {
             break;
         }
@@ -1091,6 +1209,22 @@ pub(crate) fn describe_at(dir: &Path, query: &str, limit: usize) -> Result<Sound
     })
 }
 
+pub(crate) fn describe_at(
+    dir: &Path,
+    query: &str,
+    request: &BrowseRequest,
+    limit: usize,
+) -> Result<SoundSearchResults> {
+    if !(1..=200).contains(&limit) {
+        bail!("Ask for 1–200 tracks");
+    }
+    let query = normalize_query(query)?;
+    let embedding = query_embedding(dir, &query)?;
+    let conn = crate::sonic::catalog(dir)?;
+    let tx = conn.unchecked_transaction()?;
+    rank_catalog(&tx, dir, query, request, &embedding, limit)
+}
+
 #[cfg(not(test))]
 #[tauri::command]
 #[specta::specta]
@@ -1098,49 +1232,14 @@ pub async fn sonic_describe(
     app: tauri::AppHandle,
     query: String,
     limit: u32,
+    request: Option<BrowseRequest>,
 ) -> Result<SoundSearchResults, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        describe_at(&crate::sonic::directory(&app)?, &query, limit as usize)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-#[specta::specta]
-pub async fn sonic_save_described(
-    app: tauri::AppHandle,
-    query: String,
-    name: String,
-) -> Result<crate::ai::SavedPlaylist, String> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<crate::ai::SavedPlaylist> {
-        if name.trim().is_empty() || name.len() > 200 {
-            bail!("Choose a playlist name of 1–200 characters");
-        }
-        let found = describe_at(&crate::sonic::directory(&app)?, &query, 100)?;
-        if found.tracks.is_empty() {
-            bail!("No analyzed tracks match this description yet");
-        }
-        let playlist = crate::sonic::similarity_playlist(
-            name.trim(),
-            format!(
-                "Sounds like “{}”. Sound search across {} analyzed tracks; model {MODEL}.",
-                found.query, found.searched
-            ),
-            found.searched,
-            found.tracks,
-            "local sound search",
-        );
-        crate::db::save_playlist_for_app(
-            &app,
-            crate::ai::SavePlaylistRequest {
-                expected_updated_at: None,
-                id: None,
-                name: name.trim().into(),
-                playlist,
-            },
+        describe_at(
+            &crate::sonic::directory(&app)?,
+            &query,
+            &request.unwrap_or_default(),
+            limit as usize,
         )
     })
     .await
@@ -1197,26 +1296,6 @@ pub(crate) mod tests {
         fs::write(&part, b"abc").unwrap();
         verify_part(&part, &target, &file).unwrap();
         assert!(target.exists() && !part.exists());
-    }
-
-    #[test]
-    fn ranking_keeps_the_best_scores_in_order() {
-        let dir = tempfile::tempdir().unwrap();
-        let c = open(dir.path()).unwrap();
-        for i in 0..20 {
-            let mut e = vec![0.0f32; DIMENSIONS];
-            e[0] = i as f32 / 20.0;
-            save(&c, &format!("h{i}"), &Embedded::Ready { embedding: e, windows: vec![0] }).unwrap();
-        }
-        save(&c, "bad", &Embedded::Failed("x".into())).unwrap();
-        let mut q = vec![0.0f32; DIMENSIONS];
-        q[0] = 1.0;
-        let (searched, best) = rank(&c, &q, 3).unwrap();
-        assert_eq!(searched, 20);
-        assert_eq!(
-            best.iter().map(|b| b.0.as_str()).collect::<Vec<_>>(),
-            ["h19", "h18", "h17"]
-        );
     }
 
     /// Answers like the worker. A path containing "crash" kills it.

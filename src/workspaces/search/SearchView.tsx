@@ -1,3 +1,4 @@
+import { SoundSearch } from "./SoundSearch";
 import { SearchWorkspace } from "../SearchWorkspace";
 import {
   RotateCcw,
@@ -9,6 +10,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  AudioLines,
 } from "lucide-react";
 import { Metric } from "../../components/catalog/CatalogValues";
 import { formatNumber } from "../../app/display";
@@ -49,6 +51,10 @@ export function SearchView({
 }: {
   model: Pick<
     AppModel,
+    | "searchMode"
+    | "setSearchMode"
+    | "soundSearch"
+    | "setSoundSearch"
     | "clearQuery"
     | "loadData"
     | "status"
@@ -85,6 +91,10 @@ export function SearchView({
   >;
 }) {
   const {
+    searchMode,
+    setSearchMode,
+    soundSearch,
+    setSoundSearch,
     clearQuery,
     loadData,
     status,
@@ -119,6 +129,34 @@ export function SearchView({
     openArtistFromMusicMap,
     openGenreFromBrowse,
   } = model;
+  const modeSwitch = (
+    <div className="segmented-control" role="group" aria-label="Search mode">
+      <button
+        type="button"
+        className={searchMode === "catalog" ? "active" : ""}
+        aria-pressed={searchMode === "catalog"}
+        onClick={() => setSearchMode("catalog")}
+      >
+        <Search size={16} /> By metadata
+      </button>
+      <button
+        type="button"
+        className={searchMode === "sound" ? "active" : ""}
+        aria-pressed={searchMode === "sound"}
+        onClick={() => setSearchMode("sound")}
+      >
+        <AudioLines size={16} /> By sound
+      </button>
+    </div>
+  );
+  if (searchMode === "sound") {
+    return (
+      <SearchWorkspace actions={null}>
+        {modeSwitch}
+        <SoundSearch draft={soundSearch} setDraft={setSoundSearch} onOpenAlbum={openTimelineAlbum} onOpenArtist={openArtistFromMusicMap} />
+      </SearchWorkspace>
+    );
+  }
   return (
     <SearchWorkspace
       actions={
@@ -142,6 +180,7 @@ export function SearchView({
         </>
       }
     >
+      {modeSwitch}
       <section className="metric-grid" aria-label="Library summary">
         <Metric
           label="Tracks"

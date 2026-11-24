@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { configureSonicSchedule, describeSound, findSonicMatches, getSonicSeeds, getSonicStatus, saveDescribedSound, saveSonicPlaylist, startSonicAnalysis, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule, type SoundSearchResults } from "../backend/sonic";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { configureSonicSchedule, findSonicMatches, getSonicSeeds, getSonicStatus, saveSonicPlaylist, startSonicAnalysis, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule } from "../backend/sonic";
 import { controlActivityJob, listActivityJobs, listenToActivityJobs, type ActivityJob } from "../backend/activity";
 import "./SonicAnalysisPanel.css";
 import { SonicBackupPanel } from "./SonicBackupPanel";
 import { SonicFailuresPanel } from "./SonicFailuresPanel";
 import { SonicCoveragePanel } from "./SonicCoveragePanel";
-import { SonicAtlas } from "./SonicAtlas";
+const SonicAtlas = lazy(() => import("./SonicAtlas").then(module => ({ default: module.SonicAtlas })));
+
 export function storageSize(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   return `${Math.round(bytes / 1024 ** 2).toLocaleString()} MB`;
@@ -45,8 +46,6 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
   const [schedule, setSchedule] = useState<SonicSchedule | null>(null);
   const [diagnosticsRevision, setDiagnosticsRevision] = useState(0);
   const [jobs, setJobs] = useState<ActivityJob[]>([]);
-  const [description, setDescription] = useState("");
-  const [described, setDescribed] = useState<SoundSearchResults | null>(null);
   const refreshing = useRef(false);
   const dirty = useRef(false);
   const serial = useRef(0);
@@ -141,21 +140,13 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (live.current) setBusy(false); }
   }
-  async function describe() {
-    const query = description, id = ++serial.current; setBusy(true); setError(null); setMessage(null);
-    try { const result = await describeSound(query); if (live.current && id === serial.current) setDescribed(result); }
-    catch (e) { if (live.current && id === serial.current) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (live.current && id === serial.current) setBusy(false); }
-  }
-  async function saveDescribed() {
-    if (!described) return;
-    setBusy(true); setError(null);
-    try { const result = await saveDescribedSound(described.query, `Sounds like ${described.query}`.slice(0, 200)); if (live.current) setMessage(result); }
-    catch (e) { if (live.current) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (live.current) setBusy(false); }
-  }
   return <section className="sonic-analysis" aria-label="Audio analysis">
-    {onOpenAlbum && <><button type="button" onClick={() => setAtlasOpen(true)}>Open sonic atlas</button>{atlasOpen && <SonicAtlas onClose={() => setAtlasOpen(false)} onOpenAlbum={t => onOpenAlbum(t.albumId)} />}</>}
+    {onOpenAlbum && <>
+      <button type="button" onClick={() => setAtlasOpen(true)}>Open Sonic Atlas</button>
+      {atlasOpen && <Suspense fallback={<p role="status">Opening Sonic Atlas…</p>}>
+        <SonicAtlas onClose={() => setAtlasOpen(false)} onOpenAlbum={track => onOpenAlbum(track.albumId)} />
+      </Suspense>}
+    </>}
     <div><h2>Audio analysis</h2><p>Discover connections by sound. Analysis runs locally and resumes from saved track checkpoints.</p></div>
     <p>{status ? `${status.analyzed.toLocaleString()} of ${status.total.toLocaleString()} tracks analyzed · ${status.pending.toLocaleString()} pending · ${status.failed.toLocaleString()} failed` : "Reading analysis coverage…"}</p>
     {status && <p>{`Per-second timelines: ${status.timelines.toLocaleString()} of ${status.analyzed.toLocaleString()} analyzed tracks · ${storageSize(status.timelineBytes)} on this computer`}</p>}
@@ -192,13 +183,6 @@ export function SonicAnalysisPanel({ albumId, onOpenAlbum }: { albumId?: string;
     {matches && <p>Matches among {matches.analyzed.toLocaleString()} analyzed tracks. {matches.seedReady ? "" : "This seed needs analysis."}</p>}
     {matches?.seedReady && !matches.tracks.length && <p>No eligible matches yet. Analyze more music.</p>}
     {matches?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}</span></div>)}
-    {!albumId && <form className="sonic-describe" aria-label="Describe a sound" onSubmit={e => { e.preventDefault(); void describe(); }}>
-      <label className="sonic-seed">Describe a sound<input type="search" maxLength={300} value={description} placeholder="rainy Sunday jazz" disabled={busy} onChange={e => { serial.current++; setBusy(false); setDescription(e.target.value); setDescribed(null); }} /></label>
-      <div className="sonic-analysis-actions"><button type="submit" disabled={busy || !description.trim()}>Find tracks</button><button type="button" disabled={busy || !described?.tracks.length} onClick={() => void saveDescribed()}>Save as playlist</button></div>
-      {status && !status.soundSearch.analyzed && <p>Sound search works on tracks that finished step 2 of audio analysis.</p>}
-      {described && <p>{described.tracks.length ? `Best matches for “${described.query}” among ${described.searched.toLocaleString()} tracks with sound search.` : "No tracks with sound search yet. Run audio analysis first."}</p>}
-      {described?.tracks.map(t => <div className="sonic-result" key={t.trackKey}><strong>{t.title}</strong><span>{t.artist} · {t.album}{t.distance !== null ? ` · ${Math.round((1 - t.distance) * 100)}% match` : ""}</span></div>)}
-    </form>}
     {!albumId && <SonicBackupPanel onVerify={() => analyze("reuse")} />}
     {!albumId && <><SonicFailuresPanel disabled={busy || !schedule} revision={diagnosticsRevision} onRetry={() => analyze("failed")} /><SonicCoveragePanel /></>}
     {message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}

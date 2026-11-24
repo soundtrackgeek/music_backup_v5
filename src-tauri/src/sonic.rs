@@ -2237,12 +2237,16 @@ mod tests {
         query[dir.path().join("1.mp3").to_string_lossy().len() % crate::sonic_clap::DIMENSIONS] = 1.0;
         let bytes: Vec<u8> = query.iter().flat_map(|v| half::f16::from_f32(*v).to_le_bytes()).collect();
         clap.execute("INSERT INTO clap_queries VALUES('rainy sunday jazz',?1,?2)", params![crate::sonic_clap::MODEL, bytes]).unwrap();
-        let found = crate::sonic_clap::describe_at(dir.path(), "  Rainy   Sunday jazz ", 10).unwrap();
+        let catalog = Connection::open(dir.path().join("music-library.sqlite3")).unwrap();
+        catalog.execute_batch("ALTER TABLE tracks ADD COLUMN year INTEGER;
+            CREATE TABLE album_covers(album_id TEXT PRIMARY KEY,cache_path TEXT);").unwrap();
+        let request = crate::models::BrowseRequest::default();
+        let found = crate::sonic_clap::describe_at(dir.path(), "  Rainy   Sunday jazz ", &request, 10).unwrap();
         assert_eq!(found.query, "Rainy Sunday jazz");
         assert_eq!(found.searched, 3);
         assert_eq!(found.tracks.len(), 3);
-        assert!(found.tracks.iter().all(|t| t.distance.unwrap().abs() < 1e-3));
-        assert!(crate::sonic_clap::describe_at(dir.path(), "   ", 10).is_err());
+        assert!(found.tracks.iter().all(|hit| hit.track.distance.unwrap().abs() < 1e-3));
+        assert!(crate::sonic_clap::describe_at(dir.path(), "   ", &request, 10).is_err());
     }
 
     fn fixture() -> tempfile::TempDir {

@@ -222,7 +222,6 @@ fn builder() -> Builder<Wry> {
         listening::listening_sync,
         sonic::sonic_status,
         sonic_clap::sonic_describe,
-        sonic_clap::sonic_save_described,
         sonic_failures::sonic_failed_tracks,
         sonic_failures::sonic_export_failed_tracks,
         sonic_coverage::sonic_check_coverage,

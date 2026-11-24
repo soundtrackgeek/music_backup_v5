@@ -1,8 +1,10 @@
 import { commands, type SonicMatches, type SonicStatus, type SonicTrack, type SonicSchedule, type SoundSearchResults } from "../bindings";
+import type { BrowseRequest } from "../types";
 import { isTauriRuntime } from "./tauriClient";
 import { previewActivity } from "./activity";
 import { mockRows } from "./webPreview";
 import { clearPreviewFailures, previewFailureCount } from "./sonicDiagnostics";
+export type { SoundSearchHit } from "../bindings";
 export type { SonicMatches, SonicStatus, SonicTrack, SonicSchedule, SoundSearchResults, SoundSearchStatus } from "../bindings";
 export type { SonicAlbum, SonicAlbumMatches } from "../bindings";
 export async function findSonicAlbums(albumId: string, minimumCoverage: number): Promise<import("../bindings").SonicAlbumMatches> {
@@ -61,14 +63,40 @@ export async function getTrackTimeline(trackId: number): Promise<import("../bind
   });
   return { ...base, state: "ready", seconds, channels: 2, sampleRate: 44100, leftDb: -17.8, rightDb: -18.4, points };
 }
-/** "Describe a sound": CLAP text-to-audio search over analyzed tracks. */
-export async function describeSound(query: string): Promise<SoundSearchResults> {
-  if (isTauriRuntime()) return commands.sonicDescribe(query, 50);
-  const words = query.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) throw new Error("Describe a sound in 1–300 characters");
-  return { query: words.join(" "), searched: previewReady ? 3 : 0, tracks: previewReady ? seeds.map((t, i) => ({ ...t, distance: 0.62 + i * 0.04 })) : [] };
-}
-export async function saveDescribedSound(query: string, name: string): Promise<string> {
-  if (isTauriRuntime()) { const saved = await commands.sonicSaveDescribed(query, name); return `Saved ${saved.name} in Playlists.`; }
-  return `Browser preview: ${name} (${query})`;
+export async function describeSound(query: string, request: BrowseRequest): Promise<SoundSearchResults> {
+  if (isTauriRuntime()) return commands.sonicDescribe(query, 50, request);
+  const description = query.trim().replace(/\s+/g, " ");
+  if (!description) throw new Error("Describe a sound in 1–300 characters");
+  const { yearFrom, yearTo, trackRatingMin, missingFields } = request.filters;
+  const rows = previewReady ? mockRows.filter(row => {
+    return row.trackId != null && row.love !== "B"
+      && (yearFrom == null || (row.year != null && row.year >= yearFrom))
+      && (yearTo == null || (row.year != null && row.year <= yearTo))
+      && (trackRatingMin == null || (row.normalizedRating != null && row.normalizedRating >= trackRatingMin * 20))
+      && (!missingFields.includes("rating") || row.normalizedRating == null);
+  }) : [];
+  return {
+    query: description,
+    searched: rows.length,
+    tracks: rows.slice(0, 50).map((row, index) => ({
+      year: row.year,
+      coverPath: row.coverPath,
+      track: {
+        trackId: row.trackId!,
+        trackKey: `preview:sound-${row.trackId}`,
+        title: row.title ?? "",
+        artist: row.displayArtist || row.albumArtistDisplay || "",
+        album: row.album ?? "",
+        albumId: row.albumId,
+        albumArtist: row.albumArtistDisplay ?? "",
+        filePath: row.filePath ?? "",
+        filename: row.filename ?? "",
+        genre: row.canonicalGenre,
+        rating: row.normalizedRating,
+        seconds: row.trackSeconds ?? 0,
+        loved: row.love === "L",
+        distance: 0.62 + index / 100,
+      },
+    })),
+  };
 }

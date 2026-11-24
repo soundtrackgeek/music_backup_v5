@@ -63,10 +63,16 @@ data; see [What Songstress could add](songstress-stereo-and-timeline-2026-10.md)
 
 ## Sound search
 
-**Describe a sound** (0.216.0) finds tracks from a text description such as
-“rainy Sunday jazz” or “aggressive metal with distorted guitars”. Results show a
-match score; **Save as playlist** saves the top 100 in ranked order. At most three
-tracks per artist are listed, and banned tracks are left out.
+Open **Search → By sound** and describe what you want to hear, such as “rainy
+Sunday jazz” or “aggressive metal with distorted guitars”. Year and track rating
+filters apply before ranking. Results show artwork, year, rating, and the sound
+similarity score. Use the track title to open its album or click the artist name.
+**Save as playlist** saves the displayed matches in order.
+
+In **Playlists → Create Smart playlist**, enable **Describe a sound** to keep the description
+and metadata rules together and rerun them on refresh. A description and sound
+examples are separate rule options. Both sound searches exclude banned tracks,
+deduplicate recordings, and include at most three tracks per artist.
 
 It uses the LAION CLAP model `larger_clap_music_and_speech` (Apache-2.0), through the
 ONNX export `Xenova/larger_clap_music_and_speech` at a pinned revision. The model
@@ -94,8 +100,8 @@ in a row stop the job with the worker's message; results so far stay saved.
 Progress is saved after every eight tracks. Pause, a crash or closing the app keeps
 everything embedded so far. The schedule (idle time and hours) applies to step 2 too.
 Embeddings are stored by audio hash in `music-clap.sqlite3`, 1 KB each (about 1.3 GB
-per million tracks). Queries are cached there too. Search scores every embedding, which
-takes a second or two for a million tracks.
+per million tracks). Queries are cached there too. Search scores the available
+embeddings or the subset selected by your filters.
 
 Intel Macs cannot run sound search: ONNX Runtime has no build for them.
 

@@ -31,6 +31,8 @@ type Inputs = Pick<
   | "setSavedPlaylistToOpen"
   | "setSavedDiscoveryToOpen"
   | "setRequest"
+  | "searchMode"
+  | "setSearchMode"
   | "setAnalystSnapshotToOpen"
   | "detailDrawerRef"
   | "detailToggleRef"
@@ -55,6 +57,8 @@ export function useShellWorkspace({
   setSavedPlaylistToOpen,
   setSavedDiscoveryToOpen,
   setRequest,
+  searchMode,
+  setSearchMode,
   setAnalystSnapshotToOpen,
   detailDrawerRef,
   detailToggleRef,
@@ -67,7 +71,7 @@ export function useShellWorkspace({
 
   const isLeftSidebarHidden = leftSidebarMode === "hidden";
 
-  const hasUsefulDetailContent = workspaceHasUsefulDetails(activeSection, {
+  const hasUsefulDetailContent = (activeSection !== "Search" || searchMode !== "sound") && workspaceHasUsefulDetails(activeSection, {
     hasDiscovery: false,
     hasSelectedAlbum: selectedAlbum != null,
     hasSelectedArtist: selectedArtist != null,
@@ -157,6 +161,7 @@ export function useShellWorkspace({
         setActiveSection("Charts");
       } else {
         setSearchLunaLaunch(launch);
+        setSearchMode("catalog");
         setActiveSection("Search");
       }
     } else if (mode === "analyze") {
@@ -191,6 +196,7 @@ export function useShellWorkspace({
           mode: "build",
           snapshot,
         });
+        setSearchMode("catalog");
         setActiveSection("Search");
         break;
       case "chart":
@@ -208,6 +214,7 @@ export function useShellWorkspace({
           mode: "results",
           snapshot,
         });
+        setSearchMode("catalog");
         setActiveSection("Search");
         break;
       case "chartAnswer":
