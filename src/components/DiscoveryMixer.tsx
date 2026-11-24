@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "./AuroraPlaybackActions";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -394,6 +395,7 @@ export function DiscoveryMixer({
                     </span>
                     <ArrowRight aria-hidden="true" />
                   </button>
+                  <AuroraPlaybackActions compact target={{ kind: "album", albumId: recommendation.albumId }} />
                 </li>
               ))}
             </ol>

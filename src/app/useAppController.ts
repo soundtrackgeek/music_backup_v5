@@ -1,3 +1,4 @@
+import { useMusicLibraryLinks } from "./useMusicLibraryLinks";
 import { useWorkspaceStores } from "./WorkspaceStoresProvider";
 import { useCatalogWorkspace } from "./useCatalogWorkspace";
 import { useChartsWorkspace } from "../workspaces/charts/useChartsWorkspace";
@@ -21,6 +22,7 @@ export function useAppController() {
   const tools = useToolsWorkspace({ ...stores });
   const timelines = useTimelinesWorkspace({ ...stores });
   const navigation = useNavigationWorkspace({ ...stores });
+  useMusicLibraryLinks(navigation.openTimelineAlbum);
   const statistics = useStatisticsWorkspace({ ...stores, ...catalog });
   const discovery = useDiscoveryWorkspace({ ...stores, ...catalog });
   const imports = useImportsWorkspace({ ...stores, ...catalog });

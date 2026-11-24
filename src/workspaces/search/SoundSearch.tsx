@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "../../components/AuroraPlaybackActions";
 import { lazy, Suspense, useState, type Dispatch, type SetStateAction } from "react";
 import { AudioLines, Map, Search } from "lucide-react";
 import { savePlaylist } from "../../backend";
@@ -196,6 +197,7 @@ export function SoundSearch({ draft, setDraft, onOpenAlbum, onOpenArtist }: {
                       <span>{year ?? "Year unknown"}</span>
                       <span>{track.rating == null ? "Unrated" : `${formatTrackRating(track.rating)} ★`}</span>
                       {score !== null && <strong title="Cosine similarity between the description and track audio">{score}% match</strong>}
+                      <AuroraPlaybackActions compact target={{ kind: "track", albumId: track.albumId, trackId: track.trackId }} />
                     </div>
                   </li>
                 );

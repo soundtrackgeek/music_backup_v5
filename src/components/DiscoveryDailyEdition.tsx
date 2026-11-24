@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "./AuroraPlaybackActions";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -869,6 +870,9 @@ export function DiscoveryDailyEdition({
                           <small>{story.chart}</small>
                         </span>
                       </button>
+                      <AuroraPlaybackActions compact target={story.trackId == null
+                        ? { kind: "album", albumId: story.albumId }
+                        : { kind: "track", albumId: story.albumId, trackId: story.trackId }} />
                     </li>
                   ))}
                 </ol>

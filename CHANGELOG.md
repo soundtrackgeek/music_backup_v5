@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.220.0] - 2026-11-24
+
+### Added
+
+- Added **Play in Aurora** and **Queue in Aurora** to album headers, track rows, saved playlists, and sound and Discovery results. Aurora 0.80.0 or later resolves the selection in the shared catalog.
+- Music Library opens album links from Aurora, including on a cold launch.
+
 ## [0.219.0] - 2026-11-24
 
 ### Added

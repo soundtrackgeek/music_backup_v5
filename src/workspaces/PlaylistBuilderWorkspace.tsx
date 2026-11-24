@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "../components/AuroraPlaybackActions";
 import { VirtualList } from "../components/VirtualList";
 import { SmartPlaylistRules } from "../components/SmartPlaylistRules";
 import { SonicJourneyPanel } from "../components/SonicJourneyPanel";
@@ -335,6 +336,15 @@ export function PlaylistBuilderWorkspace({
 
   const activeSavedPlaylist =
     savedPlaylists.find((saved) => saved.id === activeSavedId) ?? undefined;
+  const savedTracks = activeSavedPlaylist?.playlist.tracks;
+  const displayedTracks = playlist?.tracks;
+  const showsSavedOrder = useMemo(() => {
+    if (!savedTracks?.length || displayedTracks?.length !== savedTracks.length) return false;
+    return displayedTracks === savedTracks || displayedTracks.every((track, index) => {
+      const saved = savedTracks[index];
+      return track.trackId === saved.trackId && track.filePath === saved.filePath && track.filename === saved.filename;
+    });
+  }, [savedTracks, displayedTracks]);
   const isLocalSearchPlaylist = playlist?.model === "Local Search";
   const isSoundSearchPlaylist = playlist?.model === "local sound search";
   const isSonicJourneyPlaylist = playlist?.model === "Sonic Journey";
@@ -510,6 +520,9 @@ export function PlaylistBuilderWorkspace({
                     onChange={(event) => setName(event.target.value)}
                   />
                   <p>{playlist.description}</p>
+                  {activeSavedPlaylist && showsSavedOrder && (
+                    <AuroraPlaybackActions key={activeSavedPlaylist.id} target={{ kind: "playlist", playlistId: activeSavedPlaylist.id }} />
+                  )}
                 </div>
                 <div className="playlist-result-actions">
                   <button

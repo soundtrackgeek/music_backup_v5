@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "../../components/AuroraPlaybackActions";
 import {
   type BrowseSort,
   type BrowseResponse,
@@ -220,6 +221,7 @@ export function ResultTable({
                   <span className="billboard-badge">{singleLabel}</span>
                 ) : null}
               </strong>
+              {row.trackId != null && row.love !== "B" && <AuroraPlaybackActions compact target={{ kind: "track", albumId: row.albumId, trackId: row.trackId }} />}
               <small>
                 {[row.discNumber, row.trackNumber]
                   .filter((value) => value != null)
@@ -937,6 +939,7 @@ export function AlbumTrackTable({
                 />
                 <span>{row.title ?? "Untitled"}</span>
               </strong>
+              {row.trackId != null && row.love !== "B" && <AuroraPlaybackActions compact target={{ kind: "track", albumId: row.albumId, trackId: row.trackId }} />}
               <small>{row.canonicalGenre ?? ""}</small>
             </span>
             <span role="cell">

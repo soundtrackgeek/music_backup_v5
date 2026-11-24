@@ -3435,3 +3435,23 @@ button {
 }
 
 /* Published songs: range summary and full-archive history */
+
+.aurora-playback-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.aurora-playback-actions .icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
+
+.aurora-playback-error {
+  flex-basis: 100%;
+  white-space: normal;
+}

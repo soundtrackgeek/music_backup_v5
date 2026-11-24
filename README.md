@@ -1,5 +1,15 @@
 # Music Library
 
+## Play in Aurora
+
+Use **Play in Aurora** or **Queue in Aurora** on an album, track, discovery
+result or saved playlist. Play starts the selection in Aurora. Queue adds it
+after the current queue, subject to Aurora's 200-song queue capacity. Long
+playlists can use Play, which loads the remaining songs as playback advances.
+Install Aurora **0.80.0** or later and use the same Music Library catalog in
+both apps. Use **Open album in Music Library** in Aurora to return to the album.
+
+
 ## Disc numbers from Aurora tag edits (0.218.2)
 
 When Aurora changes a disc tag from blank or `0/0` to `1/1`, the catalog now stores disc 1 instead of keeping no disc number, so Aurora's album naming check agrees with the `1-01 - Artist - Title` names it gives the tracks.

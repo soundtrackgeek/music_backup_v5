@@ -2362,6 +2362,17 @@ pub fn run() {
     #[cfg(debug_assertions)]
     bindings::export_in_debug(std::path::Path::new("../src/bindings.ts"));
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(window) = handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            });
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .register_asynchronous_uri_scheme_protocol("cover", |context, request, responder| {
             let app = context.app_handle().clone();
             tauri::async_runtime::spawn(async move {

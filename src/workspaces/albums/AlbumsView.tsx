@@ -1,3 +1,4 @@
+import { AuroraPlaybackActions } from "../../components/AuroraPlaybackActions";
 import {
   RotateCcw,
   Database,
@@ -476,7 +477,10 @@ export function AlbumsView({
                   : `${formatNumber(albumTracksResponse?.rows.length ?? 0)} of ${formatNumber(selectedAlbumTrackCount)} tracks`}
               </p>
             </div>
-            <span className="run-status">{selectedAlbum?.year ?? "Album"}</span>
+            <div className="aurora-playback-actions">
+              <span className="run-status">{selectedAlbum?.year ?? "Album"}</span>
+              {selectedAlbum && <AuroraPlaybackActions key={selectedAlbum.albumId} target={{ kind: "album", albumId: selectedAlbum.albumId }} />}
+            </div>
           </div>
 
           {albumTracksError ? (

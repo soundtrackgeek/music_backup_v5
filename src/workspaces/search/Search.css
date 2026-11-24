@@ -494,10 +494,9 @@
 
 .sound-search-meta {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) 80px 64px 80px;
+  grid-template-columns: minmax(90px, 1fr) 72px 58px 72px auto;
   align-items: center;
   column-gap: 10px;
-  max-width: 440px;
   font-size: 0.875rem;
 }
 

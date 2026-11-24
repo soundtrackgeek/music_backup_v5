@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Music Library",
-  "version": "0.219.0",
+  "version": "0.220.0",
   "identifier": "com.local.musiclibrary",
   "build": {
     "beforeDevCommand": "npm run sonic:prepare && npm run dev",
@@ -51,6 +51,7 @@
     ]
   },
   "plugins": {
+    "deep-link": { "desktop": { "schemes": ["musiclibrary"] } },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg0NzQwRkE1RjMwQUQ3MApSV1J3clRCZitrQkhDTzhFbm16TkM5dTZHbGV2ekVWdVdsZG5WekZQQlA5dVNPdHNNUzBuWTB5NAo=",
       "endpoints": [
