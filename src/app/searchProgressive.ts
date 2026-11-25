@@ -88,6 +88,9 @@ export function countAdvancedSearchFilters(
     hasRange(filters.ratedTracksMin, filters.ratedTracksMax),
     hasRange(filters.albumRatingMin, filters.albumRatingMax),
     hasRange(filters.trackRatingMin, filters.trackRatingMax),
+    hasRange(filters.playCountMin, filters.playCountMax),
+    filters.lastPlayedFrom != null || filters.lastPlayedTo != null,
+    filters.notPlayedWithinDays != null,
     hasRange(
       filters.ratingCompletenessMin,
       filters.ratingCompletenessMax,

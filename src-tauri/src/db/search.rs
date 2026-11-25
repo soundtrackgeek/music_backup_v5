@@ -127,8 +127,9 @@ pub(crate) fn index_added_albums(conn: &Connection, album_ids_json: &str) -> Res
 
 #[cfg(not(test))]
 pub fn search_library_for_app(app: &AppHandle, request: BrowseRequest) -> Result<BrowseResponse> {
-    let (conn, _) = open_search(app)?;
-    search_library(&conn, request, COMPLETE_SEARCH_RESULT_LIMIT)
+    listening_browse::read(app, listening_browse::requested(&request), open_search, |conn| {
+        search_library(conn, request, COMPLETE_SEARCH_RESULT_LIMIT)
+    })
 }
 
 pub(super) const COMPLETE_SEARCH_RESULT_LIMIT: u32 = u32::MAX;
@@ -140,8 +141,9 @@ pub fn inspect_current_view_for_app(
     scope_limit: Option<u32>,
     inspection: &ViewInspectionRequest,
 ) -> Result<ViewInspectionResult> {
-    let (conn, _) = open_search(app)?;
-    inspect_current_view(&conn, request, scope_limit, inspection)
+    listening_browse::read(app, listening_browse::requested(request), open_search, |conn| {
+        inspect_current_view(conn, request, scope_limit, inspection)
+    })
 }
 
 #[cfg(not(test))]
@@ -399,9 +401,12 @@ pub(crate) fn search_library(
     };
 
     let from_sql = browse_from_clause(is_tracks);
+    let history_filtered = listening_browse::has_filters(filters);
+    let history_joined = history_filtered || listening_browse::has_order(&request.sort);
+    let filter_join = listening_browse::join(is_tracks, history_filtered);
 
     let (where_sql, values) = build_where_clause(is_tracks, &request.search_text, filters);
-    let count_sql = format!("SELECT COUNT(*) {from_sql} {where_sql}");
+    let count_sql = format!("SELECT COUNT(*) {from_sql}{filter_join} {where_sql}");
     let total = conn
         .query_row(&count_sql, params_from_iter(values.iter()), |row| {
             row.get(0)
@@ -409,16 +414,21 @@ pub(crate) fn search_library(
         .context("Could not count browse results")?;
 
     let order_sql = order_clause(is_tracks, &request.sort);
-    let sql = format!("{select_sql} {from_sql} {where_sql} {order_sql} LIMIT ? OFFSET ?");
+    let history_join = if history_filtered { filter_join } else { listening_browse::join(is_tracks, history_joined) };
+    let history_values = listening_browse::select_values(history_joined);
+    let sql = format!("{select_sql}{history_values} {from_sql}{history_join} {where_sql} {order_sql} LIMIT ? OFFSET ?");
     let mut row_values = values;
     row_values.push(Value::Integer(i64::from(limit)));
     row_values.push(Value::Integer(i64::from(offset)));
 
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
+    let mut rows = stmt
         .query_map(params_from_iter(row_values.iter()), browse_row_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()
         .context("Could not load browse results")?;
+    if request.include_listening_history && !history_joined {
+        listening_browse::fill_page(conn, is_tracks, &mut rows)?;
+    }
 
     Ok(BrowseResponse {
         view,
@@ -527,6 +537,8 @@ pub(super) fn browse_row_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<B
         max_bitrate_kbps: row.get(79)?,
         below_320_tracks: row.get(80)?,
         mixed_audio_quality: row.get::<_, Option<i64>>(81)?.map(|value| value != 0),
+        play_count: row.get(82)?,
+        last_played_at: row.get(83)?,
     })
 }
 
@@ -937,6 +949,7 @@ pub(crate) fn build_where_clause(
         filters.missing_fields.as_slice(),
     );
 
+    listening_browse::add_filters(&mut conditions, &mut values, filters, false);
     let where_sql = if conditions.is_empty() {
         String::new()
     } else {
@@ -1676,7 +1689,9 @@ pub(super) fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
         "ASC"
     };
 
-    let field = if is_tracks {
+    let field = if let Some(field) = listening_browse::order_field(&sort.field) {
+        field
+    } else if is_tracks {
         match sort.field.as_str() {
             "title" => "LOWER(COALESCE(t.title, ''))",
             "added" => "t.import_run_id",
@@ -1733,6 +1748,12 @@ pub(super) fn order_clause(is_tracks: bool, sort: &BrowseSort) -> String {
             "bitrate" => "aq.min_bitrate_kbps",
             _ => "LOWER(COALESCE(a.album, ''))",
         }
+    };
+
+    let direction = if sort.field == "lastPlayed" {
+        if direction == "DESC" { "DESC NULLS LAST" } else { "ASC NULLS LAST" }
+    } else {
+        direction
     };
 
     if is_tracks && sort.field == "trackNumber" {
@@ -1813,6 +1834,8 @@ pub(super) fn normalize_chart_config(mut config: ChartConfig) -> ChartConfig {
 pub(super) fn normalize_ranking_metric(metric: &str) -> String {
     match metric {
         "albumRating"
+        | "playCount"
+        | "lastPlayed"
         | "ratingCompleteness"
         | "lovedTracks"
         | "ae"
@@ -1833,6 +1856,8 @@ pub(super) fn normalize_ranking_metric(metric: &str) -> String {
 pub(super) fn normalize_chart_sort_field(field: Option<&str>, fallback_metric: &str) -> String {
     match field.unwrap_or(fallback_metric) {
         "album"
+        | "playCount"
+        | "lastPlayed"
         | "artist"
         | "year"
         | "genre"

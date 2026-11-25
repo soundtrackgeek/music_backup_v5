@@ -1,3 +1,4 @@
+import { ListeningHistoryFields } from "../../components/catalog/ListeningHistoryFields";
 import { SoundSearch } from "./SoundSearch";
 import { SearchWorkspace } from "../SearchWorkspace";
 import {
@@ -571,6 +572,7 @@ export function SearchView({
             </ChartFilterSourceGroup>
           </ChartFiltersDisclosure>
 
+          <ListeningHistoryFields filters={currentFilters} onChange={updateFilters} />
           <div className="filter-grid search-advanced-filter-grid">
             {request.view === "tracks" ? (
               <>
@@ -1025,6 +1027,8 @@ export function SearchView({
                           label: "Norsktoppen debut week",
                         },
                         { value: "trackRating", label: "Track rating" },
+                        { value: "playCount", label: "Plays" },
+                        { value: "lastPlayed", label: "Last played" },
                         { value: "bitrate", label: "Bitrate" },
                         { value: "trackNumber", label: "Track number" },
                       ]
@@ -1053,6 +1057,8 @@ export function SearchView({
                         { value: "trackCount", label: "Tracks" },
                         { value: "bitrate", label: "Lowest bitrate" },
                         { value: "albumRating", label: "Rating" },
+                        { value: "playCount", label: "Plays" },
+                        { value: "lastPlayed", label: "Last played" },
                         {
                           value: "ratingCompleteness",
                           label: "Completeness",

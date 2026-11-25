@@ -10,6 +10,8 @@ export const artistChartMetricOptions = [
   { value: "chartedTracks", label: "Most charted tracks" },
   { value: "completeAlbums", label: "Most 100% rated albums" },
   { value: "averageAlbumScore", label: "Highest average album score" },
+  { value: "playCount", label: "Most played artists" },
+  { value: "lastPlayed", label: "Recently played artists" },
 ];
 
 export const albumChartSourceOptions = [

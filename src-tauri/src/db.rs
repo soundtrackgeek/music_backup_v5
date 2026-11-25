@@ -97,6 +97,7 @@ mod provider_cache;
 mod saved_views;
 mod schema;
 mod search;
+pub(crate) mod listening_browse;
 pub(crate) use search::{browse_from_clause, build_where_clause};
 mod settings;
 mod stats;

@@ -54,6 +54,7 @@ type Inputs = Pick<
   | "setPlaylistLaunch"
   | "setActiveSection"
   | "includeCalculated"
+  | "searchTableColumns"
   | "searchExportColumns"
   | "response"
 > &
@@ -81,11 +82,13 @@ export function useSearchWorkspace({
   setPlaylistLaunch,
   setActiveSection,
   includeCalculated,
+  searchTableColumns,
   searchExportColumns,
   response,
   originCountryOptions,
 }: Inputs) {
   const currentFilters = request.filters;
+  const showListeningHistory = searchTableColumns.includes("playCount") || searchTableColumns.includes("lastPlayed");
 
   const availableSearchExportColumns = useMemo(
     () =>
@@ -104,7 +107,7 @@ export function useSearchWorkspace({
     const timer = window.setTimeout(() => {
       setIsSearching(true);
       setBrowseError(null);
-      void searchLibrary(request)
+      void searchLibrary({ ...request, includeListeningHistory: showListeningHistory })
         .then((nextResponse) => {
           if (!cancelled) {
             setResponse(nextResponse);
@@ -131,7 +134,7 @@ export function useSearchWorkspace({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeSection, catalogRefreshKey, request, searchMode]);
+  }, [activeSection, catalogRefreshKey, request, searchMode, showListeningHistory]);
 
   const chips = useMemo(() => {
     const nextChips: { key: string; label: ReactNode; remove: () => void }[] =
@@ -563,6 +566,29 @@ export function useSearchWorkspace({
       currentFilters.trackRatingMax,
       () => updateFilters({ trackRatingMin: null, trackRatingMax: null }),
     );
+
+    addRangeChip(
+      nextChips,
+      "playCount",
+      "Plays",
+      currentFilters.playCountMin,
+      currentFilters.playCountMax,
+      () => updateFilters({ playCountMin: null, playCountMax: null }),
+    );
+    if (currentFilters.lastPlayedFrom || currentFilters.lastPlayedTo) {
+      nextChips.push({
+        key: "lastPlayed",
+        label: ["Last played", currentFilters.lastPlayedFrom, currentFilters.lastPlayedTo].filter(Boolean).join(" · "),
+        remove: () => updateFilters({ lastPlayedFrom: null, lastPlayedTo: null }),
+      });
+    }
+    if (currentFilters.notPlayedWithinDays != null) {
+      nextChips.push({
+        key: "notPlayedWithinDays",
+        label: `No plays in the last ${currentFilters.notPlayedWithinDays} days`,
+        remove: () => updateFilter("notPlayedWithinDays", null),
+      });
+    }
 
     addRangeChip(
       nextChips,

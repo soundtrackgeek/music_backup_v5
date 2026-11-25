@@ -12,7 +12,7 @@ use super::search::{build_where_clause, browse_from_clause, escape_like};
 use super::*;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const ARTIST_CHART_METRICS: [&str; 8] = [
+pub(crate) const ARTIST_CHART_METRICS: [&str; 10] = [
     "albums",
     "tracks",
     "fiveStarTracks",
@@ -21,6 +21,8 @@ pub(crate) const ARTIST_CHART_METRICS: [&str; 8] = [
     "chartedTracks",
     "completeAlbums",
     "averageAlbumScore",
+    "playCount",
+    "lastPlayed",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -148,6 +150,10 @@ pub struct ArtistChartRow {
     pub charted_tracks: i64,
     pub complete_albums: i64,
     pub average_album_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_played_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -165,8 +171,14 @@ pub fn artist_chart_for_app(
     app: &AppHandle,
     request: ArtistChartRequest,
 ) -> Result<ArtistChartResponse> {
-    let (conn, _) = open_read(app)?;
-    artist_chart(&conn, request, 500)
+    listening_browse::read(app, artist_history_requested(&request), open_read, |conn| {
+        artist_chart(conn, request, 500)
+    })
+}
+
+pub(super) fn artist_history_requested(request: &ArtistChartRequest) -> bool {
+    matches!(request.metric.trim(), "playCount" | "lastPlayed")
+        || listening_browse::has_filters(&request.filters)
 }
 
 pub(crate) fn artist_chart(
@@ -192,7 +204,14 @@ pub(crate) fn artist_chart(
             || request.filters.year_to.is_some()
             || request.excluded_year_from.is_some()
             || request.excluded_year_to.is_some());
-    let mut stats_filters = request.filters.clone();
+    let mut stats_filters = BrowseFilters {
+        play_count_min: None,
+        play_count_max: None,
+        last_played_from: None,
+        last_played_to: None,
+        not_played_within_days: None,
+        ..request.filters.clone()
+    };
     let (stats_excluded_from, stats_excluded_to) = if years_pick_artists {
         stats_filters.year_from = None;
         stats_filters.year_to = None;
@@ -289,6 +308,13 @@ pub(crate) fn artist_chart(
     };
     let album_active = in_years("a.year");
     let track_active = in_years("t.year");
+    let history_requested = artist_history_requested(&request);
+    let track_history = listening_browse::join(true, history_requested);
+    let (play_total, last_played) = if history_requested {
+        ("SUM(COALESCE(history.plays, 0))", "MAX(history.last_played)")
+    } else {
+        ("NULL", "NULL")
+    };
     let album_from = browse_from_clause(false);
     // Same joins as the track browse query, but artist origin and info follow the
     // track's Artist so the artist-info filters judge the credited artist.
@@ -318,8 +344,10 @@ pub(crate) fn artist_chart(
                 SUM(CASE WHEN t.normalized_rating >= 100 THEN 1 ELSE 0 END) AS five_star_tracks,
                 SUM(CASE WHEN t.love = 'L' THEN 1 ELSE 0 END) AS loved_tracks,
                 SUM(CASE WHEN {track_charted} THEN 1 ELSE 0 END) AS charted_tracks,
+                {play_total} AS play_count,
+                {last_played} AS last_played,
                 MAX({track_active}) AS active
-            {track_from} {track_where}
+            {track_from}{track_history} {track_where}
             GROUP BY artist_key
         ),
         combined AS (
@@ -334,6 +362,8 @@ pub(crate) fn artist_chart(
                 COALESCE(tr.charted_tracks, 0) AS charted_tracks,
                 COALESCE(al.complete_albums, 0) AS complete_albums,
                 al.average_album_score AS average_album_score,
+                tr.play_count AS play_count,
+                tr.last_played AS last_played,
                 MAX(COALESCE(al.active, 0), COALESCE(tr.active, 0)) AS active
             FROM (
                 SELECT artist_key FROM album_stats
@@ -347,6 +377,7 @@ pub(crate) fn artist_chart(
 
     let mut outer_conditions = Vec::new();
     let mut outer_values: Vec<Value> = Vec::new();
+    listening_browse::add_filters(&mut outer_conditions, &mut outer_values, &request.filters, true);
     if years_pick_artists {
         outer_conditions.push("active = 1".to_string());
     }
@@ -383,6 +414,7 @@ pub(crate) fn artist_chart(
         format!("WHERE {}", outer_conditions.join(" AND "))
     };
 
+    let order_column = if order_column == "play_count" { "COALESCE(play_count, 0)" } else { order_column };
     let mut count_values = album_values.clone();
     count_values.extend(track_select_values.iter().cloned());
     count_values.extend(track_values.iter().cloned());
@@ -398,7 +430,7 @@ pub(crate) fn artist_chart(
         SELECT
             artist_key, artist_name, album_count, track_count, five_star_tracks,
             loved_tracks, charted_albums, charted_tracks, complete_albums,
-            average_album_score, COUNT(*) OVER () AS total_rows
+            average_album_score, COUNT(*) OVER () AS total_rows, play_count, last_played
         FROM combined {outer_where}
         ORDER BY ({order_column} IS NULL), {order_column} {direction},
             album_count DESC, track_count DESC, artist_name COLLATE NOCASE ASC
@@ -425,6 +457,8 @@ pub(crate) fn artist_chart(
                 charted_tracks: row.get(7)?,
                 complete_albums: row.get(8)?,
                 average_album_score: row.get(9)?,
+                play_count: row.get::<_, Option<i64>>(11)?.or_else(|| history_requested.then_some(0)),
+                last_played_at: row.get(12)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()
@@ -462,6 +496,8 @@ fn metric_column(metric: &str) -> Option<&'static str> {
         "chartedTracks" => "charted_tracks",
         "completeAlbums" => "complete_albums",
         "averageAlbumScore" => "average_album_score",
+        "playCount" => "play_count",
+        "lastPlayed" => "last_played",
         _ => return None,
     })
 }

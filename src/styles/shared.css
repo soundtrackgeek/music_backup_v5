@@ -3455,3 +3455,21 @@ button {
   flex-basis: 100%;
   white-space: normal;
 }
+
+.listening-history-filters {
+  min-width: 0;
+  margin: 12px 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.listening-history-filters .filter-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 0;
+}
+
+.listening-history-filters p {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+}

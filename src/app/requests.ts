@@ -78,6 +78,11 @@ export function createFilters(): BrowseFilters {
     albumRatingMax: null,
     trackRatingMin: null,
     trackRatingMax: null,
+    playCountMin: null,
+    playCountMax: null,
+    lastPlayedFrom: null,
+    lastPlayedTo: null,
+    notPlayedWithinDays: null,
     ratingCompletenessMin: null,
     ratingCompletenessMax: null,
     notFullyRated: false,
@@ -116,6 +121,7 @@ export function createRequest(view: BrowseView = "albums"): BrowseRequest {
     sort: defaultSort(view),
     limit: 50,
     offset: 0,
+    includeListeningHistory: false,
   };
 }
 
@@ -337,6 +343,7 @@ export function chartRequestFromConfig(config: ChartConfig): BrowseRequest {
     view: config.request.view,
     offset: 0,
     limit: config.resultLimit,
+    includeListeningHistory: config.visibleColumns.includes("playCount") || config.visibleColumns.includes("lastPlayed"),
     sort: {
       field: config.rankingMetric,
       direction: config.sortDirection,

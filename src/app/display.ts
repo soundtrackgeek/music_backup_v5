@@ -311,8 +311,16 @@ function stripOriginCountryArea(value: string | null | undefined) {
   return trimmed.slice(0, openIndex).trim();
 }
 
+export function formatLastPlayed(value: number | null | undefined) {
+  return value == null ? "—" : formatDate(new Date(value * 1_000).toISOString());
+}
+
 export function formatChartMetric(row: BrowseRow, metric: string) {
   switch (metric) {
+    case "playCount":
+      return row.playCount == null ? "—" : formatNumber(row.playCount);
+    case "lastPlayed":
+      return formatLastPlayed(row.lastPlayedAt);
     case "billboardRank":
       return formatBillboardRank(row);
     case "albumRating":
@@ -408,6 +416,10 @@ export function browseRowSortValue(row: BrowseRow, field: string) {
       return row.effectiveAlbumRating;
     case "ratingCompleteness":
       return row.ratingCompleteness;
+    case "playCount":
+      return row.playCount ?? 0;
+    case "lastPlayed":
+      return row.lastPlayedAt ?? null;
     case "lovedTracks":
       return row.lovedTracks;
     case "ae":

@@ -1,3 +1,4 @@
+import { ListeningHistoryFields } from "../../components/catalog/ListeningHistoryFields";
 import {
   createChartConfig,
   normalizeChartConfigForClient
@@ -660,6 +661,7 @@ export function ChartsView({ model }: { model: Pick<AppModel, "setChartConfig" |
                   </ChartFilterSourceGroup>
                 </ChartFiltersDisclosure>
 
+                <ListeningHistoryFields filters={chartConfig.request.filters} onChange={updateChartFilters} />
                 <div className="filter-grid chart-advanced-filter-grid">
                 <NumberField
                   label="Limit"

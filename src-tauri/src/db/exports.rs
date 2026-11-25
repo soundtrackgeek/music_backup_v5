@@ -7,12 +7,12 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
         bail!("Unsupported export format: {}", input.format);
     }
 
-    let (conn, _) = open_search(app)?;
-
     let mut request = input.request.clone();
     request.offset = 0;
     request.limit = 100_000;
-    let response = search_library(&conn, request.clone(), 100_000)?;
+    let response = listening_browse::read(app, listening_browse::requested(&request), open_search, |conn| {
+        search_library(conn, request.clone(), 100_000)
+    })?;
 
     let export_dir = app
         .path()
@@ -40,7 +40,6 @@ pub fn export_search_for_app(app: &AppHandle, input: ExportSearchRequest) -> Res
 
     let request_json =
         serde_json::to_string(&request).context("Could not serialize export query")?;
-    drop(conn);
     record_export(
         app,
         &normalize_view(&request.view),

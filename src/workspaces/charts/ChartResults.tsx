@@ -29,6 +29,8 @@ import {
   formatNorsktoppenRank,
   formatNorsktoppenDebut,
   formatTrackRating,
+  formatLastPlayed,
+  formatNumber,
   formatPercent,
   formatMinutes,
   compareBrowseRows
@@ -398,6 +400,18 @@ export function ChartResults({
       value: (row: BrowseRow) => row.albumScore?.toFixed(3) ?? "",
     },
     {
+      key: "playCount",
+      label: "Plays",
+      sortField: "playCount",
+      value: (row: BrowseRow) => row.playCount == null ? "—" : formatNumber(row.playCount),
+    },
+    {
+      key: "lastPlayed",
+      label: "Last played",
+      sortField: "lastPlayed",
+      value: (row: BrowseRow) => formatLastPlayed(row.lastPlayedAt),
+    },
+    {
       key: "loved",
       label: "Loved",
       sortField: "lovedTracks",
@@ -425,7 +439,8 @@ export function ChartResults({
     const requiredColumns = isTracks
       ? ["rank", "track", "artist", "year"]
       : ["rank", "album", "artist", "year", "genre"];
-    if (requiredColumns.includes(column.key)) return true;
+    if (requiredColumns.includes(column.key) ||
+      ((column.key === "playCount" || column.key === "lastPlayed") && config.rankingMetric === column.key)) return true;
     if (
       isTracks &&
       [
@@ -472,6 +487,10 @@ export function ChartResults({
   }));
   if (displaySort) {
     displayRows.sort((left, right) => {
+      if (displaySort.field === "lastPlayed") {
+        const missing = Number(left.row.lastPlayedAt == null) - Number(right.row.lastPlayedAt == null);
+        if (missing) return missing;
+      }
       const comparison = compareBrowseRows(
         left.row,
         right.row,

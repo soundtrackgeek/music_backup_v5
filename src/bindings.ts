@@ -24,6 +24,7 @@ export const commands = {
 	sort?: BrowseSort,
 	limit?: number,
 	offset?: number,
+	includeListeningHistory?: boolean,
 } | null) => __TAURI_INVOKE<SoundSearchResults>("sonic_describe", { query, limit, request }),
 	sonicFailedTracks: (after: string | null) => __TAURI_INVOKE<FailedTracksPage>("sonic_failed_tracks", { after }),
 	sonicExportFailedTracks: (path: string) => __TAURI_INVOKE<FailedTracksExport>("sonic_export_failed_tracks", { path }),
@@ -123,9 +124,9 @@ export const commands = {
 	importNorsktoppenSingles: (sourcePath: string) => __TAURI_INVOKE<NorsktoppenImportSummary>("import_norsktoppen_singles", { sourcePath }),
 	listActivityJobs: () => __TAURI_INVOKE<Job[]>("list_activity_jobs"),
 	controlActivityJob: (id: number, action: string) => __TAURI_INVOKE<Job[]>("control_activity_job", { id, action }),
-	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse>("search_library", { request }),
+	searchLibrary: (request: BrowseRequest) => __TAURI_INVOKE<BrowseResponse_Serialize>("search_library", { request }),
 	listArtists: (request: ArtistListRequest) => __TAURI_INVOKE<ArtistListResponse_Serialize>("list_artists", { request }),
-	getArtistChart: (request: ArtistChartRequest) => __TAURI_INVOKE<ArtistChartResponse>("get_artist_chart", { request }),
+	getArtistChart: (request: ArtistChartRequest) => __TAURI_INVOKE<ArtistChartResponse_Serialize>("get_artist_chart", { request }),
 	getArtistSplitContext: (artistId: string) => __TAURI_INVOKE<ArtistSplitContext>("get_artist_split_context", { artistId }),
 	splitArtist: (request: SplitArtistRequest) => __TAURI_INVOKE<SplitArtistResult>("split_artist", { request }),
 	getArtistTrackHighlights: (artistId: string) => __TAURI_INVOKE<ArtistTrackHighlights>("get_artist_track_highlights", { artistId }),
@@ -933,15 +934,27 @@ export type ArtistChartRequest = {
 	offset?: number,
 };
 
-export type ArtistChartResponse = {
+export type ArtistChartResponse = ArtistChartResponse_Serialize | ArtistChartResponse_Deserialize;
+
+export type ArtistChartResponse_Deserialize = {
 	metric: string,
-	rows: ArtistChartRow[],
+	rows: ArtistChartRow_Deserialize[],
 	total: number,
 	limit: number,
 	offset: number,
 };
 
-export type ArtistChartRow = {
+export type ArtistChartResponse_Serialize = {
+	metric: string,
+	rows: ArtistChartRow_Serialize[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type ArtistChartRow = ArtistChartRow_Serialize | ArtistChartRow_Deserialize;
+
+export type ArtistChartRow_Deserialize = {
 	rank: number,
 	artistKey: string,
 	artistName: string,
@@ -953,6 +966,24 @@ export type ArtistChartRow = {
 	chartedTracks: number,
 	completeAlbums: number,
 	averageAlbumScore: number | null,
+	playCount: number | null,
+	lastPlayedAt: number | null,
+};
+
+export type ArtistChartRow_Serialize = {
+	rank: number,
+	artistKey: string,
+	artistName: string,
+	albumCount: number,
+	trackCount: number,
+	fiveStarTracks: number,
+	lovedTracks: number,
+	chartedAlbums: number,
+	chartedTracks: number,
+	completeAlbums: number,
+	averageAlbumScore: number | null,
+	playCount?: number | null,
+	lastPlayedAt?: number | null,
 };
 
 export type ArtistChartTrack = {
@@ -1320,6 +1351,11 @@ export type BrowseFilters = {
 	albumRatingMax?: number | null,
 	trackRatingMin?: number | null,
 	trackRatingMax?: number | null,
+	playCountMin?: number | null,
+	playCountMax?: number | null,
+	lastPlayedFrom?: string | null,
+	lastPlayedTo?: string | null,
+	notPlayedWithinDays?: number | null,
 	ratingCompletenessMin?: number | null,
 	ratingCompletenessMax?: number | null,
 	notFullyRated?: boolean,
@@ -1352,17 +1388,30 @@ export type BrowseRequest = {
 	sort?: BrowseSort,
 	limit?: number,
 	offset?: number,
+	includeListeningHistory?: boolean,
 };
 
-export type BrowseResponse = {
+export type BrowseResponse = BrowseResponse_Serialize | BrowseResponse_Deserialize;
+
+export type BrowseResponse_Deserialize = {
 	view: BrowseView,
-	rows: BrowseRow[],
+	rows: BrowseRow_Deserialize[],
 	total: number,
 	limit: number,
 	offset: number,
 };
 
-export type BrowseRow = {
+export type BrowseResponse_Serialize = {
+	view: BrowseView,
+	rows: BrowseRow_Serialize[],
+	total: number,
+	limit: number,
+	offset: number,
+};
+
+export type BrowseRow = BrowseRow_Serialize | BrowseRow_Deserialize;
+
+export type BrowseRow_Deserialize = {
 	id: string,
 	trackId: number | null,
 	albumId: string,
@@ -1445,6 +1494,95 @@ export type BrowseRow = {
 	maxBitrateKbps: number | null,
 	below320Tracks: number | null,
 	mixedAudioQuality: boolean | null,
+	playCount: number | null,
+	lastPlayedAt: number | null,
+};
+
+export type BrowseRow_Serialize = {
+	id: string,
+	trackId: number | null,
+	albumId: string,
+	album: string | null,
+	albumArtistDisplay: string | null,
+	displayArtist: string | null,
+	title: string | null,
+	canonicalGenre: string | null,
+	publisher: string | null,
+	year: number | null,
+	releaseYear: number | null,
+	totalTracks: number | null,
+	ratedTracks: number | null,
+	ratingCompleteness: number | null,
+	totalSeconds: number | null,
+	lovedTracks: number | null,
+	tmoeSeconds: number | null,
+	aeRatio: number | null,
+	effectiveAlbumRating: number | null,
+	albumScore: number | null,
+	billboardRank: number | null,
+	billboardYear: number | null,
+	billboardDebutYear: number | null,
+	billboardDebutMonth: number | null,
+	billboardDebutWeek: number | null,
+	billboardDebutWeekKey: string | null,
+	billboardSingleRank: number | null,
+	billboardSingleYear: number | null,
+	billboardSingleDebutDate: string | null,
+	billboardSingleDebutYear: number | null,
+	billboardSingleDebutMonth: number | null,
+	billboardSingleDebutWeek: number | null,
+	billboardSingleDebutWeekKey: string | null,
+	vgListaRank: number | null,
+	vgListaYear: number | null,
+	vgListaDebutYear: number | null,
+	vgListaDebutMonth: number | null,
+	vgListaDebutWeek: number | null,
+	vgListaDebutWeekKey: string | null,
+	officialUkRank: number | null,
+	officialUkYear: number | null,
+	officialUkDebutYear: number | null,
+	officialUkDebutMonth: number | null,
+	officialUkDebutWeek: number | null,
+	officialUkDebutWeekKey: string | null,
+	tiISkuddetRank: number | null,
+	tiISkuddetYear: number | null,
+	tiISkuddetDebutDate: string | null,
+	tiISkuddetDebutYear: number | null,
+	tiISkuddetDebutMonth: number | null,
+	tiISkuddetDebutWeek: number | null,
+	tiISkuddetDebutWeekKey: string | null,
+	norsktoppenRank: number | null,
+	norsktoppenYear: number | null,
+	norsktoppenDebutDate: string | null,
+	norsktoppenDebutYear: number | null,
+	norsktoppenDebutMonth: number | null,
+	norsktoppenDebutWeek: number | null,
+	norsktoppenDebutWeekKey: string | null,
+	trackSeconds: number | null,
+	normalizedRating: number | null,
+	discNumber: number | null,
+	trackNumber: number | null,
+	love: string | null,
+	filePath: string | null,
+	filename: string | null,
+	coverPath: string | null,
+	coverMimeType: string | null,
+	originCountryCode: string | null,
+	originCountryName: string | null,
+	originCountryRawArea: string | null,
+	originCountryReviewState: string | null,
+	fileFormat: string | null,
+	bitrateKbps: number | null,
+	qualityFileSizeBytes: number | null,
+	doctorDurationMs: number | null,
+	qualityTrackCount: number | null,
+	minBitrateKbps: number | null,
+	avgBitrateKbps: number | null,
+	maxBitrateKbps: number | null,
+	below320Tracks: number | null,
+	mixedAudioQuality: boolean | null,
+	playCount?: number | null,
+	lastPlayedAt?: number | null,
 };
 
 export type BrowseSort = {

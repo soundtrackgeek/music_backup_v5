@@ -157,6 +157,8 @@ export function formatMissingFieldLabels(values: string[], view: BrowseView) {
 }
 
 export const rankingOptions = [
+  { value: "playCount", label: "Plays" },
+  { value: "lastPlayed", label: "Last played" },
   { value: "albumScore", label: "Album Score" },
   { value: "billboardRank", label: "Billboard rank" },
   { value: "albumRating", label: "Album rating" },
@@ -180,6 +182,8 @@ export const rankingOptions = [
 
 export const albumRankingOptions = rankingOptions.filter((option) =>
   [
+    "playCount",
+    "lastPlayed",
     "albumScore",
     "billboardRank",
     "albumRating",
@@ -197,6 +201,8 @@ export const albumRankingOptions = rankingOptions.filter((option) =>
 
 export const trackRankingOptions = rankingOptions.filter((option) =>
   [
+    "playCount",
+    "lastPlayed",
     "trackRating",
     "billboardSingleRank",
     "billboardSingleDebut",
@@ -214,6 +220,8 @@ export const trackRankingOptions = rankingOptions.filter((option) =>
 );
 
 export const chartColumnOptions = [
+  { value: "playCount", label: "Plays" },
+  { value: "lastPlayed", label: "Last played" },
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },
   { value: "vgLista", label: "VG Lista" },
@@ -238,6 +246,8 @@ export const chartColumnOptions = [
 ];
 
 export const searchTableColumnOptions = [
+  { value: "playCount", label: "Plays" },
+  { value: "lastPlayed", label: "Last played" },
   { value: "audioQuality", label: "Audio quality" },
   { value: "billboard", label: "Billboard" },
   { value: "billboardDebut", label: "Debut week" },

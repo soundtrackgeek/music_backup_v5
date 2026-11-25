@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.221.0] - 2026-11-25
+
+### Added
+
+- **Search**, **Charts**, and **Smart Playlists** can filter by total plays, last-played dates, or days without a play using matched local listening history. Search and Charts can display and sort by **Plays** and **Last played**, and Charts can rank artists by either metric.
+- **Discovery → Rediscover** surfaces tracks rated 4 stars or higher that you’ve played before and haven’t played in the past year, with links to the full Search results and playback in Aurora.
+
 ## [0.220.1] - 2026-11-24
 
 ### Fixed

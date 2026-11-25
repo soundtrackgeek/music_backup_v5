@@ -1074,6 +1074,16 @@ pub struct BrowseFilters {
     #[serde(default)]
     pub track_rating_max: Option<f64>,
     #[serde(default)]
+    pub play_count_min: Option<i64>,
+    #[serde(default)]
+    pub play_count_max: Option<i64>,
+    #[serde(default)]
+    pub last_played_from: Option<String>,
+    #[serde(default)]
+    pub last_played_to: Option<String>,
+    #[serde(default)]
+    pub not_played_within_days: Option<u32>,
+    #[serde(default)]
     pub rating_completeness_min: Option<f64>,
     #[serde(default)]
     pub rating_completeness_max: Option<f64>,
@@ -2271,6 +2281,8 @@ pub struct BrowseRequest {
     pub limit: u32,
     #[serde(default)]
     pub offset: u32,
+    #[serde(default)]
+    pub include_listening_history: bool,
 }
 
 impl Default for BrowseRequest {
@@ -2282,6 +2294,7 @@ impl Default for BrowseRequest {
             sort: BrowseSort::default(),
             limit: default_limit(),
             offset: 0,
+            include_listening_history: false,
         }
     }
 }
@@ -2371,6 +2384,10 @@ pub struct BrowseRow {
     pub max_bitrate_kbps: Option<i32>,
     pub below_320_tracks: Option<i64>,
     pub mixed_audio_quality: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_played_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]

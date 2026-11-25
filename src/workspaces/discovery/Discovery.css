@@ -4375,3 +4375,35 @@
     animation: none !important;
   }
 }
+
+.rediscover-shelf ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px 20px;
+  list-style: none;
+  padding: 0;
+}
+
+.rediscover-shelf li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rediscover-shelf li > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.rediscover-shelf .cover-mini { flex-shrink: 0; }
+.rediscover-shelf small { display: block; }
+.rediscover-track {
+  padding: 0;
+  color: inherit;
+  font-weight: 650;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+.rediscover-track:hover { text-decoration: underline; }

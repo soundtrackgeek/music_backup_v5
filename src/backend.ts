@@ -1,3 +1,4 @@
+import { getPreviewListeningTracks } from "./backend/listening";
 import { previewActivity, registerPreviewControl } from "./backend/activity";
 import { previewArtistId } from "./backend/artistIdentity";
 import { matchesArtistInfo } from "./app/artistInfo";
@@ -6543,7 +6544,32 @@ export async function searchLibrary(request: BrowseRequest): Promise<BrowseRespo
     const ratingCompletenessMax = normalizePercentFilter(
       request.filters.ratingCompletenessMax,
     );
-    const rows = mockRows.filter((row) => {
+    const { playCountMin, playCountMax, lastPlayedFrom, lastPlayedTo, notPlayedWithinDays } = request.filters;
+    const hasHistory = request.includeListeningHistory
+      || ["playCount", "lastPlayed"].includes(request.sort.field)
+      || [playCountMin, playCountMax, lastPlayedFrom, lastPlayedTo, notPlayedWithinDays].some(value => value != null);
+    const previewTracks = hasHistory ? getPreviewListeningTracks() : [];
+    const start = lastPlayedFrom ? new Date(lastPlayedFrom + "T00:00:00").getTime() / 1000 : null;
+    const endDate = lastPlayedTo ? new Date(lastPlayedTo + "T00:00:00") : null;
+    if (endDate) endDate.setDate(endDate.getDate() + 1);
+    const end = endDate ? endDate.getTime() / 1000 : null;
+    const cutoff = notPlayedWithinDays == null ? null : Date.now() / 1000 - 86_400 * notPlayedWithinDays;
+    const candidates = hasHistory ? mockRows.map(row => {
+      const plays = previewTracks.filter(track =>
+        row.trackId == null ? track.albumId === row.albumId : track.trackId === row.trackId,
+      );
+      return {
+        ...row,
+        playCount: plays.reduce((total, track) => total + track.plays, 0),
+        lastPlayedAt: plays.length > 0 ? Math.max(...plays.map(track => track.lastPlayedAt)) : null,
+      };
+    }) : mockRows;
+    const rows = candidates.filter((row) => {
+      const lastPlayed = row.lastPlayedAt;
+      if (!matchesNumberRange(row.playCount ?? 0, playCountMin, playCountMax)
+        || (start != null && (lastPlayed == null || lastPlayed < start))
+        || (end != null && (lastPlayed == null || lastPlayed >= end))
+        || (cutoff != null && lastPlayed != null && lastPlayed >= cutoff)) return false;
       const matchesView = isTracks
         ? row.trackId !== null
         : row.trackId === null;
@@ -6688,6 +6714,12 @@ export async function searchLibrary(request: BrowseRequest): Promise<BrowseRespo
         const swapIndex = Math.floor(Math.random() * (index + 1));
         [sorted[index], sorted[swapIndex]] = [sorted[swapIndex], sorted[index]];
       }
+    } else if (request.sort.field === "lastPlayed") {
+      sorted.sort((left, right) => {
+        const missing = Number(left.lastPlayedAt == null) - Number(right.lastPlayedAt == null);
+        const comparison = (left.lastPlayedAt ?? 0) - (right.lastPlayedAt ?? 0);
+        return missing || (request.sort.direction === "desc" ? -comparison : comparison);
+      });
     } else {
       sorted.sort((left, right) =>
         compareBrowseRows(left, right, request.sort.field),
@@ -8105,6 +8137,8 @@ function compareBrowseRows(left: BrowseRow, right: BrowseRow, field: string) {
 
 function browseSortValue(row: BrowseRow, field: string) {
   switch (field) {
+    case "playCount":
+      return row.playCount ?? 0;
     case "title":
       return row.title?.toLowerCase() ?? "";
     case "displayArtist":

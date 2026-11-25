@@ -557,6 +557,10 @@ The Listening tab shows total and matched plays, plays per month, and these list
 
 Album names open the album in Timelines. SQLite schema version 63 adds the `listening_plays`, `listening_sources`, and `listening_identity_links` tables, so plays travel with the catalog database and its backups.
 
+In **Search → By metadata**, open **Advanced filters → Listening history**. In **Charts**, look under **Advanced chart controls**. Filter by minimum or maximum plays, an inclusive last-played date range, or the number of days since an item last played. Set **Maximum plays** to **0** to find items with no recorded plays. Combine **Minimum plays** of **1** with **No plays in the last N days** to find music you’ve played before. Enable **Plays** and **Last played** in the table columns, or choose either as a Charts ranking for albums, tracks, or artists. Album counts sum plays across linked tracks, and artist charts credit the track artist within the selected scope.
+
+**Smart Playlists → Rules** offers the same filters and can sort by plays or last played. Refresh the playlist to reevaluate it against the latest recorded plays. **Discovery → Rediscover** shows tracks rated 4 stars or higher that you’ve played before and haven’t played in the past year. Open a track, play or queue it in Aurora, or use **See all** to open the matching Search.
+
 ## Artist Loved Tracks and Chart Busters
 
 Artist pages include two deferred local-data tabs alongside Overview. **Loved Tracks** lists every local track marked loved, with album, year, rating, duration, and oldest/newest, title, or rating sorting. **Chart Busters** includes matched local songs from every US Published Charts series plus the annual Billboard singles rankings, Official UK Singles, VG-lista, Ti i Skuddet, and Norsktoppen. Opening Chart Busters prepares the bundled US archive automatically if needed; a preparation message remains visible while this runs.

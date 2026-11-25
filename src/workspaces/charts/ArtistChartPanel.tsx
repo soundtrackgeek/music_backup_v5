@@ -1,3 +1,4 @@
+import { ListeningHistoryFields } from "../../components/catalog/ListeningHistoryFields";
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, FileSearch, Search, Users } from "lucide-react";
 import {
@@ -9,7 +10,7 @@ import {
   singleChartSourceOptions,
 } from "../../app/artistChart";
 import { artistGenderOptions, artistTypeOptions } from "../../app/config";
-import { formatNumber } from "../../app/display";
+import { formatLastPlayed, formatNumber } from "../../app/display";
 import {
   CountryListCriterion,
   GenreListCriterion,
@@ -44,7 +45,7 @@ type Props = {
   onOpenArtist: (artistKey: string, artistName: string) => void;
 };
 
-const columns: {
+const baseColumns: {
   metric: string;
   label: string;
   value: (row: ArtistChartRow) => string;
@@ -101,6 +102,14 @@ export function ArtistChartPanel({
       cancelled = true;
     };
   }, []);
+
+  const columns = metric === "playCount" || metric === "lastPlayed" ||
+    response?.rows.some(row => row.playCount != null)
+    ? [...baseColumns,
+        { metric: "playCount", label: "Plays", value: (row: ArtistChartRow) => formatNumber(row.playCount) },
+        { metric: "lastPlayed", label: "Last played", value: (row: ArtistChartRow) => formatLastPlayed(row.lastPlayedAt) },
+      ]
+    : baseColumns;
 
   return (
     <>
@@ -289,6 +298,7 @@ export function ArtistChartPanel({
             </fieldset>
           ) : null}
 
+          <ListeningHistoryFields filters={request.filters} onChange={onChangeFilters} />
           <div className="filter-grid chart-advanced-filter-grid">
             <NumberField
               label="Limit"

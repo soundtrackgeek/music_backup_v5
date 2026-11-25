@@ -35,6 +35,7 @@ import {
   formatNorsktoppenRank,
   formatNorsktoppenDebut,
   formatTrackRating,
+  formatLastPlayed,
   formatPercent,
   formatMinutes,
   formatNumber,
@@ -152,6 +153,14 @@ export function ResultTable({
     response.view === "tracks" && visibleColumnSet.has("norsktoppen");
   const showNorsktoppenDebutColumn =
     response.view === "tracks" && visibleColumnSet.has("norsktoppenDebut");
+  const historyColumns = [
+    { field: "playCount", label: "Plays", width: "72px", value: (row: BrowseRow) => row.playCount == null ? "—" : formatNumber(row.playCount) },
+    { field: "lastPlayed", label: "Last played", width: "120px", value: (row: BrowseRow) => formatLastPlayed(row.lastPlayedAt) },
+  ].filter(({ field }) => visibleColumnSet.has(field) || sort.field === field);
+  const historySizes = Object.fromEntries(historyColumns.map(({ field, width }) => [field, width]));
+  const historyHeaders = historyColumns.map(({ field, label }) => (
+    <SortableColumnHeader key={field} label={label} field={field} sort={sort} onSort={onSort} />
+  ));
   const albumTableColumns = {
     album: "minmax(220px, 2fr)",
     artist: "minmax(140px, 1.35fr)",
@@ -170,6 +179,7 @@ export function ResultTable({
     trackCount: "64px",
     ratingCompleteness: "84px",
     albumScore: "72px",
+    ...historySizes,
   };
   const trackTableColumns = {
     title: "minmax(190px, 2fr)",
@@ -200,6 +210,7 @@ export function ResultTable({
     ...(showQualityColumn ? { bitrate: "minmax(118px, 0.9fr)" } : {}),
     trackRating: "64px",
     File: "minmax(140px, 1.1fr)",
+    ...historySizes,
   };
   return response.view === "tracks" ? (
     <ResizableTable
@@ -314,6 +325,7 @@ export function ResultTable({
             <span role="cell" title={row.filePath ?? ""}>
               {row.filename ?? ""}
             </span>
+            {historyColumns.map(({ field, value }) => <span key={field} role="cell">{value(row)}</span>)}
           </div>
         );
       }}
@@ -460,6 +472,7 @@ export function ResultTable({
           onSort={onSort}
         />
         <ResizableColumnHeader columnId="File" label="File" />
+        {historyHeaders}
       </div>
     </ResizableTable>
   ) : (
@@ -549,6 +562,7 @@ export function ResultTable({
             <span role="cell">{row.totalTracks ?? ""}</span>
             <span role="cell">{formatPercent(row.ratingCompleteness)}</span>
             <span role="cell">{row.albumScore?.toFixed(3) ?? ""}</span>
+            {historyColumns.map(({ field, value }) => <span key={field} role="cell">{value(row)}</span>)}
           </div>
         );
       }}
@@ -658,6 +672,7 @@ export function ResultTable({
           sort={sort}
           onSort={onSort}
         />
+        {historyHeaders}
       </div>
     </ResizableTable>
   );

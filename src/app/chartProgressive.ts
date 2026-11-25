@@ -116,6 +116,9 @@ export function countAdvancedChartControls(config: ChartConfig) {
     hasRange(filters.totalMinutesMin, filters.totalMinutesMax),
     hasRange(filters.albumRatingMin, filters.albumRatingMax),
     hasRange(filters.trackRatingMin, filters.trackRatingMax),
+    hasRange(filters.playCountMin, filters.playCountMax),
+    filters.lastPlayedFrom != null || filters.lastPlayedTo != null,
+    filters.notPlayedWithinDays != null,
     hasRange(filters.lovedTracksMin, filters.lovedTracksMax),
     completeness.min > completenessRange.min ||
       completeness.max < completenessRange.max,

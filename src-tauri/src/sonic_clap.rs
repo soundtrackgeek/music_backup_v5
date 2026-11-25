@@ -1112,7 +1112,11 @@ fn rank_catalog(
         crate::db::build_where_clause(true, &request.search_text, &request.filters);
     let filtered = !where_sql.is_empty();
     let candidates_sql = if filtered {
-        let from = crate::db::browse_from_clause(true);
+        let history = crate::db::listening_browse::join(
+            true,
+            crate::db::listening_browse::has_filters(&request.filters),
+        );
+        let from = format!("{}{history}", crate::db::browse_from_clause(true));
         values.extend([Value::Text(PROFILE.into()), Value::Text(MODEL.into())]);
         // Sort narrow IDs before fetching the embedding blobs. The covering
         // audio hash index can find candidates without random reads of the blobs.
@@ -1222,6 +1226,11 @@ pub(crate) fn describe_at(
     let embedding = query_embedding(dir, &query)?;
     let conn = crate::sonic::catalog(dir)?;
     let tx = conn.unchecked_transaction()?;
+    if crate::db::listening_browse::has_filters(&request.filters)
+        && !crate::db::listening_browse::links_ready(&tx)?
+    {
+        bail!("Listening history is being updated. Try this search again.");
+    }
     rank_catalog(&tx, dir, query, request, &embedding, limit)
 }
 
@@ -1235,10 +1244,14 @@ pub async fn sonic_describe(
     request: Option<BrowseRequest>,
 ) -> Result<SoundSearchResults, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let request = request.unwrap_or_default();
+        if crate::db::listening_browse::has_filters(&request.filters) {
+            crate::listening::ensure_links(&app)?;
+        }
         describe_at(
             &crate::sonic::directory(&app)?,
             &query,
-            &request.unwrap_or_default(),
+            &request,
             limit as usize,
         )
     })

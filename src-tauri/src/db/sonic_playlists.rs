@@ -165,7 +165,8 @@ fn evaluate_indexed(
     let metrics: Vec<_> = analyses.iter().map(|a| Metric::new(a).unwrap()).collect();
     let targets: Vec<_> = analyses.iter().map(|a| a.features.clone()).collect();
     let (where_sql, values) = build_where_clause(true, &request.search_text, &request.filters);
-    let from = browse_from_clause(true);
+    let history = listening_browse::join(true, listening_browse::has_filters(&request.filters));
+    let from = format!("{}{history}", browse_from_clause(true));
     let and = if where_sql.is_empty() { "WHERE" } else { "AND" };
     let mut eligible_query = conn.prepare(&format!("SELECT s.track_key {from}
         JOIN sonic.sonic_tracks s ON s.directory=t.file_path AND s.filename=t.filename

@@ -397,8 +397,16 @@ struct PlayGroup {
 /// one track: an exact file path wins, then a matching album, then the
 /// track's own credit. Ties across distinct artist profiles remain unresolved.
 pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
+    if !conn.is_autocommit() {
+        return refresh_links_on(conn);
+    }
     let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
-    let conn = &tx;
+    let linked = refresh_links_on(&tx)?;
+    tx.commit()?;
+    Ok(linked)
+}
+
+fn refresh_links_on(conn: &Connection) -> Result<i64> {
     let profiles = ArtistProfiles::load(conn)?;
     let mut groups = Vec::new();
     {
@@ -501,10 +509,10 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
         }
     }
 
-    tx.execute("DELETE FROM listening_identity_links", [])?;
+    conn.execute("DELETE FROM listening_identity_links", [])?;
     let mut linked = 0;
     {
-        let mut insert = tx.prepare(
+        let mut insert = conn.prepare(
             "INSERT INTO listening_identity_links
                 (artist_key, title_key, album_key, path_key, track_id)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -522,13 +530,12 @@ pub(crate) fn refresh_links(conn: &Connection) -> Result<i64> {
             }
         }
     }
-    tx.execute(
+    conn.execute(
         "INSERT INTO listening_link_state (id, revision, refreshed_at) VALUES (1, ?1, ?2)
          ON CONFLICT(id) DO UPDATE SET revision = excluded.revision,
                                        refreshed_at = excluded.refreshed_at",
-        params![plays_revision(&tx)?, Utc::now().to_rfc3339()],
+        params![plays_revision(conn)?, Utc::now().to_rfc3339()],
     )?;
-    tx.commit()?;
     Ok(linked)
 }
 
@@ -550,7 +557,7 @@ fn offer(group: &mut PlayGroup, score: u8, track_id: i64, artist_id: &str) {
 // Queries
 // ---------------------------------------------------------------------------
 
-const PLAY_LINK_JOIN: &str = "listening_identity_links l
+pub(crate) const PLAY_LINK_JOIN: &str = "listening_identity_links l
     ON l.artist_key = p.artist_key AND l.title_key = p.title_key
    AND l.album_key = p.album_key AND l.path_key = p.path_key";
 

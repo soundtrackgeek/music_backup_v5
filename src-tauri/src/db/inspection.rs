@@ -40,7 +40,8 @@ pub(super) fn inspect_current_view(
     let request = scoped_request.as_ref().unwrap_or(request);
     let view = normalize_view(&request.view);
     let is_tracks = view == "tracks";
-    let from_sql = current_view_from_sql(is_tracks);
+    let history = listening_browse::join(is_tracks, listening_browse::has_filters(&request.filters));
+    let from_sql = format!("{}{history}", current_view_from_sql(is_tracks));
     let (where_sql, values) = build_where_clause(is_tracks, &request.search_text, &request.filters);
     let count_sql = format!("SELECT COUNT(*) {from_sql} {where_sql}");
     let matching_rows = conn

@@ -76,12 +76,12 @@ pub fn export_artist_chart_for_app(
     input: ArtistChartExportRequest,
 ) -> Result<ExportResult> {
     let format = validated_export_format(&input.format)?;
-    let (conn, _) = open_read(app)?;
-
     let mut request = input.request;
     request.offset = 0;
     request.limit = ARTIST_EXPORT_LIMIT;
-    let response = artist_chart(&conn, request.clone(), ARTIST_EXPORT_LIMIT)?;
+    let response = listening_browse::read(app, super::artist_chart::artist_history_requested(&request), open_read, |conn| {
+        artist_chart(conn, request.clone(), ARTIST_EXPORT_LIMIT)
+    })?;
 
     let export_dir = app
         .path()
@@ -101,7 +101,6 @@ pub fn export_artist_chart_for_app(
 
     let request_json =
         serde_json::to_string(&request).context("Could not serialize export query")?;
-    drop(conn);
     record_export(
         app,
         "artists",
@@ -135,6 +134,8 @@ mod tests {
             charted_tracks: 5,
             complete_albums: 2,
             average_album_score: score,
+            play_count: None,
+            last_played_at: None,
         }
     }
 

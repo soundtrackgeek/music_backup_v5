@@ -1,3 +1,4 @@
+import { RediscoverShelf } from "./RediscoverShelf";
 import {
   RotateCcw,
   Database,
@@ -41,6 +42,7 @@ export function DiscoveryView({
 }: {
   model: Pick<
     AppModel,
+    | "catalogRefreshKey"
     | "discovery"
     | "refreshDiscovery"
     | "loadData"
@@ -96,6 +98,7 @@ export function DiscoveryView({
   >;
 }) {
   const {
+    catalogRefreshKey,
     discovery,
     refreshDiscovery,
     loadData,
@@ -181,6 +184,7 @@ export function DiscoveryView({
       </header>
 
       <ReleaseRadarProvider available={Boolean(status?.hasDatabase)}>
+      {status?.hasDatabase && <RediscoverShelf catalogRevision={catalogRefreshKey} onOpenTrack={openTimelineTrack} onOpenSearch={openInsightInSearch} />}
       {status?.hasDatabase && <HiddenFavorites onOpen={track => openTimelineTrack(track.trackId)} />}
       {status?.hasDatabase && <RatingMissions onOpen={track => openTimelineTrack(track.trackId)} />}
       <DiscoveryDailyEdition

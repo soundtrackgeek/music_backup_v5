@@ -163,6 +163,9 @@ pub(super) fn build_playlist(conn: &Connection, plan: AiPlaylistPlan) -> Result<
     request.view = "tracks".to_string();
     request.offset = 0;
     request.limit = request.limit.clamp(20, 500);
+    if listening_browse::requested(&request) {
+        listening_browse::ensure_links_on(conn)?;
+    }
     let response = search_library(conn, request.clone(), 500)?;
     let candidate_count = response.rows.len();
     let selected_rows = select_playlist_rows(response.rows, &plan);
@@ -424,6 +427,10 @@ fn evaluate_smart_playlist_once(conn: &Connection, id: i64) -> Result<SavedPlayl
     }
 
     let mut request = saved.playlist.request.clone();
+    request.include_listening_history = false;
+    if listening_browse::requested(&request) {
+        listening_browse::ensure_links_on(conn)?;
+    }
     let track_limit = saved
         .playlist
         .smart_settings

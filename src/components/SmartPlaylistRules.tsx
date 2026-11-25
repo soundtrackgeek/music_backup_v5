@@ -1,5 +1,6 @@
+import { ListeningHistoryFields } from "./catalog/ListeningHistoryFields";
 import { useState } from "react";
-import { createRequest } from "../app/requests";
+import { createRequest, normalizeBrowseRequestForClient } from "../app/requests";
 import { saveSmartPlaylist } from "../backend";
 import type { BrowseRequest, SavedPlaylist } from "../types";
 
@@ -11,7 +12,7 @@ const textRules = [["albumArtist","Album artist"],["displayArtist","Track artist
 export function SmartPlaylistRules({ saved, onSaved, onCancel }: { saved?:SavedPlaylist; onSaved:(saved:SavedPlaylist)=>void; onCancel:()=>void }) {
   const [editRevision] = useState(saved?.updatedAt);
   const [name,setName]=useState(saved?.name??"");
-  const [request,setRequest]=useState<BrowseRequest>(saved?.playlist.request??createRequest("tracks"));
+  const [request,setRequest]=useState<BrowseRequest>(() => saved ? normalizeBrowseRequestForClient(saved.playlist.request) : createRequest("tracks"));
   const [limit,setLimit]=useState(saved?.playlist.smartSettings?.trackLimit??1000);
   const [policy,setPolicy]=useState(saved?.playlist.smartSettings?.refreshPolicy??"library");
   const [sonic,setSonic]=useState<SonicPlaylistRecipe|null>(saved?.playlist.smartSettings?.sonic??null);
@@ -34,7 +35,8 @@ export function SmartPlaylistRules({ saved, onSaved, onCancel }: { saved?:SavedP
       <label>Maximum rating<input type="number" min={0} max={5} step={album?0.05:0.5} value={(album?request.filters.albumRatingMax==null?"":request.filters.albumRatingMax/20:request.filters.trackRatingMax)??""} onChange={e=>update(album?{albumRatingMax:e.target.value?Math.round(Number(e.target.value)*20):null}:{trackRatingMax:e.target.value?Number(e.target.value):null})} placeholder="Any" /></label>
       <label>Original year from<input type="number" min={1} max={9999} value={request.filters.yearFrom??""} onChange={e=>update({yearFrom:e.target.value?Number(e.target.value):null})} /></label>
       <label>Original year to<input type="number" min={1} max={9999} value={request.filters.yearTo??""} onChange={e=>update({yearTo:e.target.value?Number(e.target.value):null})} /></label>
-      <label>Sort<select disabled={hasSoundRule} value={request.sort.field} onChange={e=>setRequest({...request,sort:{...request.sort,field:e.target.value}})}>{Array.from(new Set([request.sort.field,"title","album","artist","year","releaseYear","added",album?"albumRating":"trackRating"])).map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+      <ListeningHistoryFields filters={request.filters} onChange={update} />
+      <label>Sort<select disabled={hasSoundRule} value={request.sort.field} onChange={e=>setRequest({...request,sort:{...request.sort,field:e.target.value}})}>{Array.from(new Set([request.sort.field,"title","album","artist","year","releaseYear","added","playCount","lastPlayed",album?"albumRating":"trackRating"])).map(s=><option key={s} value={s}>{s === "playCount" ? "Plays" : s === "lastPlayed" ? "Last played" : s}</option>)}</select></label>
       <label>Direction<select disabled={hasSoundRule} value={request.sort.direction} onChange={e=>setRequest({...request,sort:{...request.sort,direction:e.target.value as "asc"|"desc"}})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
       <label>Song limit<input type="number" min={1} max={10000} required value={limit} onChange={e=>setLimit(Number(e.target.value))} /></label>
       <label>Refresh<select value={policy} onChange={e=>setPolicy(e.target.value)}><option value="library">When the library changes / on open</option><option value="manual">Manual</option></select></label>
