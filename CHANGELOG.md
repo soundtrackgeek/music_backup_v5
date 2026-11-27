@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.221.1] - 2026-11-27
+
+### Fixed
+
+- When an album folder is rejected for holding more than one album or album artist (for example, when Aurora removes or moves an album), the error now names the first MP3 and an MP3 that differs, shows each file's **Album** and **Album Artist** tags, and counts how many MP3s differ, so you can find the mismatched tag.
+
 ## [0.221.0] - 2026-11-25
 
 ### Added

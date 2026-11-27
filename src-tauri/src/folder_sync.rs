@@ -1812,15 +1812,51 @@ fn validate_single_album(tracks: &[ScannedTrack]) -> Result<()> {
         .ok_or_else(|| anyhow!("The selected folder does not contain any MP3 files"))?;
     let album = crate::identity::display_key(&first.album);
     let album_artist = crate::identity::display_key(&first.album_artist);
-    if tracks.iter().any(|track| {
-        crate::identity::display_key(&track.album) != album
-            || crate::identity::display_key(&track.album_artist) != album_artist
-    }) {
-        bail!(
-            "The selected folder contains more than one album or album artist. Select one complete album folder"
-        );
-    }
-    Ok(())
+    let mismatched = tracks
+        .iter()
+        .filter(|track| {
+            crate::identity::display_key(&track.album) != album
+                || crate::identity::display_key(&track.album_artist) != album_artist
+        })
+        .collect::<Vec<_>>();
+    let Some(example) = mismatched.first() else {
+        return Ok(());
+    };
+    let others = match mismatched.len() {
+        1 => String::new(),
+        count => format!(" ({count} MP3s differ from the first one)"),
+    };
+    bail!(
+        "The selected folder contains more than one album or album artist{others}: {} has {}, but {} has {}. Give every MP3 in the folder the same Album and Album Artist tags, then try again",
+        track_file_label(first),
+        album_identity_label(first),
+        track_file_label(example),
+        album_identity_label(example),
+    );
+}
+
+fn track_file_label(track: &ScannedTrack) -> String {
+    let name = track
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| track.filename.clone());
+    format!("\"{name}\"")
+}
+
+fn album_identity_label(track: &ScannedTrack) -> String {
+    let shown = |value: &str| {
+        if value.trim().is_empty() {
+            "(empty)".to_owned()
+        } else {
+            format!("\"{}\"", value.trim())
+        }
+    };
+    format!(
+        "Album {} and Album Artist {}",
+        shown(&track.album),
+        shown(&track.album_artist)
+    )
 }
 
 fn ensure_replacement_identity_matches(
@@ -2630,7 +2666,11 @@ mod tests {
         let error = scan_folder(&album, &AtomicBool::new(false))
             .and_then(|scan| validate_single_album(&scan.tracks))
             .expect_err("multiple albums should fail");
-        assert!(error.to_string().contains("more than one album"));
+        let message = error.to_string();
+        assert!(message.contains("more than one album"));
+        assert!(message.contains(
+            "\"01.mp3\" has Album \"First Album\" and Album Artist \"Album Artist\", but \"02.mp3\" has Album \"Second Album\" and Album Artist \"Album Artist\""
+        ));
     }
 
     #[test]
